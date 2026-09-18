@@ -1,0 +1,59 @@
+services:
+
+  api:
+    build:
+      context: ./apps/api
+
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql:///${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - ./apps/api:/app
+      - api_node_modules:/app/node_modules
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+
+    environment:
+      - NODE_ENV=development
+
+    ports:
+      - "5173:5173"
+
+    volumes:
+      - ./apps/web:/app
+      - web_node_modules:/app/node_modules
+
+  postgres:
+    image: postgres:18
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  api_node_modules:
+  web_node_modules:

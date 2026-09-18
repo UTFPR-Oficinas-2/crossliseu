@@ -1,0 +1,8 @@
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/base:ubuntu26.04
+
+    volumes:
+      - .:/workspaces/crossliseu
+
+    command: sleep infinity
