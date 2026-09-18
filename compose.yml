@@ -1,4 +1,28 @@
 services:
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql:///${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - ./apps/api:/app
+      - api_node_modules:/app/node_modules
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build
+
   postgres:
     image: postgres:18
 
@@ -21,3 +45,4 @@ services:
 
 volumes:
   postgres_data:
+  api_node_modules:
