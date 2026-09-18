@@ -24,8 +24,7 @@
         "esbenp.prettier-vscode",
         "Vue.volar",
         "dbaeumer.vscode-eslint",
-        "ms-python.python",
-        "ms-azuretools.vscode-docker"
+        "ms-python.python"
       ]
     }
   },
