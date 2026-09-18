@@ -1,4 +1,4 @@
-FROM node:26-bookworm
+FROM node:26
 
 WORKDIR /app
 
@@ -8,6 +8,6 @@ RUN npm ci
 
 COPY . .
 
-EXPOSE 3030
+EXPOSE 5173
 
-CMD ["npm", "run", "start:dev"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
