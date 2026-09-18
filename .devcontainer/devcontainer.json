@@ -3,7 +3,11 @@
 {
   "name": "Crossliseu Workspace",
   // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu26.04",
+  "dockerComposeFile": ["../compose.yml", "compose.yml"],
+  "service": "workspace",
+  "runServices": ["workspace"],
+  "workspaceFolder": "/workspaces/crossliseu",
+  "shutdownAction": "stopCompose",
   "features": {
     "ghcr.io/devcontainers/features/node:2": {
       "version": "26",
