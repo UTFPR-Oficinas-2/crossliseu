@@ -10,15 +10,15 @@ export class MatchesRepository {
         private readonly repository: Repository<Match>,
     ) {}
 
-    public findAll(): Promise<Match[]> {
+    findAll(): Promise<Match[]> {
         return this.repository.find();
     }
 
-    public findById(id: string): Promise<Match | null> {
+    findById(id: string): Promise<Match | null> {
         return this.repository.findOneBy({ id });
     }
 
-    public create(weightClass: string): Promise<Match> {
+    create(weightClass: string): Promise<Match> {
         const match = this.repository.create({ weightClass });
         return this.repository.save(match);
     }

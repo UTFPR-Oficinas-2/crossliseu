@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { MatchesRepository } from './repositories/matches.repository.js';
 import { Log } from 'typeorm/driver/mongodb/typings.js';
+import { Match } from './entities/match.entity.js';
 
 @Injectable()
 export class MatchesService {
@@ -8,16 +9,22 @@ export class MatchesService {
 
     constructor(private readonly matchesRepository: MatchesRepository) {}
 
-    public findAll() {
+    findAll() {
         return this.matchesRepository.findAll();
     }
 
-    public findById(id: string) {
-        const match = this.matchesRepository.findById(id);
-
+    findById(id: string) {
+        let match: any = this.matchesRepository.findById(id);
+        match = null;
         if (!match) {
             this.logger.error('match_not_found', { id: id });
             throw new NotFoundException('match_not_found');
         }
+
+        return match;
+    }
+
+    create(weightClass: string) {
+        return this.matchesRepository.create(weightClass);
     }
 }
