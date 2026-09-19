@@ -60,13 +60,13 @@ The following scripts should be present in `package.json`:
 
 ```json
 {
-  "scripts": {
-    "typeorm": "typeorm-ts-node-esm",
-    "migration:generate": "npm run typeorm -- migration:generate",
-    "migration:create": "npm run typeorm -- migration:create",
-    "migration:run": "npm run typeorm -- migration:run",
-    "migration:revert": "npm run typeorm -- migration:revert"
-  }
+    "scripts": {
+        "typeorm": "typeorm-ts-node-esm",
+        "migration:generate": "npm run typeorm -- migration:generate",
+        "migration:create": "npm run typeorm -- migration:create",
+        "migration:run": "npm run typeorm -- migration:run",
+        "migration:revert": "npm run typeorm -- migration:revert"
+    }
 }
 ```
 
@@ -101,10 +101,10 @@ Always inspect the generated migration before running it. TypeORM may occasional
 
 If TypeORM reports that no schema changes were found, verify that:
 
-* The entity is included in the `DataSource` configuration.
-* The database contains the schema produced by the previous migrations.
-* The entity actually differs from the current database schema.
-* `synchronize` is disabled.
+- The entity is included in the `DataSource` configuration.
+- The database contains the schema produced by the previous migrations.
+- The entity actually differs from the current database schema.
+- `synchronize` is disabled.
 
 ### Create an empty migration
 
@@ -171,35 +171,7 @@ npm run migration:run -- \
 Do not enable TypeORM's automatic schema synchronization when using migrations:
 
 ```ts
-synchronize: false
+synchronize: false;
 ```
 
 Migrations should be the only mechanism used to apply schema changes to shared and production databases.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
