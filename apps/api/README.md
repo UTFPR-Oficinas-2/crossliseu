@@ -1,30 +1,3 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
 ## Project setup
 
 ```bash
@@ -57,68 +30,148 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
-## Deployment
+## Migrations
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+This project uses TypeORM migrations to keep the PostgreSQL database schema synchronized with the entity definitions.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Prerequisites
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+Before executing migration commands:
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project:
+1. Make sure PostgreSQL is running.
+2. Make sure the required environment variables are available.
+3. Run the commands from the API directory:
 
 ```bash
-$ npm install @nestjs/observe
+cd apps/api
 ```
 
-Then follow the [setup guide](https://docs.nestjs.com/observability/overview) - it takes a single import and an app key.
+The TypeORM CLI loads the database configuration directly from:
 
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+```text
+src/database/data-source.ts
+```
 
-## Resources
+It does not start the NestJS application.
 
-Check out a few resources that may come in handy when working with NestJS:
+### Package scripts
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+The following scripts should be present in `package.json`:
 
-## Support
+```json
+{
+    "scripts": {
+        "typeorm": "typeorm-ts-node-esm",
+        "migration:generate": "npm run typeorm -- migration:generate",
+        "migration:create": "npm run typeorm -- migration:create",
+        "migration:run": "npm run typeorm -- migration:run",
+        "migration:revert": "npm run typeorm -- migration:revert"
+    }
+}
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Because the project uses ECMAScript modules, migrations are executed through `typeorm-ts-node-esm`.
 
-## Stay in touch
+### Generate a migration
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Use `migration:generate` after creating or modifying entity classes:
 
-## License
+```bash
+npm run migration:generate -- \
+  src/database/migrations/MigrationName \
+  -d src/database/data-source.ts
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+For example:
+
+```bash
+npm run migration:generate -- \
+  src/database/migrations/CreateMatches \
+  -d src/database/data-source.ts
+```
+
+TypeORM will:
+
+1. Load the configured entity classes.
+2. Connect to the database.
+3. Compare the entities with the current database schema.
+4. Generate a migration containing the necessary SQL operations.
+
+Always inspect the generated migration before running it. TypeORM may occasionally interpret a rename as deleting the old column and creating a new one, which could cause data loss.
+
+If TypeORM reports that no schema changes were found, verify that:
+
+- The entity is included in the `DataSource` configuration.
+- The database contains the schema produced by the previous migrations.
+- The entity actually differs from the current database schema.
+- `synchronize` is disabled.
+
+### Create an empty migration
+
+Use `migration:create` when a migration must be written manually:
+
+```bash
+npm run migration:create -- \
+  src/database/migrations/MigrationName
+```
+
+For example:
+
+```bash
+npm run migration:create -- \
+  src/database/migrations/AddDefaultAdmin
+```
+
+Unlike `migration:generate`, this command does not compare entities with the database. It only creates an empty migration containing `up()` and `down()` methods.
+
+### Run pending migrations
+
+To execute all migrations that have not yet been applied:
+
+```bash
+npm run migration:run -- \
+  -d src/database/data-source.ts
+```
+
+TypeORM executes the `up()` method of each pending migration and records the executed migrations in its migrations table.
+
+### Revert the latest migration
+
+To revert the most recently executed migration:
+
+```bash
+npm run migration:revert -- \
+  -d src/database/data-source.ts
+```
+
+TypeORM executes the migration's `down()` method.
+
+This command reverts only one migration at a time. Run it again to revert another migration.
+
+### Recommended workflow
+
+When changing the database schema:
+
+1. Modify or create the entity classes.
+2. Make sure the database is running.
+3. Generate a migration.
+4. Review the generated `up()` and `down()` methods.
+5. Run the migration.
+6. Commit the entity and migration files together.
+
+```bash
+npm run migration:generate -- \
+  src/database/migrations/DescribeTheChange \
+  -d src/database/data-source.ts
+
+npm run migration:run -- \
+  -d src/database/data-source.ts
+```
+
+Do not enable TypeORM's automatic schema synchronization when using migrations:
+
+```ts
+synchronize: false;
+```
+
+Migrations should be the only mechanism used to apply schema changes to shared and production databases.
