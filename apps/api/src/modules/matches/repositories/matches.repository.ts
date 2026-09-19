@@ -18,8 +18,7 @@ export class MatchesRepository {
         return this.repository.findOneBy({ id });
     }
 
-    create(weightClass: string): Promise<Match> {
-        const match = this.repository.create({ weightClass });
+    create(match: Match): Promise<Match> {
         return this.repository.save(match);
     }
 }
