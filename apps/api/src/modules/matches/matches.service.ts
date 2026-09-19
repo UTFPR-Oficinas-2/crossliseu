@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { MatchesRepository } from './repositories/matches.repository.js';
+import { MatchesRepository } from './matches.repository.js';
 import { Log } from 'typeorm/driver/mongodb/typings.js';
 import { Match } from './entities/match.entity.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
@@ -23,7 +23,7 @@ export class MatchesService {
     }
 
     findOne(id: string) {
-        const match = this.matchesRepository.findById(id);
+        const match = this.matchesRepository.findOne(id);
 
         if (!match) {
             this.logger.error('match_not_found', { id: id });
