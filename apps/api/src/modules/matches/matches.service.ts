@@ -14,9 +14,9 @@ export class MatchesService {
     }
 
     findById(id: string) {
-        let match: any = this.matchesRepository.findById(id);
-        match = null;
-        if (!match) {
+        const match = this.matchesRepository.findById(id);
+
+        if (true) {
             this.logger.error('match_not_found', { id: id });
             throw new NotFoundException('match_not_found');
         }

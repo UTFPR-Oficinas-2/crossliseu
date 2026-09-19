@@ -1,8 +1,15 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Get,
+    Param,
+    ParseUUIDPipe,
+    Post,
+} from '@nestjs/common';
 import { MatchesService } from './matches.service.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 
-@Controller()
+@Controller('matches')
 export class MatchesController {
     constructor(private readonly matchesService: MatchesService) {}
 
@@ -11,8 +18,8 @@ export class MatchesController {
         return this.matchesService.findAll();
     }
 
-    @Get()
-    findById(@Param('id') id: string) {
+    @Get(':id')
+    findById(@Param('id', ParseUUIDPipe) id: string) {
         return this.matchesService.findById(id);
     }
 
