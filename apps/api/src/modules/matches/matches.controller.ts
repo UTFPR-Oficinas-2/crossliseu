@@ -7,9 +7,12 @@ import {
     ParseUUIDPipe,
     Patch,
     Post,
+    UseGuards,
 } from '@nestjs/common';
-import { MatchesService } from './matches.service.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
+import { MatchesService } from './matches.service.js';
+import { Public } from '../auth/public-decorator.js';
 
 @Controller('matches')
 export class MatchesController {
@@ -20,6 +23,7 @@ export class MatchesController {
         return this.matchesService.create(createMatchDto);
     }
 
+    @Public()
     @Get()
     findAll() {
         return this.matchesService.findAll();

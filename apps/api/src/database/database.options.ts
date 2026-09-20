@@ -1,6 +1,7 @@
 import { DataSourceOptions } from 'typeorm';
 import { fileURLToPath } from 'node:url';
 import { Match } from '../modules/matches/entities/match.entity.js';
+import { User } from '../modules/users/entities/user.entity.js';
 
 export function databaseOptions(): DataSourceOptions {
     const db: string = String(process.env.POSTGRES_DB);
@@ -22,7 +23,7 @@ export function databaseOptions(): DataSourceOptions {
         username: username,
         password: password,
         database: db,
-        entities: [Match],
+        entities: [Match, User],
         migrations: [
             fileURLToPath(new URL('./migrations/*{.ts,.js}', import.meta.url)),
         ],
