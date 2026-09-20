@@ -28,7 +28,7 @@ export class UsersController {
 
     @Get(':id')
     findOne(@Param('id', ParseUUIDPipe) id: string) {
-        return this.usersService.findOne(id);
+        return this.usersService.findOneById(id);
     }
 
     @Patch(':id')
@@ -41,6 +41,6 @@ export class UsersController {
 
     @Delete(':id')
     remove(@Param('id', ParseUUIDPipe) id: string) {
-        return this.usersService.remove(id);
+        return this.usersService.delete(id);
     }
 }

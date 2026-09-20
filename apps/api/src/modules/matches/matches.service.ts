@@ -22,8 +22,8 @@ export class MatchesService {
         return this.matchesRepository.findAll();
     }
 
-    findOne(id: string) {
-        const match = this.matchesRepository.findOne(id);
+    async findOne(id: string) {
+        const match = await this.matchesRepository.findOne(id);
 
         if (!match) {
             this.logger.error('match_not_found', { id: id });

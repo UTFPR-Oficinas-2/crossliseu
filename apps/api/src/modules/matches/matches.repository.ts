@@ -22,11 +22,11 @@ export class MatchesRepository {
         return this.repository.findOneBy({ id });
     }
 
-    update() {
-        // TODO
+    update(id: string, partialMatch: Partial<Match>) {
+        return this.repository.update({ id }, partialMatch);
     }
 
-    remove() {
-        // TODO
+    remove(id: string) {
+        return this.repository.softDelete({ id });
     }
 }

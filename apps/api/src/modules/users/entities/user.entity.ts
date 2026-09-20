@@ -3,8 +3,8 @@ import { BaseEntity } from '../../../database/base.entity.js';
 
 @Entity('users')
 export class User extends BaseEntity {
-    @Column({ name: 'name', type: 'varchar', nullable: false })
-    name: string;
+    @Column({ name: 'username', type: 'varchar', nullable: false })
+    username: string;
 
     @Column({ name: 'email', type: 'varchar', nullable: false })
     email: string;
