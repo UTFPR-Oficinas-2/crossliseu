@@ -9,7 +9,6 @@ import {
     Post,
     UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
@@ -29,6 +28,7 @@ export class MatchesController {
         return this.matchesService.findAll();
     }
 
+    @Public()
     @Get(':id')
     findOne(@Param('id', ParseUUIDPipe) id: string) {
         return this.matchesService.findOne(id);
