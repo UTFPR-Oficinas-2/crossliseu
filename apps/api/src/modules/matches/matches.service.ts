@@ -1,7 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { MatchesRepository } from './repositories/matches.repository.js';
+import { MatchesRepository } from './matches.repository.js';
 import { Log } from 'typeorm/driver/mongodb/typings.js';
 import { Match } from './entities/match.entity.js';
+import { CreateMatchDto } from './dto/create-match.dto.js';
 
 @Injectable()
 export class MatchesService {
@@ -9,12 +10,20 @@ export class MatchesService {
 
     constructor(private readonly matchesRepository: MatchesRepository) {}
 
+    create(createMatchDto: CreateMatchDto) {
+        const { weightClass } = createMatchDto;
+
+        const match: Match = new Match(weightClass);
+
+        return this.matchesRepository.create(match);
+    }
+
     findAll() {
         return this.matchesRepository.findAll();
     }
 
-    findById(id: string) {
-        const match = this.matchesRepository.findById(id);
+    async findOne(id: string) {
+        const match = await this.matchesRepository.findOne(id);
 
         if (!match) {
             this.logger.error('match_not_found', { id: id });
@@ -22,9 +31,5 @@ export class MatchesService {
         }
 
         return match;
-    }
-
-    create(weightClass: string) {
-        return this.matchesRepository.create(weightClass);
     }
 }

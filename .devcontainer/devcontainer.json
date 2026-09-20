@@ -24,7 +24,8 @@
         "esbenp.prettier-vscode",
         "Vue.volar",
         "dbaeumer.vscode-eslint",
-        "ms-python.python"
+        "ms-python.python",
+        "ms-vscode.vscode-typescript-next"
       ]
     }
   },
