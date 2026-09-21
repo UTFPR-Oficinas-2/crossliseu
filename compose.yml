@@ -4,6 +4,9 @@ services:
     build:
       context: ./apps/api
 
+    env_file:
+        - ./.env
+
     environment:
       NODE_ENV: development
     ports:
