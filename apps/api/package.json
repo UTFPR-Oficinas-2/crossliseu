@@ -23,7 +23,8 @@
         "typeorm": "typeorm-ts-node-esm",
         "migration:generate": "npm run typeorm -- migration:generate",
         "migration:run": "npm run typeorm -- migration:run",
-        "migration:revert": "npm run typeorm -- migration:revert"
+        "migration:revert": "npm run typeorm -- migration:revert",
+        "seed:admin": "node --loader ts-node/esm --no-warnings ./src/database/seeds/create-admin.seed.ts"
     },
     "dependencies": {
         "@nestjs/common": "^12.0.1",
@@ -51,6 +52,7 @@
         "@nestjs/mau": "^0.0.6",
         "@nestjs/schematics": "^12.0.0",
         "@nestjs/testing": "^12.0.1",
+        "@types/bcrypt": "^6.0.0",
         "@types/express": "^5.0.0",
         "@types/node": "^24.0.0",
         "@types/passport-jwt": "^4.0.1",
