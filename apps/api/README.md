@@ -175,3 +175,38 @@ synchronize: false;
 ```
 
 Migrations should be the only mechanism used to apply schema changes to shared and production databases.
+
+## Seeding the admin account
+
+There is no public user signup. The only way to create a user is the admin seed script, which reads credentials from environment variables and stores the password as a bcrypt hash.
+
+### Prerequisites
+
+1. Make sure PostgreSQL is running and migrations have been applied (see [Run pending migrations](#run-pending-migrations)).
+2. Set the following variables in the root `.env` file:
+
+```text
+ADMIN_USERNAME=
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+```
+
+3. Run the command from the API directory:
+
+```bash
+cd apps/api
+```
+
+### Run the seed script
+
+```bash
+npm run seed:admin
+```
+
+This hashes `ADMIN_PASSWORD` with bcrypt and creates the admin user if it doesn't exist yet, or updates its email and password if it does. The script is safe to run more than once.
+
+If PostgreSQL is reachable at a different host than the one configured in `.env` (for example, running the script on the host machine against a `docker compose` database, where `POSTGRES_HOST` is set to the in-network service name `postgres`), override it inline:
+
+```bash
+POSTGRES_HOST=localhost npm run seed:admin
+```
