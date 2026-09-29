@@ -13,7 +13,7 @@ class VideoCapture():
 
     def read_frame(self):
         ret, frame = self.capture.read()
-        print(frame.shape)
+        #print(frame.shape)
         #numpy.ndarray
         #(1080, 1920, 3) height, width, chanels(BGR)
 

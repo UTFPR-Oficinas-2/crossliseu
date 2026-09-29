@@ -14,3 +14,11 @@ def preprocess(frame):
 
 
     return frame_hsv
+
+def show_hsv_value(event, x, y, flags, param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        hsv_frame = param
+
+        pixel = hsv_frame[y, x]
+
+        print(f"x={x}, y={y}, HSV={pixel}")
