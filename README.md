@@ -16,7 +16,7 @@ npm run start:dev
 From the root of the project:
 
 ```bash
-cd apps/api
+cd apps/web
 npm run dev
 ```
 
