@@ -29,6 +29,10 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-7: 32px;
+  /* Off-scale values used by Figma components (progress bar, status pill, card gap) */
+  --space-6px: 6px;
+  --space-7px: 7px;
+  --space-14px: 14px;
 
   /* Radius */
   --radius-sm: 4px;
@@ -87,7 +91,7 @@
   --text-overline-weight: 500;
   --text-overline-size: 11px;
   --text-overline-line-height: 1.4;
-  --text-overline-tracking: 8px;
+  --text-overline-tracking: 0.08em;
 
   --text-mono-m-family: var(--font-mono);
   --text-mono-m-weight: 500;

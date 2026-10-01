@@ -9,11 +9,16 @@ const router = createRouter({
       name: 'home',
       component: HomeView,
     },
-    {
-      path: '/dev/componentes',
-      name: 'dev-componentes',
-      component: () => import('../views/dev/ComponentsPreviewView.vue'),
-    },
+    // Component preview page, only available in development
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/dev/componentes',
+            name: 'dev-componentes',
+            component: () => import('../views/dev/ComponentsPreviewView.vue'),
+          },
+        ]
+      : []),
   ],
 })
 
