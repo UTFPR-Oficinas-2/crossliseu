@@ -33,17 +33,40 @@
   --space-6px: 6px;
   --space-7px: 7px;
   --space-14px: 14px;
+  --space-22px: 22px;
+
+  /* Sizes (component dimensions from Figma) */
+  --size-control: 44px; /* button, tab and sidebar item height */
+  --size-field: 48px; /* input height */
+  --size-button-min: 120px;
+  --size-tab-min: 110px;
+  --size-indicator-width: 3px; /* sidebar active bar */
+  --size-indicator-height: 18px;
+  --size-side-bar: 56px; /* competitor tile color bar */
 
   /* Radius */
+  --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-pill: 999px;
+
+  /* Focus and states (not defined in Figma; shared so they stay consistent) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --opacity-disabled: 0.5;
 
   /* Text styles */
   --text-display-page-family: var(--font-heading);
   --text-display-page-weight: 700;
   --text-display-page-size: 48px;
   --text-display-page-line-height: 1.05;
-  --text-display-page-tracking: -1px;
+  --text-display-page-tracking: -0.01em;
+
+  /* Metric / Overview value; Figma uses raw text here, not a published text style */
+  --text-numeric-l-family: var(--font-heading);
+  --text-numeric-l-weight: 700;
+  --text-numeric-l-size: 36px;
+  --text-numeric-l-line-height: 1.35;
+  --text-numeric-l-tracking: 0;
 
   --text-heading-l-family: var(--font-heading);
   --text-heading-l-weight: 700;

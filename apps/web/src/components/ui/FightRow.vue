@@ -21,7 +21,8 @@ const pill = computed(() => {
     case 'done':
       return { label: 'Encerrada', tone: 'success' as const }
     case 'cancelled':
-      return { label: 'Cancelada', tone: 'danger' as const }
+      // Not red: red is reserved for errors and destructive actions
+      return { label: 'Cancelada', tone: 'neutral' as const }
     default:
       return { label: 'Aguardando', tone: 'neutral' as const }
   }

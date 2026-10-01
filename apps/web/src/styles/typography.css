@@ -30,6 +30,14 @@
   letter-spacing: var(--text-heading-s-tracking);
 }
 
+.text-numeric-l {
+  font-family: var(--text-numeric-l-family);
+  font-weight: var(--text-numeric-l-weight);
+  font-size: var(--text-numeric-l-size);
+  line-height: var(--text-numeric-l-line-height);
+  letter-spacing: var(--text-numeric-l-tracking);
+}
+
 .text-body-m {
   font-family: var(--text-body-m-family);
   font-weight: var(--text-body-m-weight);
