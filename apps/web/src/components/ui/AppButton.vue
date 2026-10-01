@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 type ButtonType = 'button' | 'submit' | 'reset'
@@ -8,17 +9,29 @@ const {
   variant = 'primary',
   type = 'button',
   disabled = false,
+  to,
 } = defineProps<{
   variant?: ButtonVariant
   type?: ButtonType
   disabled?: boolean
+  /** Renders a RouterLink styled as a button, for navigation */
+  to?: RouteLocationRaw
 }>()
 
 const variantClass = computed(() => `app-button--${variant}`)
 </script>
 
 <template>
-  <button :type="type" :disabled="disabled" class="app-button text-label-m" :class="variantClass">
+  <RouterLink v-if="to" :to="to" class="app-button text-label-m" :class="variantClass">
+    <slot />
+  </RouterLink>
+  <button
+    v-else
+    :type="type"
+    :disabled="disabled"
+    class="app-button text-label-m"
+    :class="variantClass"
+  >
     <slot />
   </button>
 </template>
@@ -36,6 +49,7 @@ const variantClass = computed(() => `app-button--${variant}`)
   border-radius: var(--radius-sm);
   background: transparent;
   text-align: center;
+  text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
 }

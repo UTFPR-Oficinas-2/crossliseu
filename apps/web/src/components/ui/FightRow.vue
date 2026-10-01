@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// Figma: `Row / Fight` (node 11:51). The row shows the pairing, the match state and the actions.
+// Figma has no visible fight number, so it is only exposed to assistive tech via `aria-label`.
 import { computed } from 'vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 
@@ -11,11 +13,11 @@ const { fightNumber, robotA, robotB, status } = defineProps<{
   status: FightStatus
 }>()
 
-// Status code → what StatusPill needs
+// Match state only; recording/upload/analysis state is a separate concern and never shown here
 const pill = computed(() => {
   switch (status) {
     case 'running':
-      return { label: 'Ao vivo', tone: 'live' as const }
+      return { label: 'Em andamento', tone: 'live' as const }
     case 'paused':
       return { label: 'Pausada', tone: 'warning' as const }
     case 'done':
@@ -28,22 +30,22 @@ const pill = computed(() => {
   }
 })
 
-const number = computed(() => `#${String(fightNumber).padStart(2, '0')}`) // 4 → "#04"
+const accessibleLabel = computed(
+  () => `Luta ${new Intl.NumberFormat('pt-BR').format(fightNumber)}: ${robotA} contra ${robotB}`,
+)
 </script>
 
 <template>
-  <article class="fight-row">
-    <span class="fight-row__number">{{ number }}</span>
-
-    <p class="fight-row__competitors">
-      <strong class="fight-row__robot fight-row__robot--a">{{ robotA }}</strong>
-      <span class="fight-row__vs">x</span>
-      <strong class="fight-row__robot fight-row__robot--b">{{ robotB }}</strong>
+  <article class="fight-row" :aria-label="accessibleLabel">
+    <p class="fight-row__competitors text-heading-s">
+      <span>{{ robotA }}</span>
+      <span aria-hidden="true">×</span>
+      <span>{{ robotB }}</span>
     </p>
 
-    <StatusPill :label="pill.label" :tone="pill.tone" />
+    <StatusPill class="fight-row__status" :label="pill.label" :tone="pill.tone" />
 
-    <div class="fight-row__actions">
+    <div v-if="$slots.default" class="fight-row__actions">
       <slot />
     </div>
   </article>
@@ -51,30 +53,35 @@ const number = computed(() => `#${String(fightNumber).padStart(2, '0')}`) // 4 �
 
 <style scoped>
 .fight-row {
-  display: grid;
-  grid-template-columns: 48px 1fr auto auto; /* number | names | pill | action */
+  display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
 }
-.fight-row__number {
-  font-family: var(--font-mono);
-  color: var(--color-muted);
-}
+
 .fight-row__competitors {
   display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-text);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
-.fight-row__robot--a {
-  color: var(--color-blue);
+
+.fight-row__status,
+.fight-row__actions {
+  flex-shrink: 0;
 }
-.fight-row__robot--b {
-  color: var(--color-pink);
-}
-.fight-row__vs {
-  color: var(--color-muted);
-  font-size: 0.75rem;
+
+.fight-row__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 </style>
