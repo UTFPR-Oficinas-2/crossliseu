@@ -83,10 +83,12 @@ src/
     icons/       inline SVG icons exported from Figma
   layouts/       PublicLayout, OrganizerLayout, OperatorLayout, RefereeLayout
   views/
-    public/      Home, Championship, MatchDetails, SignIn, NotFound
-    organizer/   MyChampionships, ChampionshipForm, Overview, Participants, Matches
-    operator/    MatchOperation (one view, three states)
-    referee/     Join, Scoring, Finished, InvalidAccess
+    public/      HomeView, ChampionshipView, MatchDetailsView, SignInView, NotFoundView
+    organizer/   MyChampionshipsView, ChampionshipFormView, OverviewView, ParticipantsView,
+                 MatchesView
+    operator/    MatchOperationView (one view, three states)
+    referee/     RefereeSessionView (join → scoring → finished states), InvalidAccessView
+    <section>/components/   blocks used only inside that section
   types/         domain types (Championship, Robot, Match, RefereeScore, …)
   mocks/         typed demo data used until the API exists
   stores/        Pinia stores
