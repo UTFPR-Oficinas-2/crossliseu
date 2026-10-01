@@ -1,88 +1,101 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap');
-
 :root {
   /* Color */
-  --bg: #111315;
-  --panel: #1a1d20;
-  --raised: #24282d;
-  --border: #363b42;
-  --border-soft: #242a30;
-  --text: #f3f1ec;
-  --muted: #a6adb5;
-  --orange: #ff8a3d;
-  --orange-dim: #5c3a1e;
-  --blue: #82beff;
-  --green: #88d4ab;
-  --red: #e2544f;
-  --red-dim: #3a1f1f;
+  --color-bg: #111315;
+  --color-panel: #1a1d20;
+  --color-raised: #24282d;
+  --color-border: #363b42;
+  --color-border-soft: #242a30;
+  --color-text: #f3f1ec;
+  --color-muted: #a6adb5;
+  --color-orange: #ff8a3d;
+  --color-orange-dim: #5c3a1e;
+  --color-green: #88d4ab;
+  --color-blue: #82beff;
+  --color-pink: #ee9bbc;
+  --color-red: #e2544f;
+  --color-red-dim: #3a1f1f;
+  --color-amber: #e8b44a;
 
   /* Font families */
-  --font-family-heading: 'Barlow Condensed', sans-serif;
-  --font-family-body: 'Inter', sans-serif;
-  --font-family-mono: 'IBM Plex Mono', monospace;
+  --font-heading: 'Barlow Condensed', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-pill: 999px;
 
   /* Text styles */
-  --text-display-page-family: var(--font-family-heading);
+  --text-display-page-family: var(--font-heading);
   --text-display-page-weight: 700;
   --text-display-page-size: 48px;
   --text-display-page-line-height: 1.05;
   --text-display-page-tracking: -1px;
 
-  --text-heading-l-family: var(--font-family-heading);
+  --text-heading-l-family: var(--font-heading);
   --text-heading-l-weight: 700;
   --text-heading-l-size: 28px;
   --text-heading-l-line-height: 1.15;
   --text-heading-l-tracking: 0;
 
-  --text-heading-m-family: var(--font-family-heading);
+  --text-heading-m-family: var(--font-heading);
   --text-heading-m-weight: 700;
   --text-heading-m-size: 22px;
   --text-heading-m-line-height: 1.2;
   --text-heading-m-tracking: 0;
 
-  --text-heading-s-family: var(--font-family-heading);
+  --text-heading-s-family: var(--font-heading);
   --text-heading-s-weight: 600;
   --text-heading-s-size: 18px;
   --text-heading-s-line-height: 1.25;
   --text-heading-s-tracking: 0;
 
-  --text-body-m-family: var(--font-family-body);
+  --text-body-m-family: var(--font-body);
   --text-body-m-weight: 400;
   --text-body-m-size: 14px;
   --text-body-m-line-height: 1.5;
   --text-body-m-tracking: 0;
 
-  --text-body-s-family: var(--font-family-body);
+  --text-body-s-family: var(--font-body);
   --text-body-s-weight: 400;
   --text-body-s-size: 13px;
   --text-body-s-line-height: 1.45;
   --text-body-s-tracking: 0;
 
-  --text-label-m-family: var(--font-family-body);
+  --text-label-m-family: var(--font-body);
   --text-label-m-weight: 600;
   --text-label-m-size: 14px;
   --text-label-m-line-height: 1.4;
   --text-label-m-tracking: 0;
 
-  --text-label-s-family: var(--font-family-body);
+  --text-label-s-family: var(--font-body);
   --text-label-s-weight: 600;
   --text-label-s-size: 13px;
   --text-label-s-line-height: 1.4;
   --text-label-s-tracking: 0;
 
-  --text-overline-family: var(--font-family-mono);
+  --text-overline-family: var(--font-mono);
   --text-overline-weight: 500;
   --text-overline-size: 11px;
   --text-overline-line-height: 1.4;
   --text-overline-tracking: 8px;
 
-  --text-mono-m-family: var(--font-family-mono);
+  --text-mono-m-family: var(--font-mono);
   --text-mono-m-weight: 500;
   --text-mono-m-size: 13px;
   --text-mono-m-line-height: 1.45;
   --text-mono-m-tracking: 0;
 
-  --text-mono-s-family: var(--font-family-mono);
+  --text-mono-s-family: var(--font-mono);
   --text-mono-s-weight: 500;
   --text-mono-s-size: 11px;
   --text-mono-s-line-height: 1.45;
