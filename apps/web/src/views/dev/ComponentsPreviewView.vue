@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
+import AppNav from '@/components/ui/AppNav.vue'
+import ChampionshipCard from '@/components/ui/ChampionshipCard.vue'
 import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import FightRow from '@/components/ui/FightRow.vue'
 import InputField from '@/components/ui/InputField.vue'
+import OperatorNav from '@/components/ui/OperatorNav.vue'
 import OverviewMetric from '@/components/ui/OverviewMetric.vue'
+import PublicNav from '@/components/ui/PublicNav.vue'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
@@ -34,6 +38,46 @@ const championshipName = ref('Crossliseu 2026')
 const emptyName = ref('')
 const invalidEmail = ref('arbitro@')
 const disabledCode = ref('ARB-4821')
+
+const championships = [
+  {
+    name: 'Crossliseu 2026 · Etapa Curitiba',
+    edition: 3,
+    date: '2026-10-17',
+    status: 'running',
+    robotCount: 16,
+    fightsDone: 6,
+    fightsTotal: 15,
+  },
+  {
+    name: 'Copa UTFPR de Robôs de Combate',
+    edition: 1,
+    date: '2026-12-09',
+    status: 'scheduled',
+    robotCount: 8,
+    fightsDone: 0,
+    fightsTotal: 7,
+  },
+  {
+    name: 'Crossliseu 2026 · Etapa Ponta Grossa',
+    edition: 2,
+    date: '2026-06-21',
+    status: 'finished',
+    robotCount: 12,
+    fightsDone: 11,
+    fightsTotal: 11,
+  },
+] as const
+
+const fights = [
+  { fightNumber: 1, robotA: 'Claudio', robotB: 'Gepeto', status: 'done' },
+  { fightNumber: 2, robotA: 'Ses', robotB: 'Braz', status: 'running' },
+  { fightNumber: 3, robotA: 'Faísca', robotB: 'Trovão', status: 'paused' },
+  { fightNumber: 4, robotA: 'Martelinho', robotB: 'Destruidor Supremo II', status: 'waiting' },
+  { fightNumber: 5, robotA: 'Volt', robotB: 'Ferrugem', status: 'cancelled' },
+] as const
+
+const operatorExits = ref(0)
 </script>
 
 <template>
@@ -207,13 +251,52 @@ const disabledCode = ref('ARB-4821')
     <section class="preview__section">
       <h2 class="text-heading-m">Row / Fight</h2>
       <div class="preview__fights">
-        <FightRow :fight-number="1" robot-a="Claudio" robot-b="Gepeto" status="running">
-          <AppButton variant="secondary">Ver luta</AppButton>
+        <FightRow v-for="fight in fights" :key="fight.fightNumber" v-bind="fight">
+          <AppButton variant="secondary" :to="{ name: 'dev-componentes' }">Detalhes</AppButton>
         </FightRow>
-        <FightRow :fight-number="2" robot-a="Ses" robot-b="Braz" status="waiting">
-          <AppButton variant="secondary">Ver luta</AppButton>
-        </FightRow>
+        <FightRow :fight-number="6" robot-a="Sem ações" robot-b="Slot vazio" status="waiting" />
       </div>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Card / Championship</h2>
+      <div class="preview__cards">
+        <ChampionshipCard
+          v-for="championship in championships"
+          :key="championship.name"
+          v-bind="championship"
+          :to="{ name: 'dev-componentes' }"
+        />
+      </div>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Navigation / Public</h2>
+      <div class="preview__nav">
+        <PublicNav />
+      </div>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Navigation / App</h2>
+      <div class="preview__nav">
+        <AppNav user-name="E. Vidias" active="my-championships" />
+      </div>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Navigation / Operator</h2>
+      <div class="preview__nav">
+        <OperatorNav
+          championship="Crossliseu 2026 · Etapa Curitiba"
+          :fight-number="8"
+          arena="ARENA 01"
+          @exit="operatorExits++"
+        />
+      </div>
+      <p class="text-body-s preview__label">
+        "Sair da operação" clicado {{ operatorExits }} vez(es)
+      </p>
     </section>
   </div>
 </template>
@@ -308,5 +391,16 @@ const disabledCode = ref('ARB-4821')
 .preview__fights {
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
+}
+
+.preview__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+.preview__nav {
+  border: 1px dashed var(--color-border);
 }
 </style>

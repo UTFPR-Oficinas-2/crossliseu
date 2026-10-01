@@ -29,9 +29,13 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-7: 32px;
-  /* Off-scale values used by Figma components (progress bar, status pill, card gap) */
+  --space-8: 40px;
+  --space-page-x: 64px; /* page side padding (public and app navs) */
+  /* Off-scale values used by Figma components (progress bar, status pill, card gap, nav tags) */
+  --space-5px: 5px;
   --space-6px: 6px;
   --space-7px: 7px;
+  --space-10px: 10px;
   --space-14px: 14px;
   --space-22px: 22px;
 
@@ -43,9 +47,13 @@
   --size-indicator-width: 3px; /* sidebar active bar */
   --size-indicator-height: 18px;
   --size-side-bar: 56px; /* competitor tile color bar */
+  --size-nav-height: 88px; /* public and app navs */
+  --size-nav-operator-height: 72px;
+  --size-avatar: 28px;
 
   /* Radius */
   --radius-xs: 2px;
+  --radius-3px: 3px; /* operator nav tag */
   --radius-sm: 4px;
   --radius-pill: 999px;
 
