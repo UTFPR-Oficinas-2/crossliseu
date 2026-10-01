@@ -1,7 +1,6 @@
-<!-- src/features/matches/components/FightRow.vue -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import StatusPill from '@/shared/ui/StatusPill.vue'
+import StatusPill from '@/components/ui/StatusPill.vue'
 
 type FightStatus = 'waiting' | 'running' | 'paused' | 'done' | 'cancelled'
 

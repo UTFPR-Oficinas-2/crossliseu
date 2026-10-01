@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FightRow from '@/features/matches/components/FightRow.vue'
+import FightRow from '@/components/ui/FightRow.vue'
 </script>
 
 <template>
