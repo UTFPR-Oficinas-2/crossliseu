@@ -12,11 +12,11 @@ export interface AppNavItem {
 const {
   userName,
   items = [
-    { id: 'championships', label: 'Campeonatos', to: '/' },
-    { id: 'my-championships', label: 'Meus campeonatos', to: '/organizador/campeonatos' },
+    { id: 'championships', label: 'Campeonatos', to: { name: 'home' } },
+    { id: 'my-championships', label: 'Meus campeonatos', to: { name: 'my-championships' } },
   ],
   active,
-  homeTo = '/',
+  homeTo = { name: 'home' },
 } = defineProps<{
   /** Signed-in user's display name, e.g. "E. Vidias" */
   userName: string
