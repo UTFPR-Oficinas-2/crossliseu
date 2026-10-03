@@ -7,14 +7,18 @@ import AppButton from '@/components/ui/AppButton.vue'
 
 <template>
   <header class="public-nav">
-    <RouterLink to="/" class="public-nav__brand text-heading-l">Crossliseu</RouterLink>
+    <RouterLink :to="{ name: 'home' }" class="public-nav__brand text-heading-l"
+      >Crossliseu</RouterLink
+    >
 
     <nav class="public-nav__right" aria-label="Navegação principal">
-      <RouterLink to="/campeonatos" class="public-nav__link text-body-m">Campeonatos</RouterLink>
+      <RouterLink :to="{ name: 'home' }" class="public-nav__link text-body-m"
+        >Campeonatos</RouterLink
+      >
 
       <!-- Right-side actions; defaults to the sign-in link from Figma -->
       <slot name="actions">
-        <AppButton variant="secondary" to="/entrar">Entrar</AppButton>
+        <AppButton variant="secondary" :to="{ name: 'sign-in' }">Entrar</AppButton>
       </slot>
     </nav>
   </header>

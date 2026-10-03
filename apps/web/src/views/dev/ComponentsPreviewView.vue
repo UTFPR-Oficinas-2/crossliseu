@@ -191,7 +191,7 @@ const operatorExits = ref(0)
         <SidebarItem
           v-for="item in sidebarItems"
           :key="item"
-          :to="{ name: 'dev-componentes' }"
+          :to="{ name: 'dev-components' }"
           :active="item === activeSidebarItem"
           @click="activeSidebarItem = item"
         >
@@ -252,7 +252,7 @@ const operatorExits = ref(0)
       <h2 class="text-heading-m">Row / Fight</h2>
       <div class="preview__fights">
         <FightRow v-for="fight in fights" :key="fight.fightNumber" v-bind="fight">
-          <AppButton variant="secondary" :to="{ name: 'dev-componentes' }">Detalhes</AppButton>
+          <AppButton variant="secondary" :to="{ name: 'dev-components' }">Detalhes</AppButton>
         </FightRow>
         <FightRow :fight-number="6" robot-a="Sem ações" robot-b="Slot vazio" status="waiting" />
       </div>
@@ -265,7 +265,7 @@ const operatorExits = ref(0)
           v-for="championship in championships"
           :key="championship.name"
           v-bind="championship"
-          :to="{ name: 'dev-componentes' }"
+          :to="{ name: 'dev-components' }"
         />
       </div>
     </section>
