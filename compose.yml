@@ -3,6 +3,7 @@ services:
   api:
     build:
       context: ./apps/api
+      target: dev
 
     env_file:
         - ./.env
@@ -23,6 +24,7 @@ services:
   web:
     build:
       context: ./apps/web
+      target: dev
 
     environment:
       - NODE_ENV=development

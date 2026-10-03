@@ -1,0 +1,55 @@
+# Production stack for the VPS.
+#   Step 1 (build on the VPS):   docker compose -f compose.prod.yml up -d --build
+#   Step 2 (images from GHCR):   docker compose -f compose.prod.yml pull && docker compose -f compose.prod.yml up -d
+#
+# Ports are bound to 127.0.0.1 only: the outside world reaches the app
+# through the host NGINX, never directly.
+name: crossliseu
+
+services:
+  api:
+    image: ghcr.io/utfpr-oficinas-2/crossliseu-api:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/api
+      target: prod
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "127.0.0.1:8011:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/utfpr-oficinas-2/crossliseu-web:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/web
+      target: prod
+      args:
+        BASE_PATH: /crossliseu/
+    ports:
+      - "127.0.0.1:8010:80"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
