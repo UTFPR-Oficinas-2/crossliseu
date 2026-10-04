@@ -28,19 +28,27 @@ export type RefereeSeat = 1 | 2 | 3
 /** How a fight ended: desistência / pontos / nocaute */
 export type MatchEndReason = 'surrender' | 'points' | 'knockout'
 
+/**
+ * apps/api (`GET /championships`) only returns id, name, scheduledDate (→ `startDate`) and
+ * timestamps. Optional fields are not sent by the API yet: hide their UI when they are missing.
+ */
 export interface Championship {
   id: string
   name: string
   /** Free label shown on the card: "EDIÇÃO 01", "ETAPA 03", "INTERNO" */
-  edition: string
-  description: string
+  edition?: string
+  description?: string
   /** "UTFPR, Curitiba" */
-  location: string
-  startDate: string
-  endDate: string | null
-  status: ChampionshipStatus
+  location?: string
+  startDate: string | null
+  endDate?: string | null
+  status?: ChampionshipStatus
   /** "inscrições abertas" */
-  registrationOpen: boolean
+  registrationOpen?: boolean
+  /** Card summary: "16 robôs · 6 de 15 lutas" */
+  robotCount?: number
+  fightsDone?: number
+  fightsTotal?: number
   createdAt: string
   modifiedAt: string
 }

@@ -6,6 +6,14 @@
   letter-spacing: var(--text-display-page-tracking);
 }
 
+.text-heading-xl {
+  font-family: var(--text-heading-xl-family);
+  font-weight: var(--text-heading-xl-weight);
+  font-size: var(--text-heading-xl-size);
+  line-height: var(--text-heading-xl-line-height);
+  letter-spacing: var(--text-heading-xl-tracking);
+}
+
 .text-heading-l {
   font-family: var(--text-heading-l-family);
   font-weight: var(--text-heading-l-weight);
@@ -36,6 +44,14 @@
   font-size: var(--text-numeric-l-size);
   line-height: var(--text-numeric-l-line-height);
   letter-spacing: var(--text-numeric-l-tracking);
+}
+
+.text-body-l {
+  font-family: var(--text-body-l-family);
+  font-weight: var(--text-body-l-weight);
+  font-size: var(--text-body-l-size);
+  line-height: var(--text-body-l-line-height);
+  letter-spacing: var(--text-body-l-tracking);
 }
 
 .text-body-m {
@@ -93,4 +109,12 @@
   font-size: var(--text-mono-s-size);
   line-height: var(--text-mono-s-line-height);
   letter-spacing: var(--text-mono-s-tracking);
+}
+
+.text-timer-l {
+  font-family: var(--text-timer-l-family);
+  font-weight: var(--text-timer-l-weight);
+  font-size: var(--text-timer-l-size);
+  line-height: var(--text-timer-l-line-height);
+  letter-spacing: var(--text-timer-l-tracking);
 }
