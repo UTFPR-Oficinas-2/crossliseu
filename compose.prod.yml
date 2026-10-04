@@ -34,7 +34,7 @@ services:
         BASE_PATH: /crossliseu/
         VITE_API_URL: /crossliseu/api
     ports:
-      - "127.0.0.1:8010:80"
+      - "127.0.0.1:8010:8080"
     restart: unless-stopped
 
   postgres:
