@@ -10,11 +10,14 @@ import {
     Patch,
     Post,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ChampionshipsService } from './championships.service.js';
 import { CreateChampionshipDto } from './dto/create-championship.dto.js';
 import { UpdateChampionshipDto } from './dto/update-championship.dto.js';
 import { Public } from '../auth/public-decorator.js';
 
+@ApiTags('championships')
+@ApiBearerAuth()
 @Controller('championships')
 export class ChampionshipsController {
     constructor(private readonly championshipsService: ChampionshipsService) {}
