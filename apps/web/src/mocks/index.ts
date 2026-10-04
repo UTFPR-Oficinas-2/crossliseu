@@ -12,15 +12,13 @@ import type {
   RefereeScore,
   Robot,
 } from '@/types'
-import {
-  arenas,
-  championships,
-  managedChampionshipIds,
-  matches,
-  refereeAccesses,
-  refereeScores,
-  robots,
-} from './data'
+
+// Demo data is dev-only. `import.meta.env.DEV` is replaced at build time, so production bundles
+// don't contain (or emit a chunk for) `./data`; production only takes the API branches above.
+const demo = () =>
+  import.meta.env.DEV
+    ? import('./data')
+    : Promise.reject(new Error('Demo data is not available in production builds'))
 
 /** Only the fields apps/api returns; everything else stays undefined (see `Championship`). */
 function toChampionship(api: ApiChampionship): Championship {
@@ -36,47 +34,56 @@ function toChampionship(api: ApiChampionship): Championship {
 /** GET /championships when the API is configured. Errors propagate to the caller. */
 export async function getChampionships(): Promise<Championship[]> {
   if (isApiEnabled) return (await listChampionships()).map(toChampionship)
-  return championships
+  return (await demo()).championships
 }
 
 export async function getChampionship(id: string): Promise<Championship | null> {
+  const { championships } = await demo()
   return championships.find((c) => c.id === id) ?? null
 }
 
 /** Championships the signed-in organizer can manage */
 export async function getManagedChampionships(): Promise<Championship[]> {
+  const { championships, managedChampionshipIds } = await demo()
   return championships.filter((c) => managedChampionshipIds.includes(c.id))
 }
 
 export async function getArenas(championshipId: string): Promise<Arena[]> {
+  const { arenas } = await demo()
   return arenas.filter((a) => a.championshipId === championshipId)
 }
 
 export async function getRobots(championshipId: string): Promise<Robot[]> {
+  const { robots } = await demo()
   return robots.filter((r) => r.championshipId === championshipId)
 }
 
 /** Matches in their manual fight order */
 export async function getMatches(championshipId: string): Promise<Match[]> {
+  const { matches } = await demo()
   return matches
     .filter((m) => m.championshipId === championshipId)
     .sort((a, b) => a.order - b.order)
 }
 
 export async function getMatch(id: string): Promise<Match | null> {
+  const { matches } = await demo()
   return matches.find((m) => m.id === id) ?? null
 }
 
 /** The fight currently running or paused, if any */
 export async function getLiveMatch(): Promise<Match | null> {
+  const { matches } = await demo()
   return matches.find((m) => m.state === 'running' || m.state === 'paused') ?? null
 }
 
 export async function getRefereeScores(matchId: string): Promise<RefereeScore[]> {
+  const { refereeScores } = await demo()
   return refereeScores.filter((s) => s.matchId === matchId).sort((a, b) => a.seat - b.seat)
 }
 
 export async function getRefereeAccess(token: string): Promise<RefereeAccess | null> {
+  const { refereeAccesses } = await demo()
   return refereeAccesses.find((a) => a.token === token) ?? null
 }
 

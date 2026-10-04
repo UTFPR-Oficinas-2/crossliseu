@@ -17,6 +17,16 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## API docs
+
+With the server running, interactive docs (Swagger UI) are available at
+[http://localhost:3000/docs](http://localhost:3000/docs) and the raw OpenAPI 3 spec at
+[http://localhost:3000/docs/json](http://localhost:3000/docs/json).
+
+They are generated from the controllers and DTOs, so there is nothing to update by hand.
+They are only served outside production: with `NODE_ENV=production` (as in `compose.prod.yml`), `/docs` and `/docs/json` return 404.
+To call protected endpoints, log in via `POST /auth/login` and paste the returned token into **Authorize**.
+
 ## Run tests
 
 ```bash

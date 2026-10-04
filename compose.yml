@@ -28,6 +28,8 @@ services:
 
     environment:
       - NODE_ENV=development
+      # Vite dev proxy target for VITE_API_URL=/api (see apps/web/vite.config.ts)
+      - API_PROXY_TARGET=http://api:3000
 
     ports:
       - "5173:5173"

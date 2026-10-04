@@ -9,10 +9,13 @@ import {
     Post,
     UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
 
+@ApiTags('matches')
+@ApiBearerAuth()
 @Controller('matches')
 export class MatchesController {
     constructor(private readonly matchesService: MatchesService) {}

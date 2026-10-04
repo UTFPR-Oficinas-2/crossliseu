@@ -42,7 +42,9 @@ jobs:
         with:
           context: apps/${{ matrix.app }}
           target: prod
-          build-args: BASE_PATH=/crossliseu/
+          build-args: |
+            BASE_PATH=/crossliseu/
+            VITE_API_URL=/crossliseu/api
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-${{ matrix.app }}:latest

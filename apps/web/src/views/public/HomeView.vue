@@ -2,6 +2,7 @@
 // Figma: `01 / Público · Home` (node 2:13), `Home / Content` and its blocks. Navigation and page
 // padding come from PublicLayout.
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import ChampionshipCard from '@/components/ui/ChampionshipCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
@@ -41,6 +42,11 @@ async function load() {
 }
 
 onMounted(load)
+
+// Championship and match pages are dev-only for now (see router); never link to a missing route
+const router = useRouter()
+const hasChampionshipPage = router.hasRoute('championship')
+const hasMatchPage = router.hasRoute('match-details')
 
 const numberFormat = new Intl.NumberFormat('pt-BR')
 const pad2 = (value: number) => String(value).padStart(2, '0')
@@ -86,7 +92,10 @@ function toCardProps(championship: Championship) {
     robotCount,
     fightsDone,
     fightsTotal,
-    to: { name: 'championship', params: { championshipId: championship.id } },
+    // Without the page the card keeps its default link (home)
+    ...(hasChampionshipPage && {
+      to: { name: 'championship', params: { championshipId: championship.id } },
+    }),
   }
 }
 
@@ -119,7 +128,7 @@ const live = computed(() => {
     context: `${fight.championshipName} · Luta ${pad2(fight.number)} de ${pad2(fight.fightsTotal)}`,
     // "01:42"
     clock: `${pad2(Math.floor(fight.remainingSeconds / 60))}:${pad2(fight.remainingSeconds % 60)}`,
-    to: { name: 'match-details', params: { matchId: fight.matchId } },
+    to: hasMatchPage ? { name: 'match-details', params: { matchId: fight.matchId } } : null,
   }
 })
 </script>
@@ -146,7 +155,7 @@ const live = computed(() => {
         <p class="home__live-time text-timer-l">{{ live.clock }}</p>
         <p class="home__muted text-mono-s">TEMPO RESTANTE</p>
       </div>
-      <AppButton class="home__live-action" :to="live.to">Acompanhar luta</AppButton>
+      <AppButton v-if="live.to" class="home__live-action" :to="live.to">Acompanhar luta</AppButton>
     </section>
 
     <section class="home__championships" aria-labelledby="home-championships-title">

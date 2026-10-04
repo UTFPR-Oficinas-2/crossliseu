@@ -49,6 +49,8 @@ jobs:
       - run: npx eslint .
       - run: npx vitest run --passWithNoTests
       - run: npm run build-only -- --base=/crossliseu/
+        env:
+          VITE_API_URL: /crossliseu/api
 
   docker:
     name: Docker build
@@ -63,6 +65,8 @@ jobs:
         with:
           context: apps/${{ matrix.app }}
           target: prod
-          build-args: BASE_PATH=/crossliseu/
+          build-args: |
+            BASE_PATH=/crossliseu/
+            VITE_API_URL=/crossliseu/api
           push: false
           cache-from: type=gha,scope=${{ matrix.app }}
