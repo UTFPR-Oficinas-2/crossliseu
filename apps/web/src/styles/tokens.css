@@ -30,17 +30,22 @@
   --space-6: 24px;
   --space-7: 32px;
   --space-8: 40px;
+  --space-9: 48px;
   --space-page-x: 64px; /* page side padding (public and app navs) */
+  --space-page-y: 56px; /* public page content top/bottom padding */
   /* Off-scale values used by Figma components (progress bar, status pill, card gap, nav tags) */
   --space-5px: 5px;
   --space-6px: 6px;
   --space-7px: 7px;
   --space-10px: 10px;
   --space-14px: 14px;
+  --space-18px: 18px; /* operator step horizontal padding */
   --space-22px: 22px;
+  --space-28px: 28px; /* home live strip gap and left padding */
 
   /* Sizes (component dimensions from Figma) */
   --size-control: 44px; /* button, tab and sidebar item height */
+  --size-control-lg: 48px; /* home live strip action button height */
   --size-field: 48px; /* input height */
   --size-button-min: 120px;
   --size-tab-min: 110px;
@@ -49,7 +54,15 @@
   --size-side-bar: 56px; /* competitor tile color bar */
   --size-nav-height: 88px; /* public and app navs */
   --size-nav-operator-height: 72px;
+  --size-nav-referee-height: 64px;
+  --size-page-max: 1440px; /* public content max width (Figma desktop frame) */
+  --size-sidebar: 260px; /* organizer sidebar width */
+  --size-step-line: 3px; /* operator step indicator line */
+  --size-referee-frame: 390px; /* referee mobile frame width */
   --size-avatar: 28px;
+  --size-accent-border: 4px; /* home live strip left border */
+  --size-live-action: 176px; /* home live strip action button width */
+  --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
 
   /* Radius */
   --radius-xs: 2px;
@@ -68,6 +81,12 @@
   --text-display-page-size: 48px;
   --text-display-page-line-height: 1.05;
   --text-display-page-tracking: -0.01em;
+
+  --text-heading-xl-family: var(--font-heading);
+  --text-heading-xl-weight: 700;
+  --text-heading-xl-size: 36px;
+  --text-heading-xl-line-height: 1.1;
+  --text-heading-xl-tracking: 0;
 
   /* Metric / Overview value; Figma uses raw text here, not a published text style */
   --text-numeric-l-family: var(--font-heading);
@@ -93,6 +112,12 @@
   --text-heading-s-size: 18px;
   --text-heading-s-line-height: 1.25;
   --text-heading-s-tracking: 0;
+
+  --text-body-l-family: var(--font-body);
+  --text-body-l-weight: 400;
+  --text-body-l-size: 16px;
+  --text-body-l-line-height: 1.5;
+  --text-body-l-tracking: 0;
 
   --text-body-m-family: var(--font-body);
   --text-body-m-weight: 400;
@@ -135,4 +160,10 @@
   --text-mono-s-size: 11px;
   --text-mono-s-line-height: 1.45;
   --text-mono-s-tracking: 0;
+
+  --text-timer-l-family: var(--font-mono);
+  --text-timer-l-weight: 700;
+  --text-timer-l-size: 44px;
+  --text-timer-l-line-height: 1;
+  --text-timer-l-tracking: 0;
 }

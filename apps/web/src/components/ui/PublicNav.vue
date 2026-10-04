@@ -2,7 +2,11 @@
 // Figma: `Navigation / Public` (node 2:20). Wordmark on the left; links and the sign-in action
 // on the right. RouterLink sets aria-current="page" on the exact-active link by itself.
 // No sign-up link: there is no public self-registration.
+import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
+
+// The sign-in page is dev-only for now (see router): never link to a route that isn't registered
+const canSignIn = useRouter().hasRoute('sign-in')
 </script>
 
 <template>
@@ -18,7 +22,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 
       <!-- Right-side actions; defaults to the sign-in link from Figma -->
       <slot name="actions">
-        <AppButton variant="secondary" :to="{ name: 'sign-in' }">Entrar</AppButton>
+        <AppButton v-if="canSignIn" variant="secondary" :to="{ name: 'sign-in' }">Entrar</AppButton>
       </slot>
     </nav>
   </header>

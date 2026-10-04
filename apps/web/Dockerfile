@@ -19,12 +19,16 @@ FROM dev AS build
 # URL path the app is served under, e.g. /crossliseu/ for https://ediasv.dev/crossliseu/
 ARG BASE_PATH=/
 
+# apps/api base URL inlined by Vite at build time, e.g. /crossliseu/api (required)
+ARG VITE_API_URL=
+ENV VITE_API_URL=${VITE_API_URL}
+
 RUN npm run build-only -- --base="${BASE_PATH}"
 
-# ---- prod: NGINX serving the static build ----
-FROM nginx:1.29-alpine AS prod
+# ---- prod: NGINX (non-root, port 8080) serving the static build ----
+FROM nginxinc/nginx-unprivileged:1.29-alpine AS prod
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
