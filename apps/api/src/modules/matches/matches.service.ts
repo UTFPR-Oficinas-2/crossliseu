@@ -13,7 +13,7 @@ export class MatchesService {
     create(createMatchDto: CreateMatchDto) {
         const { weightClass } = createMatchDto;
 
-        const match: Match = new Match(weightClass);
+        const match: Match = new Match(weightClass, null);
 
         return this.matchesRepository.create(match);
     }

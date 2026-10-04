@@ -8,4 +8,4 @@ import { Robot } from './entities/robot.entity.js';
     providers: [],
     exports: [],
 })
-export class MatchesModule {}
+export class RobotsModule {}
