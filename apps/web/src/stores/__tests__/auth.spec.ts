@@ -2,19 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { TOKEN_STORAGE_KEY, useAuthStore } from '../auth'
+import { liveToken, makeToken } from './token-helpers'
 
 vi.mock('@/mocks', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
 import { signIn as requestSignIn } from '@/mocks'
 
-function makeToken(payload: object): string {
-  const encode = (value: object) =>
-    btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `${encode({ alg: 'none' })}.${encode(payload)}.sig`
-}
-
 const nowSeconds = () => Math.floor(Date.now() / 1000)
-const liveToken = (username = 'admin') =>
-  makeToken({ sub: '1', username, iat: nowSeconds(), exp: nowSeconds() + 7200 })
 
 describe('auth store', () => {
   beforeEach(() => {

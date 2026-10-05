@@ -2,14 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
+import { liveToken } from '@/stores/__tests__/token-helpers'
 import router, { safeRedirect } from '../index'
-
-function liveToken(): string {
-  const encode = (value: object) =>
-    btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  const exp = Math.floor(Date.now() / 1000) + 7200
-  return `${encode({ alg: 'none' })}.${encode({ sub: '1', username: 'admin', exp })}.sig`
-}
 
 describe('router guard', () => {
   beforeEach(async () => {

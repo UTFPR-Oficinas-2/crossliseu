@@ -78,6 +78,7 @@ const fights = [
 ] as const
 
 const operatorExits = ref(0)
+const signOuts = ref(0)
 </script>
 
 <template>
@@ -280,8 +281,9 @@ const operatorExits = ref(0)
     <section class="preview__section">
       <h2 class="text-heading-m">Navigation / App</h2>
       <div class="preview__nav">
-        <AppNav user-name="E. Vidias" active="my-championships" />
+        <AppNav user-name="E. Vidias" active="my-championships" @sign-out="signOuts++" />
       </div>
+      <p class="text-body-s preview__label">"Sair" clicado {{ signOuts }} vez(es)</p>
     </section>
 
     <section class="preview__section">

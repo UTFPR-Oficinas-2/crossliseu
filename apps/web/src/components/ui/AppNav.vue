@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Figma: `Navigation / App` (node 10:40) — top navigation for signed-in organizer pages.
-import type { RouteLocationRaw } from 'vue-router'
+import { computed } from 'vue'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
+import AppButton from '@/components/ui/AppButton.vue'
 
 export interface AppNavItem {
   /** Stable key, matched against the `active` prop */
@@ -26,6 +28,17 @@ const {
   /** Where the logo links to */
   homeTo?: RouteLocationRaw
 }>()
+
+const emit = defineEmits<{ signOut: [] }>()
+
+// Never link to a named route that isn't registered (e.g. `my-championships` in production)
+const router = useRouter()
+const visibleItems = computed(() =>
+  items.filter((item) => {
+    const to = item.to
+    return typeof to === 'string' || !('name' in to) || !to.name || router.hasRoute(to.name)
+  }),
+)
 </script>
 
 <template>
@@ -35,7 +48,7 @@ const {
     <div class="app-nav__right">
       <nav aria-label="Navegação principal">
         <ul class="app-nav__list">
-          <li v-for="item in items" :key="item.id">
+          <li v-for="item in visibleItems" :key="item.id">
             <RouterLink
               :to="item.to"
               class="app-nav__link text-body-m"
@@ -53,6 +66,8 @@ const {
         <span class="app-nav__avatar" aria-hidden="true" />
         <span class="app-nav__user text-label-s">{{ userName }}</span>
       </div>
+
+      <AppButton variant="ghost" type="button" @click="emit('signOut')">Sair</AppButton>
     </div>
   </header>
 </template>

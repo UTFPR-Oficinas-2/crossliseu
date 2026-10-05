@@ -2,16 +2,21 @@
 // Figma: `07 / Organizador · Visão geral` (node 2:15) — `Navigation / App` + `Organizer / Shell`
 // (sidebar 21:305, main 21:333). Only the frame is built here; page content goes in <RouterView />.
 import { computed, ref, watch } from 'vue'
-import { useRoute, type RouteRecordName } from 'vue-router'
+import { useRoute, useRouter, type RouteRecordName } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppNav from '@/components/ui/AppNav.vue'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
 import { getChampionship } from '@/mocks'
-
-// Mock: signed-in user's display name (Figma demo data) until auth exists
-const userName = 'E. Vidias'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+async function handleSignOut() {
+  auth.signOut()
+  await router.push({ name: 'home' })
+}
 
 /** Present only on the per-championship routes; `/manage` and `/manage/new` have no sidebar */
 const championshipId = computed(() => {
@@ -43,7 +48,7 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
 
 <template>
   <div class="organizer-layout">
-    <AppNav :user-name="userName" active="my-championships" />
+    <AppNav :user-name="auth.username ?? ''" active="my-championships" @sign-out="handleSignOut" />
 
     <div class="organizer-layout__shell">
       <aside v-if="championshipId" class="organizer-layout__sidebar">
