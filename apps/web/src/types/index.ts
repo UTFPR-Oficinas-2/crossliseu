@@ -35,16 +35,9 @@ export type MatchEndReason = 'surrender' | 'points' | 'knockout'
 export interface Championship {
   id: string
   name: string
-  /** Free label shown on the card: "EDIÇÃO 01", "ETAPA 03", "INTERNO" */
-  edition?: string
-  description?: string
-  /** "UTFPR, Curitiba" */
-  location?: string
   startDate: string | null
   endDate?: string | null
   status?: ChampionshipStatus
-  /** "inscrições abertas" */
-  registrationOpen?: boolean
   /** Card summary: "16 robôs · 6 de 15 lutas" */
   robotCount?: number
   fightsDone?: number

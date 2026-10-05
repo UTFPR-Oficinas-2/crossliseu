@@ -68,14 +68,12 @@ const activeFilterEmpty = computed(
 )
 
 /**
- * ChampionshipCard needs a numeric edition, a date, a status and fight counts. Championships
- * missing any of them are not rendered as a card rather than shown with made-up values.
+ * ChampionshipCard needs a date, a status and fight counts. Championships missing any of them
+ * are not rendered as a card rather than shown with made-up values.
  */
 function toCardProps(championship: Championship) {
-  const edition = /^edição\s+(\d+)$/i.exec(championship.edition ?? '')?.[1]
   const { startDate, status, robotCount, fightsDone, fightsTotal } = championship
   if (
-    edition === undefined ||
     !startDate ||
     !status ||
     robotCount === undefined ||
@@ -86,7 +84,6 @@ function toCardProps(championship: Championship) {
   }
   return {
     name: championship.name,
-    edition: Number(edition),
     date: startDate,
     status,
     robotCount,
