@@ -3,7 +3,7 @@ import { Column, Entity, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
 
-@Entity()
+@Entity('robots')
 export class Robot extends BaseEntity {
     constructor(name: string) {
         super();

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Match } from '../modules/matches/entities/match.entity.js';
 import { User } from '../modules/users/entities/user.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
+import { Robot } from '../modules/robots/entities/robot.entity.js';
 
 export function databaseOptions(): DataSourceOptions {
     const db: string = String(process.env.POSTGRES_DB);
@@ -24,7 +25,7 @@ export function databaseOptions(): DataSourceOptions {
         username: username,
         password: password,
         database: db,
-        entities: [Match, User, Championship],
+        entities: [Match, User, Championship, Robot],
         migrations: [
             fileURLToPath(new URL('./migrations/*{.ts,.js}', import.meta.url)),
         ],
