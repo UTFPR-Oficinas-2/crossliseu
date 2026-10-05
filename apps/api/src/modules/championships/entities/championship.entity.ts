@@ -8,24 +8,33 @@ export type ChampionshipStatus = 'ongoing' | 'scheduled' | 'closed';
 
 @Entity('championships')
 export class Championship extends BaseEntity {
-    constructor(name: string, startDate: Date, endDate: Date) {
+    // TypeORM calls the constructor without arguments when hydrating rows
+    constructor(name?: string, startDate?: Date, endDate?: Date) {
         super();
+
+        if (!name || !startDate || !endDate) {
+            return;
+        }
 
         this.name = name;
         this.startDate = startDate;
         this.endDate = endDate;
-        this.status = this.setInitialStatus(startDate);
+        this.status = this.setInitialStatus(startDate, endDate);
     }
 
-    private setInitialStatus(startDate: Date): ChampionshipStatus {
+    private setInitialStatus(
+        startDate: Date,
+        endDate: Date,
+    ): ChampionshipStatus {
         const getIsoSplit = (date: Date): string => {
             return date.toISOString().split('T')[0];
         };
 
         const startDateIso = getIsoSplit(startDate);
+        const endDateIso = getIsoSplit(endDate);
         const todayIso = getIsoSplit(new Date());
 
-        if (startDateIso < todayIso) {
+        if (endDateIso < todayIso) {
             return 'closed';
         } else if (startDateIso > todayIso) {
             return 'scheduled';

@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
 import { ChampionshipsRepository } from './championships.repository.js';
 import { Championship } from './entities/championship.entity.js';
 import { CreateChampionshipDto } from './dto/create-championship.dto.js';
@@ -13,11 +18,14 @@ export class ChampionshipsService {
     ) {}
 
     create(createChampionshipDto: CreateChampionshipDto) {
-        const { name, scheduledDate } = createChampionshipDto;
+        const { name, startDate, endDate } = createChampionshipDto;
+
+        this.assertValidDateRange(startDate, endDate);
 
         const championship: Championship = new Championship(
             name,
-            scheduledDate ?? null,
+            startDate,
+            endDate,
         );
 
         return this.championshipsRepository.create(championship);
@@ -39,7 +47,13 @@ export class ChampionshipsService {
     }
 
     async update(id: string, updateChampionshipDto: UpdateChampionshipDto) {
-        await this.findOne(id);
+        const championship = await this.findOne(id);
+
+        this.assertValidDateRange(
+            updateChampionshipDto.startDate ?? championship.startDate,
+            updateChampionshipDto.endDate ?? championship.endDate,
+        );
+
         await this.championshipsRepository.update(id, updateChampionshipDto);
 
         return this.findOne(id);
@@ -48,5 +62,15 @@ export class ChampionshipsService {
     async remove(id: string) {
         await this.findOne(id);
         await this.championshipsRepository.remove(id);
+    }
+
+    private assertValidDateRange(startDate: Date, endDate: Date) {
+        if (endDate < startDate) {
+            this.logger.error('championship_end_before_start', {
+                startDate,
+                endDate,
+            });
+            throw new BadRequestException('championship_end_before_start');
+        }
     }
 }
