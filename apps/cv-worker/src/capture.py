@@ -4,7 +4,7 @@ import cv2
 
 class VideoCapture():
 
-    def __init__(self,video_source:Path):
+    def __init__(self, video_source: Path):
         self.video_source = video_source
         self.capture = cv2.VideoCapture(str(video_source))
 
@@ -27,5 +27,3 @@ class VideoCapture():
 
     def release(self):
         self.capture.release()
-
-    
