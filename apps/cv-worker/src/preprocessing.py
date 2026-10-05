@@ -10,7 +10,7 @@ def reduce_noise(frame_bgr, kernel_size=5):
         kernel_size += 1
         # #  #  # #
         # #  #  # #
-        # # [#] # # ---- > Easier the find the central point
+        # # [#] # # ---- > Builded rounded by a central point
         # #  #  # #
         # #  #  # #
         

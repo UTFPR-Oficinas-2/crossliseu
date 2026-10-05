@@ -1,6 +1,6 @@
 from capture import VideoCapture
 from preprocessing import preprocess, show_hsv_value
-from segmentation import create_mask
+from segmentation import create_mask,clean_mask
 from config import LOWER_BLUE, UPPER_BLUE, LOWER_RED, UPPER_RED
 import cv2
 
@@ -30,9 +30,12 @@ def cv_worker():
             UPPER_RED
         )
 
+        blue_mask_c = clean_mask(blue_mask)
+        red_mask_c = clean_mask(red_mask)
+
         # Display // Just for tests
-        cv2.imshow("BLUE MASK", blue_mask)
-        cv2.imshow("RED MASK", red_mask)
+        cv2.imshow("BLUE MASK", blue_mask_c)
+        cv2.imshow("RED MASK", red_mask_c)
 
         # cv2.setMouseCallback(
         #     "ORIGINAL",
