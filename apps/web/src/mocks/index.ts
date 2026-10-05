@@ -3,6 +3,7 @@
 // `VITE_API_URL` is set; the rest still serve demo data.
 import { isApiEnabled } from '@/api/client'
 import { listChampionships, type ApiChampionship } from '@/api/championships'
+import { login } from '@/api/auth'
 import type {
   Arena,
   Championship,
@@ -20,6 +21,11 @@ const demo = () =>
     ? import('./data')
     : Promise.reject(new Error('Demo data is not available in production builds'))
 
+const demoAuth = () =>
+  import.meta.env.DEV
+    ? import('./demo-auth')
+    : Promise.reject(new Error('Demo sign-in is not available in production builds'))
+
 /** Only the fields apps/api returns; everything else stays undefined (see `Championship`). */
 function toChampionship(api: ApiChampionship): Championship {
   return {
@@ -35,6 +41,15 @@ function toChampionship(api: ApiChampionship): Championship {
 export async function getChampionships(): Promise<Championship[]> {
   if (isApiEnabled) return (await listChampionships()).map(toChampionship)
   return (await demo()).championships
+}
+
+/**
+ * POST /auth/login when the API is configured, otherwise the demo account
+ * (`organizador` / `crossliseu`). Resolves to the JWT; wrong credentials throw `ApiError(401)`.
+ */
+export async function signIn(username: string, password: string): Promise<string> {
+  if (isApiEnabled) return (await login(username, password)).token
+  return (await demoAuth()).demoSignIn(username, password)
 }
 
 export async function getChampionship(id: string): Promise<Championship | null> {

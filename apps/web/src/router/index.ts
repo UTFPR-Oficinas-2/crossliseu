@@ -1,9 +1,25 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
+import { useAuthStore } from '@/stores/auth'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** Signed-out visitors are sent to `sign-in`. UX only: the API enforces access. */
+    requiresAuth?: boolean
+  }
+}
+
+/** Only same-app paths are valid redirect targets (no `//host`, `/\host` or absolute URLs) */
+export function safeRedirect(value: unknown): string {
+  if (typeof value !== 'string') return '/'
+  return value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\') ? value : '/'
+}
+
 // Pages that are still placeholders backed by demo data (or dev tools) are registered only in
 // development. Production builds ship the home page and the 404 page: `import.meta.env.DEV` is
 // replaced at build time, so the lazy chunks below are not emitted. Keep the inline ternaries
 // (a helper function would keep the imports). Move a route out once it uses the API.
+// `sign-in` is the exception: it talks to the API and is registered in every build.
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
   ? [
       // Component preview page
@@ -15,6 +31,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
       {
         path: '/manage',
         component: () => import('../layouts/OrganizerLayout.vue'),
+        meta: { requiresAuth: true },
         children: [
           {
             path: '',
@@ -56,6 +73,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
       {
         path: '/operator',
         component: () => import('../layouts/OperatorLayout.vue'),
+        meta: { requiresAuth: true },
         children: [
           {
             // One view with three states: preparation, running, closing
@@ -102,11 +120,6 @@ const devPublicRoutes: RouteRecordRaw[] = import.meta.env.DEV
         component: () => import('../views/public/MatchDetailsView.vue'),
         props: true,
       },
-      {
-        path: 'sign-in',
-        name: 'sign-in',
-        component: () => import('../views/public/SignInView.vue'),
-      },
     ]
   : []
 
@@ -125,6 +138,11 @@ const router = createRouter({
         },
         ...devPublicRoutes,
         {
+          path: 'sign-in',
+          name: 'sign-in',
+          component: () => import('../views/public/SignInView.vue'),
+        },
+        {
           path: ':pathMatch(.*)*',
           name: 'not-found',
           component: () => import('../views/public/NotFoundView.vue'),
@@ -132,6 +150,14 @@ const router = createRouter({
       ],
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const auth = useAuthStore()
+  if (to.name === 'sign-in' && auth.isAuthenticated) return { name: 'home' }
+  if (to.matched.some((record) => record.meta.requiresAuth) && !auth.isAuthenticated) {
+    return { name: 'sign-in', query: { redirect: to.fullPath } }
+  }
 })
 
 export default router

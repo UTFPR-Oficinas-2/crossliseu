@@ -17,6 +17,19 @@ export class ApiError extends Error {
   }
 }
 
+type UnauthorizedHandler = () => void
+
+let onUnauthorized: UnauthorizedHandler | null = null
+
+/**
+ * Called when a request that carried a token gets a 401 (expired or revoked session). A 401 on
+ * a request without a token (wrong password on /auth/login) never triggers it. Registered once
+ * in `main.ts`, so this module doesn't depend on the auth store.
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler
+}
+
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 
 interface RequestOptions {
@@ -44,6 +57,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (!response.ok) {
+    if (response.status === 401 && token) onUnauthorized?.()
     // Nest errors look like `{ statusCode, message, error }`
     const payload = (await response.json().catch(() => null)) as { message?: unknown } | null
     const message = typeof payload?.message === 'string' ? payload.message : response.statusText
