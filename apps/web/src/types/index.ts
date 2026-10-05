@@ -28,10 +28,7 @@ export type RefereeSeat = 1 | 2 | 3
 /** How a fight ended: desistência / pontos / nocaute */
 export type MatchEndReason = 'surrender' | 'points' | 'knockout'
 
-/**
- * apps/api (`GET /championships`) only returns id, name, scheduledDate (→ `startDate`) and
- * timestamps. Optional fields are not sent by the API yet: hide their UI when they are missing.
- */
+/** Optional fields are missing from some demo data: hide their UI when they are missing. */
 export interface Championship {
   id: string
   name: string

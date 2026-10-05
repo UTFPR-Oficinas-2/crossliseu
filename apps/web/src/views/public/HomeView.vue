@@ -56,7 +56,7 @@ const championshipCount = computed(() => {
   return `${numberFormat.format(count)} ${count === 1 ? 'campeonato' : 'campeonatos'}`
 })
 
-// Championships without a status (the API doesn't send one yet) only appear under "Todos"
+// Championships without a status only appear under "Todos"
 const filteredChampionships = computed(() =>
   activeFilter.value === 'all'
     ? championships.value

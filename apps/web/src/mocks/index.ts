@@ -2,11 +2,16 @@
 // call sites. Missing ids resolve to `null`. Functions backed by apps/api switch to it when
 // `VITE_API_URL` is set; the rest still serve demo data.
 import { isApiEnabled } from '@/api/client'
-import { listChampionships, type ApiChampionship } from '@/api/championships'
+import {
+  listChampionships,
+  type ApiChampionship,
+  type ApiChampionshipStatus,
+} from '@/api/championships'
 import { login } from '@/api/auth'
 import type {
   Arena,
   Championship,
+  ChampionshipStatus,
   Match,
   MatchState,
   RefereeAccess,
@@ -26,12 +31,22 @@ const demoAuth = () =>
     ? import('./demo-auth')
     : Promise.reject(new Error('Demo sign-in is not available in production builds'))
 
-/** Only the fields apps/api returns; everything else stays undefined (see `Championship`). */
+const championshipStatus: Record<ApiChampionshipStatus, ChampionshipStatus> = {
+  ongoing: 'running',
+  scheduled: 'scheduled',
+  closed: 'finished',
+}
+
 function toChampionship(api: ApiChampionship): Championship {
   return {
     id: api.id,
     name: api.name,
-    startDate: api.scheduledDate,
+    startDate: api.startDate,
+    endDate: api.endDate,
+    status: championshipStatus[api.status],
+    robotCount: api.robotCount,
+    fightsDone: api.fightsDone,
+    fightsTotal: api.fightsTotal,
     createdAt: api.createdAt,
     modifiedAt: api.modifiedAt,
   }

@@ -4,7 +4,10 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common';
-import { ChampionshipsRepository } from './championships.repository.js';
+import {
+    ChampionshipCounts,
+    ChampionshipsRepository,
+} from './championships.repository.js';
 import { Championship } from './entities/championship.entity.js';
 import { CreateChampionshipDto } from './dto/create-championship.dto.js';
 import { UpdateChampionshipDto } from './dto/update-championship.dto.js';
@@ -31,11 +34,18 @@ export class ChampionshipsService {
         return this.championshipsRepository.create(championship);
     }
 
-    findAll() {
-        return this.championshipsRepository.findAll();
+    async findAll() {
+        return this.withCounts(await this.championshipsRepository.findAll());
     }
 
     async findOne(id: string) {
+        const [championship] = await this.withCounts([
+            await this.findEntity(id),
+        ]);
+        return championship;
+    }
+
+    private async findEntity(id: string) {
         const championship = await this.championshipsRepository.findOne(id);
 
         if (!championship) {
@@ -47,7 +57,7 @@ export class ChampionshipsService {
     }
 
     async update(id: string, updateChampionshipDto: UpdateChampionshipDto) {
-        const championship = await this.findOne(id);
+        const championship = await this.findEntity(id);
 
         this.assertValidDateRange(
             updateChampionshipDto.startDate ?? championship.startDate,
@@ -60,8 +70,27 @@ export class ChampionshipsService {
     }
 
     async remove(id: string) {
-        await this.findOne(id);
+        await this.findEntity(id);
         await this.championshipsRepository.remove(id);
+    }
+
+    private async withCounts(
+        championships: Championship[],
+    ): Promise<(Championship & ChampionshipCounts)[]> {
+        const counts = await this.championshipsRepository.countRobotsAndMatches(
+            championships.map((championship) => championship.id),
+        );
+
+        return championships.map((championship) =>
+            Object.assign(
+                championship,
+                counts.get(championship.id) ?? {
+                    robotCount: 0,
+                    fightsTotal: 0,
+                    fightsDone: 0,
+                },
+            ),
+        );
     }
 
     private assertValidDateRange(startDate: Date, endDate: Date) {
