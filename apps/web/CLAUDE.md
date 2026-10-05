@@ -6,7 +6,7 @@ organizers manage them; an operator runs each fight; three referees score from t
 ## Stack and commands
 
 - Vue 3 (`<script setup lang="ts">`), TypeScript, Vite, Vue Router, Pinia, Vitest.
-- Client-rendered SPA. The backend is NestJS in `apps/api`; live updates will use WebSockets.
+- Client-rendered SPA. The backend is NestJS in `apps/api`; live updates are planned (WebSockets) but not implemented.
 - No Tailwind, no UI kit, no React. Styling is plain CSS with custom properties.
 - Prettier: no semicolons, single quotes, print width 100.
 
@@ -77,22 +77,24 @@ Use these classes instead of setting font-family/size/weight in components.
 
 ```
 src/
+  api/           fetch client for apps/api (client.ts, auth.ts, championships.ts)
   styles/        tokens.css, typography.css, base.css (reset + body)
   components/
     ui/          design-system components (one per Figma component)
-    icons/       inline SVG icons exported from Figma
   layouts/       PublicLayout, OrganizerLayout, OperatorLayout, RefereeLayout
   views/
     public/      HomeView, ChampionshipView, MatchDetailsView, SignInView, NotFoundView
+    dev/         ComponentsPreviewView (dev builds only)
     organizer/   MyChampionshipsView, ChampionshipFormView, OverviewView, ParticipantsView,
                  MatchesView
     operator/    MatchOperationView (one view, three states)
     referee/     RefereeSessionView (join → scoring → finished states), InvalidAccessView
     <section>/components/   blocks used only inside that section
   types/         domain types (Championship, Robot, Match, RefereeScore, …)
-  mocks/         typed demo data used until the API exists
+  mocks/         typed demo data, used in dev when `VITE_API_URL` is unset
   stores/        Pinia stores
   router/
+  test/          Vitest setup
 ```
 
 ### Figma component → Vue file
@@ -122,8 +124,9 @@ Text properties become props or slots.
 - Interface text is **Portuguese (pt-BR)** exactly as in Figma. Code identifiers, file names,
   comments and commits are in English.
 - Format dates and numbers with `Intl` using `pt-BR`.
-- Pages use typed data from `src/mocks/` for now. Don't call the API or invent endpoints
-  unless asked. Keep data loading in one place per view so it can be swapped for the API later.
+- Sign-in and championships already use the API through `src/api/`; every other page still
+  uses typed data from `src/mocks/`. Don't call the API or invent endpoints unless asked. Keep
+  data loading in one place per view so it can be swapped for the API later.
 - Don't add dependencies other than the `@fontsource` packages without asking.
 
 ## Accessibility and layout
@@ -147,10 +150,3 @@ Text properties become props or slots.
 - There is no public self-registration on the sign-in page.
 - Being signed in doesn't grant management access. Hide controls the user can't use, but
   assume the backend enforces permissions.
-
-## Scaffold cleanup
-
-The Vite starter files (`HelloWorld`, `TheWelcome`, `WelcomeItem`, `components/icons/Icon*`,
-`stores/counter.ts`, `AboutView`, the green styles in `assets/`, and `HelloWorld.spec.ts`)
-should be removed when the foundations are implemented. Remove them as part of that task,
-not piecemeal.

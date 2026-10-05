@@ -1,222 +1,88 @@
-## Project setup
+# Crossliseu API
+
+NestJS REST API for championships, matches and authentication. Part of the [Crossliseu](../../README.md) monorepo.
+
+## Requirements
+
+- Node 22.18+ (or 24.12+)
+- PostgreSQL 18, started with `docker compose up -d postgres` from the repository root
+- A root `.env` file; see [Environment variables](../../README.md#environment-variables)
+
+## Getting started
+
+Run every command from `apps/api`: the API loads the root `.env` through the relative path `../../.env`. Set `POSTGRES_HOST=localhost` when running outside Docker.
 
 ```bash
-$ npm install
+npm ci
+npm run migration:run -- -d src/database/data-source.ts
+npm run seed:admin
+npm run start:dev          # http://localhost:3000
 ```
 
-## Compile and run the project
+## Scripts
+
+| Script | Description |
+| --- | --- |
+| `npm run start:dev` | Start with file watching |
+| `npm run start:prod` | Run the compiled app (`npm run build` first) |
+| `npm run build` | Compile to `dist/` |
+| `npm run lint` | Lint with oxlint (type-aware) |
+| `npm run format` | Format with Prettier |
+| `npm test` | Run unit tests (Vitest) |
+| `npm run test:cov` | Run unit tests with coverage |
+| `npm run migration:generate` / `migration:run` / `migration:revert` | Manage migrations, see [Migrations](#migrations) |
+| `npm run seed:admin` | Create the admin user, see [Seeding the admin](#seeding-the-admin) |
+
+## Configuration
+
+Database and `SECRET` come from the root `.env`. The API also reads:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP port |
+| `NODE_ENV` | | `production` disables Swagger |
+
+## Authentication
+
+Every route requires a JWT unless marked public. There is no sign-up; the first user comes from the [admin seed](#seeding-the-admin).
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+curl -X POST http://localhost:3000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "<ADMIN_USERNAME>", "password": "<ADMIN_PASSWORD>"}'
 ```
+
+Send the returned token as `Authorization: Bearer <token>`. Tokens expire after 2 hours.
+
+Public routes: `POST /auth/login`, `GET /championships`, `GET /championships/:id`, `GET /matches`, `GET /matches/:id`.
 
 ## API docs
 
-With the server running, interactive docs (Swagger UI) are available at
-[http://localhost:3000/docs](http://localhost:3000/docs) and the raw OpenAPI 3 spec at
-[http://localhost:3000/docs/json](http://localhost:3000/docs/json).
-
-They are generated from the controllers and DTOs, so there is nothing to update by hand.
-They are only served outside production: with `NODE_ENV=production` (as in `compose.prod.yml`), `/docs` and `/docs/json` return 404.
-To call protected endpoints, log in via `POST /auth/login` and paste the returned token into **Authorize**.
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
+Swagger UI is served at <http://localhost:3000/docs> and the OpenAPI JSON at <http://localhost:3000/docs/json>. Both return 404 when `NODE_ENV=production`. To try protected endpoints, log in, then paste the token into **Authorize**.
 
 ## Migrations
 
-This project uses TypeORM migrations to keep the PostgreSQL database schema synchronized with the entity definitions.
-
-### Prerequisites
-
-Before executing migration commands:
-
-1. Make sure PostgreSQL is running.
-2. Make sure the required environment variables are available.
-3. Run the commands from the API directory:
+Schema changes go through TypeORM migrations (`synchronize` is always `false`). The `-d` flag is required on every command.
 
 ```bash
-cd apps/api
+# After changing an entity: generate a migration, then review the SQL before running it
+npm run migration:generate -- src/database/migrations/MigrationName -d src/database/data-source.ts
+
+# Apply pending migrations
+npm run migration:run -- -d src/database/data-source.ts
+
+# Undo the last migration
+npm run migration:revert -- -d src/database/data-source.ts
 ```
 
-The TypeORM CLI loads the database configuration directly from:
+TypeORM can read a column rename as drop + create, which loses data. Check the generated file first.
 
-```text
-src/database/data-source.ts
-```
+## Seeding the admin
 
-It does not start the NestJS application.
-
-### Package scripts
-
-The following scripts should be present in `package.json`:
-
-```json
-{
-    "scripts": {
-        "typeorm": "typeorm-ts-node-esm",
-        "migration:generate": "npm run typeorm -- migration:generate",
-        "migration:create": "npm run typeorm -- migration:create",
-        "migration:run": "npm run typeorm -- migration:run",
-        "migration:revert": "npm run typeorm -- migration:revert"
-    }
-}
-```
-
-Because the project uses ECMAScript modules, migrations are executed through `typeorm-ts-node-esm`.
-
-### Generate a migration
-
-Use `migration:generate` after creating or modifying entity classes:
-
-```bash
-npm run migration:generate -- \
-  src/database/migrations/MigrationName \
-  -d src/database/data-source.ts
-```
-
-For example:
-
-```bash
-npm run migration:generate -- \
-  src/database/migrations/CreateMatches \
-  -d src/database/data-source.ts
-```
-
-TypeORM will:
-
-1. Load the configured entity classes.
-2. Connect to the database.
-3. Compare the entities with the current database schema.
-4. Generate a migration containing the necessary SQL operations.
-
-Always inspect the generated migration before running it. TypeORM may occasionally interpret a rename as deleting the old column and creating a new one, which could cause data loss.
-
-If TypeORM reports that no schema changes were found, verify that:
-
-- The entity is included in the `DataSource` configuration.
-- The database contains the schema produced by the previous migrations.
-- The entity actually differs from the current database schema.
-- `synchronize` is disabled.
-
-### Create an empty migration
-
-Use `migration:create` when a migration must be written manually:
-
-```bash
-npm run migration:create -- \
-  src/database/migrations/MigrationName
-```
-
-For example:
-
-```bash
-npm run migration:create -- \
-  src/database/migrations/AddDefaultAdmin
-```
-
-Unlike `migration:generate`, this command does not compare entities with the database. It only creates an empty migration containing `up()` and `down()` methods.
-
-### Run pending migrations
-
-To execute all migrations that have not yet been applied:
-
-```bash
-npm run migration:run -- \
-  -d src/database/data-source.ts
-```
-
-TypeORM executes the `up()` method of each pending migration and records the executed migrations in its migrations table.
-
-### Revert the latest migration
-
-To revert the most recently executed migration:
-
-```bash
-npm run migration:revert -- \
-  -d src/database/data-source.ts
-```
-
-TypeORM executes the migration's `down()` method.
-
-This command reverts only one migration at a time. Run it again to revert another migration.
-
-### Recommended workflow
-
-When changing the database schema:
-
-1. Modify or create the entity classes.
-2. Make sure the database is running.
-3. Generate a migration.
-4. Review the generated `up()` and `down()` methods.
-5. Run the migration.
-6. Commit the entity and migration files together.
-
-```bash
-npm run migration:generate -- \
-  src/database/migrations/DescribeTheChange \
-  -d src/database/data-source.ts
-
-npm run migration:run -- \
-  -d src/database/data-source.ts
-```
-
-Do not enable TypeORM's automatic schema synchronization when using migrations:
-
-```ts
-synchronize: false;
-```
-
-Migrations should be the only mechanism used to apply schema changes to shared and production databases.
-
-## Seeding the admin account
-
-There is no public user signup. The only way to create a user is the admin seed script, which reads credentials from environment variables and stores the password as a bcrypt hash.
-
-### Prerequisites
-
-1. Make sure PostgreSQL is running and migrations have been applied (see [Run pending migrations](#run-pending-migrations)).
-2. Set the following variables in the root `.env` file:
-
-```text
-ADMIN_USERNAME=
-ADMIN_EMAIL=
-ADMIN_PASSWORD=
-```
-
-3. Run the command from the API directory:
-
-```bash
-cd apps/api
-```
-
-### Run the seed script
+Set `ADMIN_USERNAME`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` in the root `.env`, then:
 
 ```bash
 npm run seed:admin
 ```
 
-This hashes `ADMIN_PASSWORD` with bcrypt and creates the admin user if it doesn't exist yet, or updates its email and password if it does. The script is safe to run more than once.
-
-If PostgreSQL is reachable at a different host than the one configured in `.env` (for example, running the script on the host machine against a `docker compose` database, where `POSTGRES_HOST` is set to the in-network service name `postgres`), override it inline:
-
-```bash
-POSTGRES_HOST=localhost npm run seed:admin
-```
+Inside Docker Compose use `docker compose exec api npm run seed:admin` instead.
