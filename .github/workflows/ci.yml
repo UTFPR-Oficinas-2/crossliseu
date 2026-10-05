@@ -1,0 +1,72 @@
+# Step 3: checks that must pass before a pull request can be merged into main.
+# Also reused by deploy.yml so nothing is deployed without passing them.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run type-check
+      # The npm "lint" script uses --fix; in CI we only check.
+      - run: npx oxlint .
+      - run: npx eslint .
+      - run: npx vitest run --passWithNoTests
+      - run: npm run build-only -- --base=/crossliseu/
+        env:
+          VITE_API_URL: /crossliseu/api
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: apps/${{ matrix.app }}
+          target: prod
+          build-args: |
+            BASE_PATH=/crossliseu/
+            VITE_API_URL=/crossliseu/api
+          push: false
+          cache-from: type=gha,scope=${{ matrix.app }}

@@ -3,6 +3,7 @@ services:
   api:
     build:
       context: ./apps/api
+      target: dev
 
     env_file:
         - ./.env
@@ -10,7 +11,7 @@ services:
     environment:
       NODE_ENV: development
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
     volumes:
       - ./apps/api:/app
@@ -23,19 +24,22 @@ services:
   web:
     build:
       context: ./apps/web
+      target: dev
 
     environment:
       - NODE_ENV=development
+      # Vite dev proxy target for VITE_API_URL=/api (see apps/web/vite.config.ts)
+      - API_PROXY_TARGET=http://api:3000
 
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
 
     volumes:
       - ./apps/web:/app
       - web_node_modules:/app/node_modules
 
   postgres:
-    image: postgres:18
+    image: postgres:18-bookworm
 
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -43,7 +47,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql

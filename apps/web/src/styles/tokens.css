@@ -1,0 +1,171 @@
+:root {
+  /* Color */
+  --color-bg: #111315;
+  --color-panel: #1a1d20;
+  --color-raised: #24282d;
+  --color-border: #363b42;
+  --color-border-soft: #242a30;
+  --color-text: #f3f1ec;
+  --color-muted: #a6adb5;
+  --color-orange: #ff8a3d;
+  --color-orange-dim: #5c3a1e;
+  --color-green: #88d4ab;
+  --color-blue: #82beff;
+  --color-pink: #ee9bbc;
+  --color-red: #e2544f;
+  --color-red-dim: #3a1f1f;
+  --color-amber: #e8b44a;
+
+  /* Font families */
+  --font-heading: 'Barlow Condensed', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-page-x: 64px; /* page side padding (public and app navs) */
+  --space-page-y: 56px; /* public page content top/bottom padding */
+  /* Off-scale values used by Figma components (progress bar, status pill, card gap, nav tags) */
+  --space-5px: 5px;
+  --space-6px: 6px;
+  --space-7px: 7px;
+  --space-10px: 10px;
+  --space-14px: 14px;
+  --space-18px: 18px; /* operator step horizontal padding */
+  --space-22px: 22px;
+  --space-28px: 28px; /* home live strip gap and left padding */
+
+  /* Sizes (component dimensions from Figma) */
+  --size-control: 44px; /* button, tab and sidebar item height */
+  --size-control-lg: 48px; /* home live strip action button height */
+  --size-field: 48px; /* input height */
+  --size-button-min: 120px;
+  --size-tab-min: 110px;
+  --size-indicator-width: 3px; /* sidebar active bar */
+  --size-indicator-height: 18px;
+  --size-side-bar: 56px; /* competitor tile color bar */
+  --size-nav-height: 88px; /* public and app navs */
+  --size-nav-operator-height: 72px;
+  --size-nav-referee-height: 64px;
+  --size-page-max: 1440px; /* public content max width (Figma desktop frame) */
+  --size-sidebar: 260px; /* organizer sidebar width */
+  --size-step-line: 3px; /* operator step indicator line */
+  --size-referee-frame: 390px; /* referee mobile frame width */
+  --size-avatar: 28px;
+  --size-accent-border: 4px; /* home live strip left border */
+  --size-live-action: 176px; /* home live strip action button width */
+  --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
+  --size-form-card: 480px; /* sign-in card width */
+  --size-dot: 8px; /* status dot, e.g. the error banner marker */
+
+  /* Radius */
+  --radius-xs: 2px;
+  --radius-3px: 3px; /* operator nav tag */
+  --radius-sm: 4px;
+  --radius-pill: 999px;
+
+  /* Focus and states (not defined in Figma; shared so they stay consistent) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --opacity-disabled: 0.5;
+
+  /* Text styles */
+  --text-display-page-family: var(--font-heading);
+  --text-display-page-weight: 700;
+  --text-display-page-size: 48px;
+  --text-display-page-line-height: 1.05;
+  --text-display-page-tracking: -0.01em;
+
+  --text-heading-xl-family: var(--font-heading);
+  --text-heading-xl-weight: 700;
+  --text-heading-xl-size: 36px;
+  --text-heading-xl-line-height: 1.1;
+  --text-heading-xl-tracking: 0;
+
+  /* Metric / Overview value; Figma uses raw text here, not a published text style */
+  --text-numeric-l-family: var(--font-heading);
+  --text-numeric-l-weight: 700;
+  --text-numeric-l-size: 36px;
+  --text-numeric-l-line-height: 1.35;
+  --text-numeric-l-tracking: 0;
+
+  --text-heading-l-family: var(--font-heading);
+  --text-heading-l-weight: 700;
+  --text-heading-l-size: 28px;
+  --text-heading-l-line-height: 1.15;
+  --text-heading-l-tracking: 0;
+
+  --text-heading-m-family: var(--font-heading);
+  --text-heading-m-weight: 700;
+  --text-heading-m-size: 22px;
+  --text-heading-m-line-height: 1.2;
+  --text-heading-m-tracking: 0;
+
+  --text-heading-s-family: var(--font-heading);
+  --text-heading-s-weight: 600;
+  --text-heading-s-size: 18px;
+  --text-heading-s-line-height: 1.25;
+  --text-heading-s-tracking: 0;
+
+  --text-body-l-family: var(--font-body);
+  --text-body-l-weight: 400;
+  --text-body-l-size: 16px;
+  --text-body-l-line-height: 1.5;
+  --text-body-l-tracking: 0;
+
+  --text-body-m-family: var(--font-body);
+  --text-body-m-weight: 400;
+  --text-body-m-size: 14px;
+  --text-body-m-line-height: 1.5;
+  --text-body-m-tracking: 0;
+
+  --text-body-s-family: var(--font-body);
+  --text-body-s-weight: 400;
+  --text-body-s-size: 13px;
+  --text-body-s-line-height: 1.45;
+  --text-body-s-tracking: 0;
+
+  --text-label-m-family: var(--font-body);
+  --text-label-m-weight: 600;
+  --text-label-m-size: 14px;
+  --text-label-m-line-height: 1.4;
+  --text-label-m-tracking: 0;
+
+  --text-label-s-family: var(--font-body);
+  --text-label-s-weight: 600;
+  --text-label-s-size: 13px;
+  --text-label-s-line-height: 1.4;
+  --text-label-s-tracking: 0;
+
+  --text-overline-family: var(--font-mono);
+  --text-overline-weight: 500;
+  --text-overline-size: 11px;
+  --text-overline-line-height: 1.4;
+  --text-overline-tracking: 0.08em;
+
+  --text-mono-m-family: var(--font-mono);
+  --text-mono-m-weight: 500;
+  --text-mono-m-size: 13px;
+  --text-mono-m-line-height: 1.45;
+  --text-mono-m-tracking: 0;
+
+  --text-mono-s-family: var(--font-mono);
+  --text-mono-s-weight: 500;
+  --text-mono-s-size: 11px;
+  --text-mono-s-line-height: 1.45;
+  --text-mono-s-tracking: 0;
+
+  --text-timer-l-family: var(--font-mono);
+  --text-timer-l-weight: 700;
+  --text-timer-l-size: 44px;
+  --text-timer-l-line-height: 1;
+  --text-timer-l-tracking: 0;
+}

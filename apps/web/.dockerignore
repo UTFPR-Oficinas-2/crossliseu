@@ -1,3 +1,15 @@
 node_modules
 dist
+coverage
 .git
+.env*
+!.env.example
+*.pem
+*.key
+*.log
+npm-debug.log*
+*.tsbuildinfo
+.eslintcache
+.vscode
+.idea
+.DS_Store

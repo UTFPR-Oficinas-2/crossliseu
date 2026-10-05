@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UsersService } from '../users/users.service.js';
 import { User } from '../users/entities/user.entity.js';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -14,10 +15,18 @@ export class AuthService {
         username: string,
         password: string,
     ): Promise<Partial<User> | null> {
-        const user = await this.usersService.findByUsername(username);
+        let user: User;
+        try {
+            user = await this.usersService.findByUsername(username);
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                return null;
+            }
+            throw error;
+        }
 
-        if (user && user.password == password) {
-            const { password, ...result } = user;
+        if (user && (await bcrypt.compare(password, user.password))) {
+            const { password: _password, ...result } = user;
             return result;
         }
 
