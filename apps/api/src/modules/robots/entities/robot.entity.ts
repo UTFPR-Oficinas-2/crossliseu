@@ -1,5 +1,7 @@
-import { Column, Entity } from 'typeorm';
+import type { Relation } from 'typeorm';
+import { Column, Entity, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
+import { Championship } from '../../championships/entities/championship.entity.js';
 
 @Entity()
 export class Robot extends BaseEntity {
@@ -11,4 +13,7 @@ export class Robot extends BaseEntity {
 
     @Column({ name: 'name', type: 'varchar', nullable: false })
     name: string;
+
+    @ManyToOne(() => Championship, (championship) => championship.robots)
+    championship: Relation<Championship>;
 }
