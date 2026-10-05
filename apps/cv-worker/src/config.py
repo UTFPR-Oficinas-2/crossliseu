@@ -9,3 +9,7 @@ UPPER_BLUE = (130, 255, 255)
 # HSV range - Red robot
 LOWER_RED = (0, 120, 70)
 UPPER_RED = (10, 255, 255)
+
+# Processing
+BLUR_KERNEL = 5 #GaussianBlur
+MORPH_KERNEL = 5

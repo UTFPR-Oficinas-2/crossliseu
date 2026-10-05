@@ -34,11 +34,11 @@ def cv_worker():
         cv2.imshow("BLUE MASK", blue_mask)
         cv2.imshow("RED MASK", red_mask)
 
-        cv2.setMouseCallback(
-            "ORIGINAL",
-            show_hsv_value,
-            frame_hsv
-        )
+        # cv2.setMouseCallback(
+        #     "ORIGINAL",
+        #     show_hsv_value,
+        #     frame_hsv
+        # )
 
         # q to close window
         if cv2.waitKey(1) & 0xFF == ord("q"):

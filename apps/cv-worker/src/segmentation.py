@@ -10,3 +10,8 @@ def create_mask(frame_hsv, lower, upper):
     mask = cv2.inRange(frame_hsv, lower, upper)
 
     return mask
+
+#Concepts of Closing and Opening of the mask 
+
+def clean_mask():
+    ...

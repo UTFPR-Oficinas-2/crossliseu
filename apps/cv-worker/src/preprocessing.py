@@ -1,15 +1,45 @@
 import cv2
 
 
+def reduce_noise(frame_bgr, kernel_size=5):
+    if kernel_size <= 0:
+        return frame_bgr
+
+    # GaussianBlur requires an odd kernel size
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+        # #  #  # #
+        # #  #  # #
+        # # [#] # # ---- > Easier the find the central point
+        # #  #  # #
+        # #  #  # #
+        
+    return cv2.GaussianBlur(
+        frame_bgr,
+        (kernel_size, kernel_size),
+        0
+    )
+
+
 def convert_to_hsv(frame):
-    hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hsv_frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2HSV
+    )
+
     return hsv_frame
 
 
-def preprocess(frame):
-    # Receive frame BGR from OpenCV
+def preprocess(frame, blur_kernel=5):
+    # Receive BGR frame from OpenCV
 
-    # Converts BGR -> HSV
+    # Reduce image noise
+    frame = reduce_noise(
+        frame,
+        blur_kernel
+    )
+
+    # Convert BGR -> HSV
     frame_hsv = convert_to_hsv(frame)
 
     # H → Hue        → which color

@@ -17,9 +17,6 @@ class VideoCapture():
         #numpy.ndarray
         #(1080, 1920, 3) height, width, chanels(BGR)
 
-        #Convert BGR to HSV(convert an image of a space color for another one)
-        hsv_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
-
         if not ret:
             return None
 
