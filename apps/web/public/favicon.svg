@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Crossliseu mark: a chamfered "C" shaped like the octagonal arena. Colors from src/styles/tokens.css -->
+  <rect width="32" height="32" rx="6" fill="#111315"/>
+  <path d="M25.5 7.5H12.5L7.5 12.5V19.5L12.5 24.5H25.5" fill="none" stroke="#ff8a3d" stroke-width="5"/>
+</svg>
