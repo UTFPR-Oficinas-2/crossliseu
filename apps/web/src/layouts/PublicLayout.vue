@@ -2,20 +2,23 @@
 // Figma: `01 / Público · Home` (node 2:13). Shared frame for public pages: top navigation and
 // the page content area (`Home / Content` padding). Page blocks live in each view.
 import { computed } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppNav from '@/components/ui/AppNav.vue'
 import PublicNav from '@/components/ui/PublicNav.vue'
-
-// Mock: stand-in until auth exists. Signed out shows `Navigation / Public`, signed in shows
-// `Navigation / App`.
-const isSignedIn = false
-// Mock: demo user name from Figma (`Navigation / App`)
-const userName = 'E. Vidias'
+import { useAuthStore } from '@/stores/auth'
 
 // Public routes that belong to the "Campeonatos" nav item
 const championshipRoutes = ['home', 'championship', 'match-details']
 
 const route = useRoute()
+const router = useRouter()
+// Signed out shows `Navigation / Public`, signed in shows `Navigation / App`
+const auth = useAuthStore()
+
+async function handleSignOut() {
+  auth.signOut()
+  await router.push({ name: 'home' })
+}
 
 const activeNavItem = computed(() =>
   championshipRoutes.includes(String(route.name)) ? 'championships' : undefined,
@@ -24,7 +27,12 @@ const activeNavItem = computed(() =>
 
 <template>
   <div class="public-layout">
-    <AppNav v-if="isSignedIn" :user-name="userName" :active="activeNavItem" />
+    <AppNav
+      v-if="auth.isAuthenticated"
+      :user-name="auth.username ?? ''"
+      :active="activeNavItem"
+      @sign-out="handleSignOut"
+    />
     <PublicNav v-else />
 
     <main class="public-layout__content">
@@ -42,6 +50,9 @@ const activeNavItem = computed(() =>
 }
 
 .public-layout__content {
+  /* Column so a page can fill the height and pin its footer to the bottom (sign-in) */
+  display: flex;
+  flex-direction: column;
   flex: 1;
   width: 100%;
   /* Left-aligned so the content edge lines up with the nav logo on wide screens */

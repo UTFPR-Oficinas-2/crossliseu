@@ -63,6 +63,8 @@
   --size-accent-border: 4px; /* home live strip left border */
   --size-live-action: 176px; /* home live strip action button width */
   --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
+  --size-form-card: 480px; /* sign-in card width */
+  --size-dot: 8px; /* status dot, e.g. the error banner marker */
 
   /* Radius */
   --radius-xs: 2px;

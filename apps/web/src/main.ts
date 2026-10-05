@@ -13,10 +13,21 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import { setUnauthorizedHandler } from './api/client'
+import { useAuthStore } from './stores/auth'
 
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
+
+// An expired or revoked token (401 on an authenticated request) ends the session
+setUnauthorizedHandler(() => {
+  useAuthStore().signOut()
+  const current = router.currentRoute.value
+  if (current.matched.some((record) => record.meta.requiresAuth)) {
+    void router.push({ name: 'sign-in', query: { redirect: current.fullPath } })
+  }
+})
 
 app.mount('#app')

@@ -5,7 +5,7 @@
 import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 
-// The sign-in page is dev-only for now (see router): never link to a route that isn't registered
+// Never link to a route that isn't registered
 const canSignIn = useRouter().hasRoute('sign-in')
 </script>
 
