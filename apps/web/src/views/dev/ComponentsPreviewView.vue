@@ -26,6 +26,8 @@ const statusPills = [
   { tone: 'success', label: 'Encerrada' },
   { tone: 'warning', label: 'Pausada' },
   { tone: 'danger', label: 'Falhou' },
+  { tone: 'accent', label: 'Em andamento' },
+  { tone: 'info', label: 'Programado' },
 ] as const
 
 const tabs = ['Visão geral', 'Participantes', 'Lutas']

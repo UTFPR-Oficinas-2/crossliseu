@@ -14,8 +14,9 @@ const router = useRouter()
 const auth = useAuthStore()
 
 async function handleSignOut() {
-  auth.signOut()
-  await router.push({ name: 'home' })
+  // Sign out only once we actually left (a form may block navigation with a confirmation)
+  const failure = await router.push({ name: 'home' })
+  if (!failure) auth.signOut()
 }
 
 /** Present only on the per-championship routes; `/manage` and `/manage/new` have no sidebar */
@@ -31,9 +32,13 @@ watch(
   async (id) => {
     championshipName.value = null
     if (!id) return
-    const championship = await getChampionship(id)
-    // Ignore a stale response if the user navigated to another championship meanwhile
-    if (id === championshipId.value) championshipName.value = championship?.name ?? null
+    try {
+      const championship = await getChampionship(id)
+      // Ignore a stale response if the user navigated to another championship meanwhile
+      if (id === championshipId.value) championshipName.value = championship?.name ?? null
+    } catch (error) {
+      console.error('Failed to load championship name', error)
+    }
   },
   { immediate: true },
 )
@@ -170,9 +175,9 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
   padding: var(--space-8) var(--space-8) var(--space-9);
 }
 
-/* Without a sidebar, content lines up with the nav's side padding */
+/* Without a sidebar, content lines up with the nav's side padding (Figma 06/08: 48 top, 56 bottom) */
 .organizer-layout__main--full {
   min-width: 0;
-  padding-inline: var(--space-page-x);
+  padding: var(--space-9) var(--space-page-x) var(--space-page-y);
 }
 </style>

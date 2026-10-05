@@ -65,6 +65,8 @@
   --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
   --size-form-card: 480px; /* sign-in card width */
   --size-dot: 8px; /* status dot, e.g. the error banner marker */
+  --size-aside: 360px; /* organizer form aside column */
+  --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
 
   /* Radius */
   --radius-xs: 2px;

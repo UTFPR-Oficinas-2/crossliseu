@@ -1,13 +1,17 @@
 // Data access for pages. Every function is async so it can call the API later without changing
 // call sites. Missing ids resolve to `null`. Functions backed by apps/api switch to it when
-// `VITE_API_URL` is set; the rest still serve demo data.
-import { isApiEnabled } from '@/api/client'
+// `VITE_API_URL` is set (championship reads and writes, sign-in); the rest still serve demo data.
+import { ApiError, isApiEnabled } from '@/api/client'
 import {
+  createChampionship as postChampionship,
+  getChampionship as fetchChampionship,
   listChampionships,
+  updateChampionship as patchChampionship,
   type ApiChampionship,
   type ApiChampionshipStatus,
 } from '@/api/championships'
 import { login } from '@/api/auth'
+import { championshipStatusFromDates } from '@/utils/championship'
 import type {
   Arena,
   Championship,
@@ -67,15 +71,85 @@ export async function signIn(username: string, password: string): Promise<string
   return (await demoAuth()).demoSignIn(username, password)
 }
 
+/** Form payload for create and update; dates are `YYYY-MM-DD` (`CreateChampionshipDto`) */
+export interface ChampionshipInput {
+  name: string
+  startDate: string
+  endDate: string
+}
+
+/** GET /championships/:id when the API is configured. Unknown or malformed ids resolve to `null`. */
 export async function getChampionship(id: string): Promise<Championship | null> {
+  if (isApiEnabled) {
+    try {
+      return toChampionship(await fetchChampionship(id))
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return null
+      throw error
+    }
+  }
   const { championships } = await demo()
   return championships.find((c) => c.id === id) ?? null
 }
 
-/** Championships the signed-in organizer can manage */
+/**
+ * Championships the signed-in organizer can manage. The API has no roles yet, so with the API
+ * configured this is every championship.
+ */
 export async function getManagedChampionships(): Promise<Championship[]> {
+  if (isApiEnabled) return (await listChampionships()).map(toChampionship)
   const { championships, managedChampionshipIds } = await demo()
   return championships.filter((c) => managedChampionshipIds.includes(c.id))
+}
+
+// Same rule and code as `ChampionshipsService.assertValidDateRange`
+function assertDemoDateRange({ startDate, endDate }: ChampionshipInput) {
+  if (endDate < startDate) {
+    throw new ApiError(400, 'championship_end_before_start', ['championship_end_before_start'])
+  }
+}
+
+/** POST /championships (JWT). In demo mode the championship is added to the in-memory list. */
+export async function createChampionship(
+  input: ChampionshipInput,
+  token: string,
+): Promise<Championship> {
+  if (isApiEnabled) return toChampionship(await postChampionship(input, token))
+  assertDemoDateRange(input)
+  const { championships, managedChampionshipIds } = await demo()
+  const now = new Date().toISOString()
+  const championship: Championship = {
+    // `crypto.randomUUID` only exists in secure contexts (not on a plain-http LAN origin)
+    id: crypto.randomUUID?.() ?? `demo-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ...input,
+    status: championshipStatusFromDates(input.startDate, input.endDate),
+    robotCount: 0,
+    fightsDone: 0,
+    fightsTotal: 0,
+    createdAt: now,
+    modifiedAt: now,
+  }
+  championships.push(championship)
+  managedChampionshipIds.push(championship.id)
+  return { ...championship }
+}
+
+/** PATCH /championships/:id (JWT). In demo mode the in-memory championship is updated. */
+export async function updateChampionship(
+  id: string,
+  input: ChampionshipInput,
+  token: string,
+): Promise<Championship> {
+  if (isApiEnabled) return toChampionship(await patchChampionship(id, input, token))
+  assertDemoDateRange(input)
+  const { championships } = await demo()
+  const championship = championships.find((c) => c.id === id)
+  if (!championship) throw new ApiError(404, 'championship_not_found', ['championship_not_found'])
+  Object.assign(championship, input, {
+    status: championshipStatusFromDates(input.startDate, input.endDate),
+    modifiedAt: new Date().toISOString(),
+  })
+  return { ...championship }
 }
 
 export async function getArenas(championshipId: string): Promise<Arena[]> {
