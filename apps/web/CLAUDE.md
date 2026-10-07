@@ -106,6 +106,7 @@ src/
 | `Tab / Item`                                         | `TabItem.vue` (`active` prop)                             |
 | `Sidebar / Item`                                     | `SidebarItem.vue` (`active` prop)                         |
 | `Input / Field`                                      | `InputField.vue` (supports `v-model` and an `error` prop) |
+| `Select / Menu` · `Select / Option`                  | `SelectField.vue` (`v-model`, `options`, `error` prop)    |
 | `Card / Championship`                                | `ChampionshipCard.vue`                                    |
 | `Row / Fight`                                        | `FightRow.vue`                                            |
 | `Competitor / Tile`                                  | `CompetitorTile.vue` (`side: 'A' \| 'B'` prop)            |
