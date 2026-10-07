@@ -28,6 +28,9 @@ export type RefereeSeat = 1 | 2 | 3
 /** How a fight ended: desistência / pontos / nocaute */
 export type MatchEndReason = 'surrender' | 'points' | 'knockout'
 
+/** Robot weight class: only two for now (no kilograms). A match pairs robots of one class. */
+export type WeightClass = 'lightweight' | 'heavyweight'
+
 /** Optional fields are missing from some demo data: hide their UI when they are missing. */
 export interface Championship {
   id: string
@@ -56,13 +59,14 @@ export interface Robot {
   championshipId: string
   name: string
   team: string
-  /** Person responsible for the robot (Responsável) */
-  owner: string
-  /** "3 kg" */
+  /** Demo data only: the API has no owner (Responsável), and the UI no longer shows it */
+  owner?: string
+  /** A `WeightClass`; robots saved before weight classes were fixed may hold other text */
   weightClass: string
-  /** "Arrasto", "Girante", "Cunha" */
-  category: string
-  status: RobotStatus
+  /** Demo data only: combat category ("Arrasto", "Girante", "Cunha"), not shown */
+  category?: string
+  /** Demo data only: weigh-in status, not shown */
+  status?: RobotStatus
   createdAt: string
   modifiedAt: string
 }
@@ -107,18 +111,26 @@ export interface RobotHeatmap {
   detectedPositions: number | null
 }
 
-export interface Match {
+/** What the organizer screens need from a match (Figma 10 and 10b) */
+export interface MatchSummary {
   id: string
   championshipId: string
+  /** Shared by both robots; see `Robot.weightClass` */
+  weightClass: string
+  robotAId: string
+  robotBId: string
+  state: MatchState
+  createdAt: string
+  modifiedAt: string
+}
+
+/** A match with the operator, referee and public fields (still demo data only) */
+export interface Match extends MatchSummary {
   /** Fight number shown as "Luta 07" */
   number: number
   /** Manual position in the fight order; there is no automatic bracket */
   order: number
   arenaId: string
-  weightClass: string
-  robotAId: string
-  robotBId: string
-  state: MatchState
   roundDurationSeconds: number
   elapsedSeconds: number
   startedAt: string | null
@@ -133,8 +145,6 @@ export interface Match {
   uploadProgress: number | null
   analysisStatus: ProcessingStatus
   heatmaps: RobotHeatmap[]
-  createdAt: string
-  modifiedAt: string
 }
 
 /** What a referee link resolves to */
