@@ -21,32 +21,16 @@ export class MatchesService {
     ) {}
 
     async create(createMatchDto: CreateMatchDto) {
-        const { weightClass, championshipId, robotAId, robotBId } =
-            createMatchDto;
-
-        if (robotAId === robotBId) {
-            this.logger.error('match_robots_must_differ', { robotAId });
-            throw new BadRequestException('match_robots_must_differ');
-        }
+        const { championshipId, robotAId, robotBId } = createMatchDto;
 
         // Throws championship_not_found when it does not exist
         await this.championshipsService.findOne(championshipId);
 
-        // Throws robot_not_found when either does not exist
-        const robots = await Promise.all([
-            this.robotsService.findOne(robotAId),
-            this.robotsService.findOne(robotBId),
-        ]);
-
-        for (const robot of robots) {
-            if (robot.championshipId !== championshipId) {
-                this.logger.error('robot_not_in_championship', {
-                    robotId: robot.id,
-                    championshipId,
-                });
-                throw new BadRequestException('robot_not_in_championship');
-            }
-        }
+        const weightClass = await this.resolveRobots(
+            championshipId,
+            robotAId,
+            robotBId,
+        );
 
         const match: Match = new Match(
             weightClass,
@@ -58,8 +42,8 @@ export class MatchesService {
         return this.matchesRepository.create(match);
     }
 
-    findAll() {
-        return this.matchesRepository.findAll();
+    findAll(championshipId?: string) {
+        return this.matchesRepository.findAll(championshipId);
     }
 
     async findOne(id: string) {
@@ -71,5 +55,46 @@ export class MatchesService {
         }
 
         return match;
+    }
+
+    /**
+     * Checks that the robots differ, exist, belong to the championship and share a weight class
+     * ("Dois robôs diferentes… da mesma categoria de peso", Figma 10b). Returns that class.
+     */
+    private async resolveRobots(
+        championshipId: string,
+        robotAId: string,
+        robotBId: string,
+    ): Promise<string> {
+        if (robotAId === robotBId) {
+            this.logger.error('match_robots_must_differ', { robotAId });
+            throw new BadRequestException('match_robots_must_differ');
+        }
+
+        // Throws robot_not_found when either does not exist
+        const [robotA, robotB] = await Promise.all([
+            this.robotsService.findOne(robotAId),
+            this.robotsService.findOne(robotBId),
+        ]);
+
+        for (const robot of [robotA, robotB]) {
+            if (robot.championshipId !== championshipId) {
+                this.logger.error('robot_not_in_championship', {
+                    robotId: robot.id,
+                    championshipId,
+                });
+                throw new BadRequestException('robot_not_in_championship');
+            }
+        }
+
+        if (robotA.weightClass !== robotB.weightClass) {
+            this.logger.error('match_weight_class_mismatch', {
+                robotAId,
+                robotBId,
+            });
+            throw new BadRequestException('match_weight_class_mismatch');
+        }
+
+        return robotA.weightClass;
     }
 }

@@ -7,9 +7,9 @@ import {
     ParseUUIDPipe,
     Patch,
     Post,
-    UseGuards,
+    Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
@@ -27,8 +27,12 @@ export class MatchesController {
 
     @Public()
     @Get()
-    findAll() {
-        return this.matchesService.findAll();
+    @ApiQuery({ name: 'championshipId', required: false })
+    findAll(
+        @Query('championshipId', new ParseUUIDPipe({ optional: true }))
+        championshipId?: string,
+    ) {
+        return this.matchesService.findAll(championshipId);
     }
 
     @Public()

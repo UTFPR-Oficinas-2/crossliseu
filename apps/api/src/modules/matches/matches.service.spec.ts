@@ -12,10 +12,13 @@ const OTHER_CHAMPIONSHIP_ID = '22222222-2222-4222-8222-222222222222';
 const ROBOT_A_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ROBOT_B_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-function robot(id: string, championshipId = CHAMPIONSHIP_ID): Robot {
+function robot(
+    id: string,
+    { championshipId = CHAMPIONSHIP_ID, weightClass = 'lightweight' } = {},
+): Robot {
     const entity = new Robot(
         `robot-${id}`,
-        'beetleweight',
+        weightClass,
         'team',
         championshipId,
     );
@@ -23,9 +26,22 @@ function robot(id: string, championshipId = CHAMPIONSHIP_ID): Robot {
     return entity;
 }
 
-function setup(robots: Robot[]) {
+function setup(robots: Robot[], matches: Match[] = []) {
     const matchesRepository = {
-        create: vi.fn((match: Match) => Promise.resolve(match)),
+        create: vi.fn((entity: Match) => Promise.resolve(entity)),
+        findAll: vi.fn().mockResolvedValue(matches),
+        findOne: vi.fn((id: string) =>
+            Promise.resolve(matches.find((entity) => entity.id === id) ?? null),
+        ),
+        // Applies the change so the service's reload sees it
+        update: vi.fn((id: string, partial: Partial<Match>) => {
+            Object.assign(
+                matches.find((entity) => entity.id === id) ?? {},
+                partial,
+            );
+            return Promise.resolve();
+        }),
+        remove: vi.fn().mockResolvedValue(undefined),
     };
     const championshipsService = {
         findOne: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
@@ -48,7 +64,6 @@ function setup(robots: Robot[]) {
 }
 
 const dto = {
-    weightClass: 'beetleweight',
     championshipId: CHAMPIONSHIP_ID,
     robotAId: ROBOT_A_ID,
     robotBId: ROBOT_B_ID,
@@ -61,19 +76,42 @@ describe('MatchesService.create', () => {
             robot(ROBOT_B_ID),
         ]);
 
-        const match = await service.create(dto);
+        const created = await service.create(dto);
 
         expect(championshipsService.findOne).toHaveBeenCalledWith(
             CHAMPIONSHIP_ID,
         );
         expect(matchesRepository.create).toHaveBeenCalledOnce();
-        expect(match).toMatchObject({
-            weightClass: 'beetleweight',
+        expect(created).toMatchObject({
+            weightClass: 'lightweight',
             championshipId: CHAMPIONSHIP_ID,
             robotAId: ROBOT_A_ID,
             robotBId: ROBOT_B_ID,
             status: 'waiting',
         });
+    });
+
+    it('stores the weight class shared by the robots', async () => {
+        const { service } = setup([
+            robot(ROBOT_A_ID, { weightClass: 'heavyweight' }),
+            robot(ROBOT_B_ID, { weightClass: 'heavyweight' }),
+        ]);
+
+        const created = await service.create(dto);
+
+        expect(created.weightClass).toBe('heavyweight');
+    });
+
+    it('rejects robots of different weight classes', async () => {
+        const { service, matchesRepository } = setup([
+            robot(ROBOT_A_ID, { weightClass: 'lightweight' }),
+            robot(ROBOT_B_ID, { weightClass: 'heavyweight' }),
+        ]);
+
+        await expect(service.create(dto)).rejects.toThrow(
+            new BadRequestException('match_weight_class_mismatch'),
+        );
+        expect(matchesRepository.create).not.toHaveBeenCalled();
     });
 
     it('rejects the same robot on both sides', async () => {
@@ -88,7 +126,7 @@ describe('MatchesService.create', () => {
     it('rejects a robot registered in another championship', async () => {
         const { service, matchesRepository } = setup([
             robot(ROBOT_A_ID),
-            robot(ROBOT_B_ID, OTHER_CHAMPIONSHIP_ID),
+            robot(ROBOT_B_ID, { championshipId: OTHER_CHAMPIONSHIP_ID }),
         ]);
 
         await expect(service.create(dto)).rejects.toThrow(
@@ -119,5 +157,15 @@ describe('MatchesService.create', () => {
             new NotFoundException('championship_not_found'),
         );
         expect(matchesRepository.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('MatchesService.findAll', () => {
+    it('passes the championship filter to the repository', async () => {
+        const { service, matchesRepository } = setup([]);
+
+        await service.findAll(CHAMPIONSHIP_ID);
+
+        expect(matchesRepository.findAll).toHaveBeenCalledWith(CHAMPIONSHIP_ID);
     });
 });
