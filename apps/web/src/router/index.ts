@@ -6,6 +6,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** Signed-out visitors are sent to `sign-in`. UX only: the API enforces access. */
     requiresAuth?: boolean
+    /** OrganizerLayout highlights this sidebar route (by name) on sub-pages such as forms */
+    sidebar?: string
   }
 }
 
@@ -61,6 +63,42 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
             name: 'championship-matches',
             component: () => import('../views/organizer/MatchesView.vue'),
             props: true,
+          },
+          {
+            path: ':championshipId/participants/new',
+            name: 'participant-create',
+            component: () => import('../views/organizer/ParticipantFormView.vue'),
+            props: (route) => ({ mode: 'create', championshipId: route.params.championshipId }),
+            meta: { sidebar: 'championship-participants' },
+          },
+          {
+            path: ':championshipId/participants/:robotId/edit',
+            name: 'participant-edit',
+            component: () => import('../views/organizer/ParticipantFormView.vue'),
+            props: (route) => ({
+              mode: 'edit',
+              championshipId: route.params.championshipId,
+              robotId: route.params.robotId,
+            }),
+            meta: { sidebar: 'championship-participants' },
+          },
+          {
+            path: ':championshipId/matches/new',
+            name: 'match-create',
+            component: () => import('../views/organizer/MatchFormView.vue'),
+            props: (route) => ({ mode: 'create', championshipId: route.params.championshipId }),
+            meta: { sidebar: 'championship-matches' },
+          },
+          {
+            path: ':championshipId/matches/:matchId/edit',
+            name: 'match-edit',
+            component: () => import('../views/organizer/MatchFormView.vue'),
+            props: (route) => ({
+              mode: 'edit',
+              championshipId: route.params.championshipId,
+              matchId: route.params.matchId,
+            }),
+            meta: { sidebar: 'championship-matches' },
           },
           {
             path: ':championshipId/settings',

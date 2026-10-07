@@ -49,6 +49,9 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
   { routeName: 'championship-matches', label: 'Lutas' },
   { routeName: 'championship-settings', label: 'Configurações' },
 ]
+
+/** Form pages set `meta.sidebar` to the list they belong to */
+const activeSidebarItem = computed(() => route.meta.sidebar ?? route.name)
 </script>
 
 <template>
@@ -67,7 +70,7 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
             <li v-for="item in sidebarItems" :key="item.routeName">
               <SidebarItem
                 :to="{ name: item.routeName, params: { championshipId } }"
-                :active="route.name === item.routeName"
+                :active="activeSidebarItem === item.routeName"
               >
                 {{ item.label }}
               </SidebarItem>
