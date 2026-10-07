@@ -36,7 +36,7 @@ export class Robot extends BaseEntity {
     @Column({ name: 'championship_id', type: 'uuid', nullable: false })
     championshipId: string;
 
-    @ManyToOne(() => Championship, (championship) => championship.robots)
+    @ManyToOne(() => Championship, { nullable: false })
     @JoinColumn({ name: 'championship_id' })
     championship?: Relation<Championship>;
 }

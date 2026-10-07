@@ -1,8 +1,5 @@
-import { Column, Entity, OneToMany } from 'typeorm';
-import type { Relation } from 'typeorm';
+import { Column, Entity } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
-import { Match } from '../../matches/entities/match.entity.js';
-import { Robot } from '../../robots/entities/robot.entity.js';
 
 export type ChampionshipStatus = 'ongoing' | 'scheduled' | 'closed';
 
@@ -54,10 +51,4 @@ export class Championship extends BaseEntity {
 
     @Column({ name: 'status', type: 'varchar', nullable: false })
     status: ChampionshipStatus;
-
-    @OneToMany(() => Match, (match) => match.championship)
-    matches: Relation<Match[]>;
-
-    @OneToMany(() => Robot, (robot) => robot.championship)
-    robots: Relation<Robot[]>;
 }

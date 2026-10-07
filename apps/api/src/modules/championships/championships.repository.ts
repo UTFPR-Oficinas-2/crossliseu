@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Championship } from './entities/championship.entity.js';
 import { In, Repository } from 'typeorm';
+import { Match } from '../matches/entities/match.entity.js';
+import { Robot } from '../robots/entities/robot.entity.js';
 
 export interface ChampionshipCounts {
     robotCount: number;
@@ -52,8 +54,9 @@ export class ChampionshipsRepository {
                 'COUNT(DISTINCT match.id) FILTER (WHERE match.status = :finished)',
                 'fightsDone',
             )
-            .leftJoin('championship.robots', 'robot')
-            .leftJoin('championship.matches', 'match')
+            // TypeORM adds `deletedAt IS NULL` to entity joins, keeping soft-deleted rows out
+            .leftJoin(Robot, 'robot', 'robot.championshipId = championship.id')
+            .leftJoin(Match, 'match', 'match.championshipId = championship.id')
             .where({ id: In(ids) })
             .setParameter('finished', 'finished')
             .groupBy('championship.id')

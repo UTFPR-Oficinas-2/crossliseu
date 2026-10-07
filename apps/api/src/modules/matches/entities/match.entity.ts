@@ -8,12 +8,23 @@ export type MatchState = 'waiting' | 'running' | 'finished' | 'paused';
 
 @Entity('matches')
 export class Match extends BaseEntity {
-    constructor(weightClass: string, robotA: Robot, robotB: Robot) {
+    // TypeORM calls the constructor without arguments when hydrating rows
+    constructor(
+        weightClass?: string,
+        championshipId?: string,
+        robotAId?: string,
+        robotBId?: string,
+    ) {
         super();
 
+        if (!weightClass || !championshipId || !robotAId || !robotBId) {
+            return;
+        }
+
         this.weightClass = weightClass;
-        this.robotA = robotA;
-        this.robotB = robotB;
+        this.championshipId = championshipId;
+        this.robotAId = robotAId;
+        this.robotBId = robotBId;
         this.status = 'waiting';
     }
 
@@ -23,14 +34,24 @@ export class Match extends BaseEntity {
     @Column({ name: 'state', type: 'varchar', nullable: false })
     status: MatchState;
 
+    @Column({ name: 'championship_id', type: 'uuid', nullable: false })
+    championshipId: string;
+
+    @ManyToOne(() => Championship, { nullable: false })
+    @JoinColumn({ name: 'championship_id' })
+    championship?: Relation<Championship>;
+
+    @Column({ name: 'robot_a_id', type: 'uuid', nullable: false })
+    robotAId: string;
+
     @ManyToOne(() => Robot, { nullable: false })
     @JoinColumn({ name: 'robot_a_id' })
-    robotA: Relation<Robot>;
+    robotA?: Relation<Robot>;
+
+    @Column({ name: 'robot_b_id', type: 'uuid', nullable: false })
+    robotBId: string;
 
     @ManyToOne(() => Robot, { nullable: false })
     @JoinColumn({ name: 'robot_b_id' })
-    robotB: Relation<Robot>;
-
-    @ManyToOne(() => Championship, (championship) => championship.matches)
-    championship: Relation<Championship>;
+    robotB?: Relation<Robot>;
 }
