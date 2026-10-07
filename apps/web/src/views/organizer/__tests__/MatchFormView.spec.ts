@@ -327,6 +327,22 @@ describe('MatchFormView', () => {
     expect(wrapper.get('[role="alert"]').text()).toBe(MATCH_MESSAGES.notEditable)
   })
 
+  it('edit: returns to the list when the match was already deleted elsewhere', async () => {
+    vi.mocked(deleteMatch).mockRejectedValue(
+      new ApiError(404, 'match_not_found', ['match_not_found']),
+    )
+    const { wrapper, router } = await mountView('/manage/c1/matches/m1/edit')
+    // Unsaved changes are moot once the match is gone: no leave prompt
+    await pick(wrapper, 0, 'Marte')
+
+    await buttonByText(wrapper, 'Excluir luta')!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('championship-matches')
+    expect(confirmSpy).not.toHaveBeenCalledWith(LEAVE_MESSAGE)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
   it('asks before leaving with unsaved changes', async () => {
     const { wrapper, router } = await mountView('/manage/c1/matches/new')
     await pick(wrapper, 0, 'Marte')

@@ -22,6 +22,7 @@ export const MATCH_MESSAGES = {
   robotNotFound: 'Um dos robôs foi removido. Recarregue a página.',
   notEditable: 'Esta luta não está mais programada e não pode ser alterada.',
   matchNotFound: 'Esta luta não existe mais.',
+  championshipNotFound: 'Este campeonato não existe mais. Volte para meus campeonatos.',
   noConnection: 'Não foi possível conectar ao servidor. Tente novamente.',
   reviewFields: 'Revise os campos destacados.',
   generic: 'Não foi possível salvar a luta. Tente novamente.',
@@ -142,6 +143,7 @@ const apiBannerMessages: [string, string][] = [
   ['match_not_editable', MATCH_MESSAGES.notEditable],
   ['robot_not_found', MATCH_MESSAGES.robotNotFound],
   ['match_not_found', MATCH_MESSAGES.matchNotFound],
+  ['championship_not_found', MATCH_MESSAGES.championshipNotFound],
 ]
 
 /** Save and delete failures; `fallback` is the generic message for the action */

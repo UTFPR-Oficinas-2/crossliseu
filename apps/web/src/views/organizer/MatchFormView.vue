@@ -4,6 +4,7 @@
 // lives here in edit mode.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
+import { ApiError } from '@/api/client'
 import AppButton from '@/components/ui/AppButton.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
@@ -182,6 +183,15 @@ async function onSubmit() {
   }
 }
 
+const isMatchNotFound = (error: unknown) =>
+  error instanceof ApiError && error.status === 404 && error.details.includes('match_not_found')
+
+// The match is gone: leaving can't lose anything
+async function leaveDeletedMatch() {
+  baseline.value = { ...values }
+  await router.push(listRoute.value)
+}
+
 async function onDelete() {
   if (busy.value || !matchId) return
   if (!window.confirm('Excluir esta luta? Essa ação não pode ser desfeita.')) return
@@ -190,11 +200,14 @@ async function onDelete() {
   try {
     await deleteMatch(matchId, auth.token ?? '')
     if (isUnmounted) return
-    // The match is gone: leaving can't lose anything
-    baseline.value = { ...values }
-    await router.push(listRoute.value)
+    await leaveDeletedMatch()
   } catch (error) {
     if (isUnmounted) return
+    // Already deleted elsewhere: the outcome the organizer asked for
+    if (isMatchNotFound(error)) {
+      await leaveDeletedMatch()
+      return
+    }
     bannerError.value = describeSaveError(error, MATCH_MESSAGES.deleteGeneric).message
   } finally {
     if (!isUnmounted) deleting.value = false

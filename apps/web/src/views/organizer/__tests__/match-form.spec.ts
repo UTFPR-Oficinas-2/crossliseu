@@ -173,6 +173,10 @@ describe('describeSaveError', () => {
     expect(describeSaveError(apiError(404, 'match_not_found')).message).toBe(
       MATCH_MESSAGES.matchNotFound,
     )
+    expect(describeSaveError(apiError(404, 'championship_not_found'))).toEqual({
+      message: 'Este campeonato não existe mais. Volte para meus campeonatos.',
+      fields: {},
+    })
   })
 
   it('falls back per action', () => {
