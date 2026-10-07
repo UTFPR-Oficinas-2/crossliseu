@@ -9,6 +9,8 @@ import InputField from '@/components/ui/InputField.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
 import OverviewMetric from '@/components/ui/OverviewMetric.vue'
 import PublicNav from '@/components/ui/PublicNav.vue'
+import SelectField from '@/components/ui/SelectField.vue'
+import type { SelectOption } from '@/components/ui/select-field'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
@@ -26,6 +28,8 @@ const statusPills = [
   { tone: 'success', label: 'Encerrada' },
   { tone: 'warning', label: 'Pausada' },
   { tone: 'danger', label: 'Falhou' },
+  { tone: 'accent', label: 'Em andamento' },
+  { tone: 'info', label: 'Programado' },
 ] as const
 
 const tabs = ['Visão geral', 'Participantes', 'Lutas']
@@ -38,6 +42,21 @@ const championshipName = ref('Crossliseu 2026')
 const emptyName = ref('')
 const invalidEmail = ref('arbitro@')
 const disabledCode = ref('ARB-4821')
+
+const robotOptions: SelectOption[] = [
+  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · Peso leve' },
+  { value: 'nemesis', label: 'Nêmesis', meta: 'Equipe Impacto · Peso leve' },
+  { value: 'cobalto', label: 'Cobalto', meta: 'Equipe Órbita · Peso leve' },
+  {
+    value: 'marte',
+    label: 'Marte',
+    meta: 'Equipe Órbita · Peso leve',
+    disabled: true,
+    disabledReason: 'Já escolhido como Robô 1',
+  },
+]
+const pickedRobot = ref('cobalto')
+const emptyRobot = ref('')
 
 const championships = [
   {
@@ -222,6 +241,27 @@ const signOuts = ref(0)
           error="Informe um e-mail válido."
         />
         <InputField v-model="disabledCode" label="Código de acesso" disabled />
+      </div>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Select / Menu</h2>
+      <div class="preview__fields">
+        <SelectField
+          v-model="pickedRobot"
+          label="Robô 2 *"
+          :options="robotOptions"
+          group-label="Participantes · Peso leve"
+          hint="Equipe Órbita · Peso leve"
+        />
+        <SelectField
+          v-model="emptyRobot"
+          label="Sem seleção, com erro"
+          :options="robotOptions"
+          placeholder="Escolha um robô"
+          error="Escolha o robô 2."
+        />
+        <SelectField label="Desativado" :options="robotOptions" disabled />
       </div>
     </section>
 

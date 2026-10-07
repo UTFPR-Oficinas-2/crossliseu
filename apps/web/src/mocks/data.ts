@@ -10,6 +10,7 @@ import type {
   RefereeAccess,
   RefereeScore,
   Robot,
+  WeightClass,
 } from '@/types'
 
 const TIMESTAMP = '2026-09-01T12:00:00.000Z'
@@ -21,13 +22,9 @@ export const championships: Championship[] = [
   {
     id: COPA_2026_ID,
     name: 'Copa Crossliseu 2026',
-    edition: 'Edição 01',
-    description: 'Etapa final da temporada 2026 de robótica de combate da UTFPR.',
-    location: 'UTFPR, Curitiba',
     startDate: '2026-12-09',
     endDate: '2026-12-09',
     status: 'running',
-    registrationOpen: false,
     robotCount: 16,
     fightsDone: 6,
     fightsTotal: 15,
@@ -37,13 +34,9 @@ export const championships: Championship[] = [
   {
     id: '6f1c2a40-0001-4000-8000-000000000002',
     name: 'Desafio de Robótica · Verão',
-    edition: 'Edição 02',
-    description: '',
-    location: 'UTFPR, Curitiba',
     startDate: '2026-12-19',
     endDate: null,
     status: 'scheduled',
-    registrationOpen: true,
     robotCount: 12,
     createdAt: TIMESTAMP,
     modifiedAt: TIMESTAMP,
@@ -51,13 +44,9 @@ export const championships: Championship[] = [
   {
     id: '6f1c2a40-0001-4000-8000-000000000003',
     name: 'Arena UTFPR · Etapa 3',
-    edition: 'Etapa 03',
-    description: '',
-    location: 'UTFPR, Curitiba',
     startDate: '2027-01-24',
     endDate: null,
     status: 'scheduled',
-    registrationOpen: false,
     robotCount: 8,
     createdAt: TIMESTAMP,
     modifiedAt: TIMESTAMP,
@@ -65,13 +54,9 @@ export const championships: Championship[] = [
   {
     id: '6f1c2a40-0001-4000-8000-000000000004',
     name: 'Copa Crossliseu 2025',
-    edition: 'Edição 01',
-    description: '',
-    location: 'UTFPR, Curitiba',
     startDate: '2025-12-10',
     endDate: '2025-12-10',
     status: 'finished',
-    registrationOpen: false,
     robotCount: 16,
     fightsDone: 15,
     fightsTotal: 15,
@@ -81,13 +66,9 @@ export const championships: Championship[] = [
   {
     id: '6f1c2a40-0001-4000-8000-000000000005',
     name: 'Torneio Interclasses',
-    edition: 'Interno',
-    description: '',
-    location: 'UTFPR, Curitiba',
     startDate: '2025-09-22',
     endDate: '2025-09-22',
     status: 'finished',
-    registrationOpen: false,
     robotCount: 10,
     fightsDone: 9,
     fightsTotal: 9,
@@ -97,13 +78,9 @@ export const championships: Championship[] = [
   {
     id: '6f1c2a40-0001-4000-8000-000000000006',
     name: 'Seletiva Regional Sul',
-    edition: 'Regional',
-    description: '',
-    location: 'UTFPR, Curitiba',
     startDate: '2025-08-03',
     endDate: '2025-08-03',
     status: 'finished',
-    registrationOpen: false,
     robotCount: 14,
     fightsDone: 13,
     fightsTotal: 13,
@@ -134,6 +111,7 @@ function robot(
   owner: string,
   category: string,
   status: Robot['status'] = 'eligible',
+  weightClass: WeightClass = 'lightweight',
 ): Robot {
   return {
     id: `6f1c2a40-0003-4000-8000-${String(n).padStart(12, '0')}`,
@@ -141,7 +119,7 @@ function robot(
     name,
     team,
     owner,
-    weightClass: '3 kg',
+    weightClass,
     category,
     status,
     createdAt: TIMESTAMP,
@@ -150,8 +128,8 @@ function robot(
 }
 
 export const robots: Robot[] = [
-  robot(1, 'Titã', 'Equipe Volt', 'A. Moraes', 'Arrasto'),
-  robot(2, 'Nêmesis', 'Equipe Impacto', 'R. Silveira', 'Girante'),
+  robot(1, 'Titã', 'Equipe Volt', 'A. Moraes', 'Arrasto', 'eligible', 'heavyweight'),
+  robot(2, 'Nêmesis', 'Equipe Impacto', 'R. Silveira', 'Girante', 'eligible', 'heavyweight'),
   robot(3, 'Aço', 'Equipe Aço', 'C. Bianchi', 'Cunha'),
   robot(4, 'Faísca', 'Equipe Faísca', 'J. Prado', 'Girante'),
   robot(5, 'Marte', 'Equipe Órbita', 'L. Tavares', 'Arrasto', 'pending-weigh-in'),
@@ -196,7 +174,7 @@ function match(overrides: MatchOverrides): Match {
     id: matchId(overrides.number),
     championshipId: COPA_2026_ID,
     arenaId: ARENA_01_ID,
-    weightClass: '3 kg',
+    weightClass: 'lightweight',
     state: 'waiting',
     roundDurationSeconds: 180,
     elapsedSeconds: 0,
@@ -215,6 +193,9 @@ function match(overrides: MatchOverrides): Match {
     ...overrides,
   }
 }
+
+/** Builds a match with the defaults above; demo writes in `@/mocks` use it for new matches */
+export const buildDemoMatch = match
 
 function finishedMatch(
   number: number,
@@ -274,6 +255,7 @@ export const matches: Match[] = [
     order: 7,
     robotAId: robotId('Titã'),
     robotBId: robotId('Nêmesis'),
+    weightClass: 'heavyweight',
     state: 'running',
     elapsedSeconds: 78,
     startedAt: '2026-12-09T15:30:00.000-03:00',

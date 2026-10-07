@@ -1,7 +1,13 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
+// The weight class is not sent: MatchesService takes it from the two robots
 export class CreateMatchDto {
-    @IsString()
-    @IsNotEmpty()
-    weightClass: string;
+    @IsUUID()
+    championshipId: string;
+
+    @IsUUID()
+    robotAId: string;
+
+    @IsUUID()
+    robotBId: string;
 }

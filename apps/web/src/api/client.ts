@@ -9,11 +9,14 @@ export const isApiEnabled = import.meta.env.PROD || API_URL !== ''
 export class ApiError extends Error {
   /** HTTP status, or `0` when the request never got a response (network/CORS failure) */
   readonly status: number
+  /** Nest error messages: class-validator returns one per failed rule, services return one code */
+  readonly details: readonly string[]
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details: readonly string[] = []) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.details = details
   }
 }
 
@@ -60,8 +63,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (response.status === 401 && token) onUnauthorized?.()
     // Nest errors look like `{ statusCode, message, error }`
     const payload = (await response.json().catch(() => null)) as { message?: unknown } | null
-    const message = typeof payload?.message === 'string' ? payload.message : response.statusText
-    throw new ApiError(response.status, message)
+    const raw = payload?.message
+    const details = Array.isArray(raw)
+      ? raw.filter((item): item is string => typeof item === 'string')
+      : typeof raw === 'string'
+        ? [raw]
+        : []
+    const message = typeof raw === 'string' ? raw : response.statusText
+    throw new ApiError(response.status, message, details)
   }
 
   if (response.status === 204) return undefined as T

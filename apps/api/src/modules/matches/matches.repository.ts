@@ -14,8 +14,14 @@ export class MatchesRepository {
         return this.repository.save(match);
     }
 
-    findAll(): Promise<Match[]> {
-        return this.repository.find();
+    findAll(championshipId?: string): Promise<Match[]> {
+        return this.repository.find({
+            where: championshipId ? { championshipId } : {},
+            // Robot names for the organizer list without one request per robot
+            relations: { robotA: true, robotB: true },
+            // Fights are ordered manually by creation; there is no bracket
+            order: { createdAt: 'ASC' },
+        });
     }
 
     findOne(id: string): Promise<Match | null> {

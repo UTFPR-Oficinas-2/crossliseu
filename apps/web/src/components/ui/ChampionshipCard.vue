@@ -18,7 +18,8 @@ const {
   to = '/',
 } = defineProps<{
   name: string
-  edition: number
+  /** Hidden when missing */
+  edition?: number
   /** Date object or ISO string ("2026-12-09") */
   date: Date | string
   status: ChampionshipStatus
@@ -42,7 +43,10 @@ const pill = computed(() => {
   }
 })
 
-const editionLabel = computed(() => `EDIÇÃO ${String(edition).padStart(2, '0')}`) // 1 → "EDIÇÃO 01"
+// 1 → "EDIÇÃO 01"
+const editionLabel = computed(() =>
+  edition === undefined ? null : `EDIÇÃO ${String(edition).padStart(2, '0')}`,
+)
 
 const dateFormat = new Intl.DateTimeFormat('pt-BR', {
   day: '2-digit',
@@ -81,7 +85,7 @@ const progress = computed(() => {
   <article class="championship-card">
     <header class="championship-card__header">
       <StatusPill :label="pill.label" :tone="pill.tone" />
-      <p class="championship-card__edition text-mono-s">{{ editionLabel }}</p>
+      <p v-if="editionLabel" class="championship-card__edition text-mono-s">{{ editionLabel }}</p>
     </header>
 
     <h3 class="championship-card__name text-heading-m">{{ name }}</h3>

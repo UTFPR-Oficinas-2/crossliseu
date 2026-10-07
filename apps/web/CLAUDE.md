@@ -77,7 +77,7 @@ Use these classes instead of setting font-family/size/weight in components.
 
 ```
 src/
-  api/           fetch client for apps/api (client.ts, auth.ts, championships.ts)
+  api/           fetch client for apps/api (client.ts, auth.ts, championships.ts, robots.ts, matches.ts)
   styles/        tokens.css, typography.css, base.css (reset + body)
   components/
     ui/          design-system components (one per Figma component)
@@ -106,6 +106,7 @@ src/
 | `Tab / Item`                                         | `TabItem.vue` (`active` prop)                             |
 | `Sidebar / Item`                                     | `SidebarItem.vue` (`active` prop)                         |
 | `Input / Field`                                      | `InputField.vue` (supports `v-model` and an `error` prop) |
+| `Select / Menu` · `Select / Option`                  | `SelectField.vue` (`v-model`, `options`, `error` prop)    |
 | `Card / Championship`                                | `ChampionshipCard.vue`                                    |
 | `Row / Fight`                                        | `FightRow.vue`                                            |
 | `Competitor / Tile`                                  | `CompetitorTile.vue` (`side: 'A' \| 'B'` prop)            |
@@ -124,9 +125,10 @@ Text properties become props or slots.
 - Interface text is **Portuguese (pt-BR)** exactly as in Figma. Code identifiers, file names,
   comments and commits are in English.
 - Format dates and numbers with `Intl` using `pt-BR`.
-- Sign-in and championships already use the API through `src/api/`; every other page still
-  uses typed data from `src/mocks/`. Don't call the API or invent endpoints unless asked. Keep
-  data loading in one place per view so it can be swapped for the API later.
+- Sign-in, championships, participants and match scheduling use the API through `src/api/`;
+  every other page still uses typed data from `src/mocks/`. Don't call the API or invent
+  endpoints unless asked. Keep data loading in one place per view so it can be swapped for the
+  API later.
 - Don't add dependencies other than the `@fontsource` packages without asking.
 
 ## Accessibility and layout

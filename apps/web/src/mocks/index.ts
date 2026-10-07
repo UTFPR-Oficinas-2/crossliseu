@@ -1,17 +1,44 @@
 // Data access for pages. Every function is async so it can call the API later without changing
 // call sites. Missing ids resolve to `null`. Functions backed by apps/api switch to it when
-// `VITE_API_URL` is set; the rest still serve demo data.
-import { isApiEnabled } from '@/api/client'
-import { listChampionships, type ApiChampionship } from '@/api/championships'
+// `VITE_API_URL` is set (championships, robots, match scheduling, sign-in); the rest still serve
+// demo data.
+import { ApiError, isApiEnabled } from '@/api/client'
+import {
+  createChampionship as postChampionship,
+  getChampionship as fetchChampionship,
+  listChampionships,
+  updateChampionship as patchChampionship,
+  type ApiChampionship,
+  type ApiChampionshipStatus,
+} from '@/api/championships'
 import { login } from '@/api/auth'
+import {
+  createMatch as postMatch,
+  deleteMatch as removeMatch,
+  listMatches,
+  updateMatch as patchMatch,
+  type ApiMatch,
+} from '@/api/matches'
+import {
+  createRobot as postRobot,
+  deleteRobot as removeRobot,
+  listRobots,
+  updateRobot as patchRobot,
+  type ApiRobot,
+} from '@/api/robots'
+import { championshipStatusFromDates } from '@/utils/championship'
+import { normalizeText } from '@/utils/robot'
 import type {
   Arena,
   Championship,
+  ChampionshipStatus,
   Match,
   MatchState,
+  MatchSummary,
   RefereeAccess,
   RefereeScore,
   Robot,
+  WeightClass,
 } from '@/types'
 
 // Demo data is dev-only. `import.meta.env.DEV` is replaced at build time, so production bundles
@@ -26,12 +53,22 @@ const demoAuth = () =>
     ? import('./demo-auth')
     : Promise.reject(new Error('Demo sign-in is not available in production builds'))
 
-/** Only the fields apps/api returns; everything else stays undefined (see `Championship`). */
+const championshipStatus: Record<ApiChampionshipStatus, ChampionshipStatus> = {
+  ongoing: 'running',
+  scheduled: 'scheduled',
+  closed: 'finished',
+}
+
 function toChampionship(api: ApiChampionship): Championship {
   return {
     id: api.id,
     name: api.name,
-    startDate: api.scheduledDate,
+    startDate: api.startDate,
+    endDate: api.endDate,
+    status: championshipStatus[api.status],
+    robotCount: api.robotCount,
+    fightsDone: api.fightsDone,
+    fightsTotal: api.fightsTotal,
     createdAt: api.createdAt,
     modifiedAt: api.modifiedAt,
   }
@@ -52,15 +89,90 @@ export async function signIn(username: string, password: string): Promise<string
   return (await demoAuth()).demoSignIn(username, password)
 }
 
+/** Form payload for create and update; dates are `YYYY-MM-DD` (`CreateChampionshipDto`) */
+export interface ChampionshipInput {
+  name: string
+  startDate: string
+  endDate: string
+}
+
+/** GET /championships/:id when the API is configured. Unknown or malformed ids resolve to `null`. */
 export async function getChampionship(id: string): Promise<Championship | null> {
+  if (isApiEnabled) {
+    try {
+      return toChampionship(await fetchChampionship(id))
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return null
+      throw error
+    }
+  }
   const { championships } = await demo()
   return championships.find((c) => c.id === id) ?? null
 }
 
-/** Championships the signed-in organizer can manage */
+/**
+ * Championships the signed-in organizer can manage. The API has no roles yet, so with the API
+ * configured this is every championship.
+ */
 export async function getManagedChampionships(): Promise<Championship[]> {
+  if (isApiEnabled) return (await listChampionships()).map(toChampionship)
   const { championships, managedChampionshipIds } = await demo()
   return championships.filter((c) => managedChampionshipIds.includes(c.id))
+}
+
+// `crypto.randomUUID` only exists in secure contexts (not on a plain-http LAN origin)
+const newDemoId = () =>
+  crypto.randomUUID?.() ?? `demo-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+const demoError = (status: number, code: string) => new ApiError(status, code, [code])
+
+// Same rule and code as `ChampionshipsService.assertValidDateRange`
+function assertDemoDateRange({ startDate, endDate }: ChampionshipInput) {
+  if (endDate < startDate) {
+    throw new ApiError(400, 'championship_end_before_start', ['championship_end_before_start'])
+  }
+}
+
+/** POST /championships (JWT). In demo mode the championship is added to the in-memory list. */
+export async function createChampionship(
+  input: ChampionshipInput,
+  token: string,
+): Promise<Championship> {
+  if (isApiEnabled) return toChampionship(await postChampionship(input, token))
+  assertDemoDateRange(input)
+  const { championships, managedChampionshipIds } = await demo()
+  const now = new Date().toISOString()
+  const championship: Championship = {
+    id: newDemoId(),
+    ...input,
+    status: championshipStatusFromDates(input.startDate, input.endDate),
+    robotCount: 0,
+    fightsDone: 0,
+    fightsTotal: 0,
+    createdAt: now,
+    modifiedAt: now,
+  }
+  championships.push(championship)
+  managedChampionshipIds.push(championship.id)
+  return { ...championship }
+}
+
+/** PATCH /championships/:id (JWT). In demo mode the in-memory championship is updated. */
+export async function updateChampionship(
+  id: string,
+  input: ChampionshipInput,
+  token: string,
+): Promise<Championship> {
+  if (isApiEnabled) return toChampionship(await patchChampionship(id, input, token))
+  assertDemoDateRange(input)
+  const { championships } = await demo()
+  const championship = championships.find((c) => c.id === id)
+  if (!championship) throw new ApiError(404, 'championship_not_found', ['championship_not_found'])
+  Object.assign(championship, input, {
+    status: championshipStatusFromDates(input.startDate, input.endDate),
+    modifiedAt: new Date().toISOString(),
+  })
+  return { ...championship }
 }
 
 export async function getArenas(championshipId: string): Promise<Arena[]> {
@@ -68,9 +180,109 @@ export async function getArenas(championshipId: string): Promise<Arena[]> {
   return arenas.filter((a) => a.championshipId === championshipId)
 }
 
+function toRobot(api: ApiRobot): Robot {
+  return {
+    id: api.id,
+    championshipId: api.championshipId,
+    name: api.name,
+    team: api.team,
+    weightClass: api.weightClass,
+    createdAt: api.createdAt,
+    modifiedAt: api.modifiedAt,
+  }
+}
+
+/** Robots of a championship in registration order. GET /robots when the API is configured. */
 export async function getRobots(championshipId: string): Promise<Robot[]> {
+  if (isApiEnabled) return (await listRobots(championshipId)).map(toRobot)
   const { robots } = await demo()
   return robots.filter((r) => r.championshipId === championshipId)
+}
+
+/** Form payload for create and update (`CreateRobotDto` without the championship) */
+export interface RobotInput {
+  name: string
+  team: string
+  weightClass: WeightClass
+}
+
+// Same normalization as the API DTO: `@NormalizeText` on name and team; the weight class is exact
+function normalizeRobotInput(input: RobotInput): RobotInput {
+  return {
+    name: normalizeText(input.name),
+    team: normalizeText(input.team),
+    weightClass: input.weightClass,
+  }
+}
+
+// Same rules and codes as `RobotsService` in apps/api
+function assertDemoNameAvailable(
+  robots: Robot[],
+  championshipId: string,
+  name: string,
+  robotId?: string,
+) {
+  const lower = name.toLocaleLowerCase('pt-BR')
+  const taken = robots.some(
+    (r) =>
+      r.championshipId === championshipId &&
+      r.id !== robotId &&
+      r.name.toLocaleLowerCase('pt-BR') === lower,
+  )
+  if (taken) throw demoError(409, 'robot_name_taken')
+}
+
+const demoRobotHasMatches = (matches: Match[], robotId: string) =>
+  matches.some((m) => m.robotAId === robotId || m.robotBId === robotId)
+
+/** POST /robots (JWT). In demo mode the robot is added to the in-memory list. */
+export async function createRobot(
+  championshipId: string,
+  input: RobotInput,
+  token: string,
+): Promise<Robot> {
+  if (isApiEnabled) return toRobot(await postRobot({ ...input, championshipId }, token))
+  const { championships, robots } = await demo()
+  if (!championships.some((c) => c.id === championshipId)) {
+    throw demoError(404, 'championship_not_found')
+  }
+  const normalized = normalizeRobotInput(input)
+  assertDemoNameAvailable(robots, championshipId, normalized.name)
+  const now = new Date().toISOString()
+  const robot: Robot = {
+    id: newDemoId(),
+    championshipId,
+    ...normalized,
+    createdAt: now,
+    modifiedAt: now,
+  }
+  robots.push(robot)
+  return { ...robot }
+}
+
+/** PATCH /robots/:id (JWT). In demo mode the in-memory robot is updated. */
+export async function updateRobot(id: string, input: RobotInput, token: string): Promise<Robot> {
+  if (isApiEnabled) return toRobot(await patchRobot(id, input, token))
+  const { robots, matches } = await demo()
+  const robot = robots.find((r) => r.id === id)
+  if (!robot) throw demoError(404, 'robot_not_found')
+  const normalized = normalizeRobotInput(input)
+  assertDemoNameAvailable(robots, robot.championshipId, normalized.name, id)
+  if (normalized.weightClass !== robot.weightClass && demoRobotHasMatches(matches, id)) {
+    throw demoError(409, 'robot_has_matches')
+  }
+  Object.assign(robot, normalized, { modifiedAt: new Date().toISOString() })
+  return { ...robot }
+}
+
+/** DELETE /robots/:id (JWT). Refused while any match uses the robot. */
+export async function deleteRobot(id: string, token: string): Promise<void> {
+  if (isApiEnabled) return removeRobot(id, token)
+  const { robots, matches } = await demo()
+  const index = robots.findIndex((r) => r.id === id)
+  if (index === -1) throw demoError(404, 'robot_not_found')
+  if (demoRobotHasMatches(matches, id)) throw demoError(409, 'robot_has_matches')
+  robots.splice(index, 1)
 }
 
 /** Matches in their manual fight order */
@@ -79,6 +291,120 @@ export async function getMatches(championshipId: string): Promise<Match[]> {
   return matches
     .filter((m) => m.championshipId === championshipId)
     .sort((a, b) => a.order - b.order)
+}
+
+function toMatchSummary(api: ApiMatch): MatchSummary {
+  return {
+    id: api.id,
+    championshipId: api.championshipId,
+    weightClass: api.weightClass,
+    robotAId: api.robotAId,
+    robotBId: api.robotBId,
+    state: api.status,
+    createdAt: api.createdAt,
+    modifiedAt: api.modifiedAt,
+  }
+}
+
+// Drops the operator fields of a demo `Match`
+const summaryOf = (match: MatchSummary): MatchSummary => ({
+  id: match.id,
+  championshipId: match.championshipId,
+  weightClass: match.weightClass,
+  robotAId: match.robotAId,
+  robotBId: match.robotBId,
+  state: match.state,
+  createdAt: match.createdAt,
+  modifiedAt: match.modifiedAt,
+})
+
+/** Matches of a championship for the organizer screens. GET /matches when the API is configured. */
+export async function getMatchSummaries(championshipId: string): Promise<MatchSummary[]> {
+  if (isApiEnabled) return (await listMatches(championshipId)).map(toMatchSummary)
+  return (await getMatches(championshipId)).map(summaryOf)
+}
+
+/** Form payload for create and update */
+export interface MatchInput {
+  robotAId: string
+  robotBId: string
+}
+
+// Same checks and codes as `MatchesService.resolveRobots` in apps/api; returns the shared class
+function resolveDemoRobots(robots: Robot[], championshipId: string, input: MatchInput): string {
+  if (input.robotAId === input.robotBId) throw demoError(400, 'match_robots_must_differ')
+  const robotA = robots.find((r) => r.id === input.robotAId)
+  const robotB = robots.find((r) => r.id === input.robotBId)
+  if (!robotA || !robotB) throw demoError(404, 'robot_not_found')
+  if (robotA.championshipId !== championshipId || robotB.championshipId !== championshipId) {
+    throw demoError(400, 'robot_not_in_championship')
+  }
+  if (robotA.weightClass !== robotB.weightClass) {
+    throw demoError(400, 'match_weight_class_mismatch')
+  }
+  return robotA.weightClass
+}
+
+/** POST /matches (JWT). In demo mode the match is appended to the fight order. */
+export async function createMatch(
+  championshipId: string,
+  input: MatchInput,
+  token: string,
+): Promise<MatchSummary> {
+  if (isApiEnabled) return toMatchSummary(await postMatch({ ...input, championshipId }, token))
+  const { championships, robots, matches, buildDemoMatch } = await demo()
+  if (!championships.some((c) => c.id === championshipId)) {
+    throw demoError(404, 'championship_not_found')
+  }
+  const weightClass = resolveDemoRobots(robots, championshipId, input)
+  const number =
+    Math.max(
+      0,
+      ...matches.filter((m) => m.championshipId === championshipId).map((m) => m.number),
+    ) + 1
+  const now = new Date().toISOString()
+  const match = buildDemoMatch({
+    ...input,
+    id: newDemoId(),
+    championshipId,
+    number,
+    order: number,
+    weightClass,
+    createdAt: now,
+    modifiedAt: now,
+  })
+  matches.push(match)
+  return summaryOf(match)
+}
+
+// Same guard as `MatchesService.assertEditable` in apps/api
+function findEditableDemoMatch(matches: Match[], id: string): Match {
+  const match = matches.find((m) => m.id === id)
+  if (!match) throw demoError(404, 'match_not_found')
+  if (match.state !== 'waiting') throw demoError(409, 'match_not_editable')
+  return match
+}
+
+/** PATCH /matches/:id (JWT). Only waiting matches. */
+export async function updateMatch(
+  id: string,
+  input: MatchInput,
+  token: string,
+): Promise<MatchSummary> {
+  if (isApiEnabled) return toMatchSummary(await patchMatch(id, input, token))
+  const { robots, matches } = await demo()
+  const match = findEditableDemoMatch(matches, id)
+  const weightClass = resolveDemoRobots(robots, match.championshipId, input)
+  Object.assign(match, input, { weightClass, modifiedAt: new Date().toISOString() })
+  return summaryOf(match)
+}
+
+/** DELETE /matches/:id (JWT). Only waiting matches. */
+export async function deleteMatch(id: string, token: string): Promise<void> {
+  if (isApiEnabled) return removeMatch(id, token)
+  const { matches } = await demo()
+  const match = findEditableDemoMatch(matches, id)
+  matches.splice(matches.indexOf(match), 1)
 }
 
 export async function getMatch(id: string): Promise<Match | null> {

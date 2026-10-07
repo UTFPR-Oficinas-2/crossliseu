@@ -65,12 +65,18 @@
   --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
   --size-form-card: 480px; /* sign-in card width */
   --size-dot: 8px; /* status dot, e.g. the error banner marker */
+  --size-aside: 360px; /* organizer form aside column */
+  --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
+  --size-menu-max: 320px; /* select menu height before it scrolls */
 
   /* Radius */
   --radius-xs: 2px;
   --radius-3px: 3px; /* operator nav tag */
   --radius-sm: 4px;
   --radius-pill: 999px;
+
+  /* Layers */
+  --z-menu: 10; /* open select menus sit above the rest of the form */
 
   /* Focus and states (not defined in Figma; shared so they stay consistent) */
   --focus-ring-width: 2px;

@@ -1,7 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Championship } from './entities/championship.entity.js';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
+import { Match } from '../matches/entities/match.entity.js';
+import { Robot } from '../robots/entities/robot.entity.js';
+
+export interface ChampionshipCounts {
+    robotCount: number;
+    fightsTotal: number;
+    fightsDone: number;
+}
+
+interface ChampionshipCountsRow {
+    id: string;
+    robotCount: string;
+    fightsTotal: string;
+    fightsDone: string;
+}
 
 @Injectable()
 export class ChampionshipsRepository {
@@ -20,6 +35,44 @@ export class ChampionshipsRepository {
 
     findOne(id: string): Promise<Championship | null> {
         return this.repository.findOneBy({ id });
+    }
+
+    /** Robots, matches and finished matches per championship id (soft-deleted rows excluded) */
+    async countRobotsAndMatches(
+        ids: string[],
+    ): Promise<Map<string, ChampionshipCounts>> {
+        if (ids.length === 0) {
+            return new Map();
+        }
+
+        const rows = await this.repository
+            .createQueryBuilder('championship')
+            .select('championship.id', 'id')
+            .addSelect('COUNT(DISTINCT robot.id)', 'robotCount')
+            .addSelect('COUNT(DISTINCT match.id)', 'fightsTotal')
+            .addSelect(
+                'COUNT(DISTINCT match.id) FILTER (WHERE match.status = :finished)',
+                'fightsDone',
+            )
+            // TypeORM adds `deletedAt IS NULL` to entity joins, keeping soft-deleted rows out
+            .leftJoin(Robot, 'robot', 'robot.championshipId = championship.id')
+            .leftJoin(Match, 'match', 'match.championshipId = championship.id')
+            .where({ id: In(ids) })
+            .setParameter('finished', 'finished')
+            .groupBy('championship.id')
+            .getRawMany<ChampionshipCountsRow>();
+
+        // Postgres returns COUNT as bigint, which the driver hands back as a string
+        return new Map(
+            rows.map((row) => [
+                row.id,
+                {
+                    robotCount: Number(row.robotCount),
+                    fightsTotal: Number(row.fightsTotal),
+                    fightsDone: Number(row.fightsDone),
+                },
+            ]),
+        );
     }
 
     update(id: string, partialChampionship: Partial<Championship>) {
