@@ -132,6 +132,19 @@ describe('MatchesView', () => {
     }
   })
 
+  it('names each row "A contra B" for screen readers, with spaces around "contra"', async () => {
+    const { wrapper } = await mountView()
+    // Text a screen reader reads: the aria-hidden "×" is skipped
+    const spoken = wrapper.findAll('tbody th').map((th) =>
+      Array.from(th.element.childNodes)
+        .filter((node) => !(node instanceof Element && node.getAttribute('aria-hidden') === 'true'))
+        .map((node) => node.textContent)
+        .join(''),
+    )
+
+    expect(spoken[0]).toBe('Titã contra Nêmesis')
+  })
+
   it('offers Editar only on scheduled matches, and Criar luta', async () => {
     const { wrapper } = await mountView()
     const edits = wrapper.findAll('a').filter((a) => a.text() === 'Editar')

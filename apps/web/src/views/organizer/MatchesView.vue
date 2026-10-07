@@ -165,7 +165,7 @@ const breadcrumb = computed(() => [
                 >
                   <span class="matches__name">{{ robotA }}</span>
                   <span class="matches__versus" aria-hidden="true">×</span>
-                  <span class="visually-hidden">contra</span>
+                  <span class="visually-hidden"> contra </span>
                   <span class="matches__name">{{ robotB }}</span>
                 </th>
                 <td role="cell" class="matches__cell--status">
