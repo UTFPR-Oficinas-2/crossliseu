@@ -3,7 +3,7 @@
 // select-only combobox (WAI-ARIA APG): focus stays on the trigger, which points at the active
 // option with aria-activedescendant. No hover styles: the active option gets an inset ring for
 // keyboard users, and the selected one gets the orange-dim background and a check.
-import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { firstEnabled, stepEnabled, type SelectOption } from './select-field'
 
 const {
@@ -109,6 +109,15 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+// The menu stops growing at --size-menu-max and scrolls, so the active option (also the selected
+// one when the menu opens) can sit below the fold. Wait for the DOM update first: while the menu
+// is still display: none there is nothing to scroll. jsdom has no scrollIntoView, hence `?.()`.
+watch(activeIndex, async (index) => {
+  if (index < 0) return
+  await nextTick()
+  document.getElementById(optionId(index))?.scrollIntoView?.({ block: 'nearest' })
+})
+
 // Pressing anywhere outside the field closes the menu
 function onDocumentPointerDown(event: Event) {
   if (!root.value?.contains(event.target as Node)) close()
@@ -178,7 +187,8 @@ function onFocusOut(event: FocusEvent) {
         </svg>
       </div>
 
-      <div v-show="open" class="select-field__menu">
+      <!-- Any press inside the menu (rows, group label, padding, scrollbar) keeps focus on the trigger -->
+      <div v-show="open" class="select-field__menu" @mousedown.prevent>
         <p v-if="groupLabel" :id="groupId" class="select-field__group text-overline">
           {{ groupLabel }}
         </p>
@@ -197,7 +207,6 @@ function onFocusOut(event: FocusEvent) {
             role="option"
             :aria-selected="option.value === model ? 'true' : 'false'"
             :aria-disabled="option.disabled ? 'true' : undefined"
-            @mousedown.prevent
             @click="choose(index)"
           >
             <span class="select-field__option-label text-heading-s">{{ option.label }}</span>

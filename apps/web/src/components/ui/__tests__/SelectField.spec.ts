@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 
 import SelectField from '../SelectField.vue'
 import { firstEnabled, stepEnabled, type SelectOption } from '../select-field'
@@ -158,6 +158,25 @@ describe('SelectField', () => {
     expect(combobox(wrapper).attributes('aria-expanded')).toBe('false')
   })
 
+  it('keeps the menu open and the focus on the trigger when pressing inside the menu', async () => {
+    const wrapper = mountSelect()
+    const trigger = wrapper.get<HTMLElement>('[role="combobox"]')
+
+    await trigger.trigger('click')
+    trigger.element.focus()
+
+    for (const selector of ['.select-field__group', '.select-field__menu']) {
+      const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+      wrapper.get(selector).element.dispatchEvent(press)
+      await wrapper.vm.$nextTick()
+
+      // Cancelling mousedown is what stops the browser from moving focus to body
+      expect(press.defaultPrevented).toBe(true)
+      expect(trigger.attributes('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(trigger.element)
+    }
+  })
+
   it('shows the error instead of the hint and marks the field invalid', () => {
     const wrapper = mountSelect({
       hint: 'Equipe Bigorna · Peso pesado',
@@ -190,5 +209,41 @@ describe('SelectField', () => {
       'Participantes · Peso leve',
     ])
     expect(combobox(wrapper).attributes('aria-labelledby')).toBe(ids[0])
+  })
+})
+
+describe('SelectField scrolling', () => {
+  // jsdom has no scrollIntoView, so the component calls it optionally; stub it to observe the calls
+  const scrollIntoView = vi.fn<(arg?: boolean | ScrollIntoViewOptions) => void>()
+  const scrolledTo = () => scrollIntoView.mock.contexts.at(-1)
+
+  beforeEach(() => {
+    scrollIntoView.mockClear()
+    Element.prototype.scrollIntoView = scrollIntoView
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+  })
+
+  it('scrolls the newly active option into view on ArrowDown', async () => {
+    const wrapper = mountSelect()
+
+    await combobox(wrapper).trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(scrolledTo()).toBe(optionEls(wrapper)[0]!.element)
+
+    await combobox(wrapper).trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(scrolledTo()).toBe(optionEls(wrapper)[2]!.element)
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' })
+  })
+
+  it('scrolls the selected option into view when it opens', async () => {
+    const wrapper = mountSelect({ modelValue: 'aco' })
+
+    await combobox(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(scrolledTo()).toBe(optionEls(wrapper)[2]!.element)
   })
 })
