@@ -32,6 +32,9 @@ async function load() {
   // The component is reused when the id changes: only the latest request may write state
   const requestedId = championshipId
   loadState.value = 'loading'
+  // Nothing from the previous championship may linger in the breadcrumb or the search
+  championshipName.value = ''
+  search.value = ''
   removeError.value = null
   try {
     // Championship first: a malformed id is "not found" here, while GET /robots would reject it

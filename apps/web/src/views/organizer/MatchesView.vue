@@ -45,6 +45,8 @@ async function load() {
   // The component is reused when the id changes: only the latest request may write state
   const requestedId = championshipId
   loadState.value = 'loading'
+  // The previous championship's name must not linger in the breadcrumb
+  championshipName.value = ''
   try {
     // Championship first: a malformed id is "not found" here, while the lists would reject it
     const championship = await getChampionship(requestedId)

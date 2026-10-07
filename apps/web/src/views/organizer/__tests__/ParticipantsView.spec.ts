@@ -233,6 +233,28 @@ describe('ParticipantsView', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
+  it('drops the previous name and search when the championship changes', async () => {
+    const { wrapper, router } = await mountView()
+    await wrapper.get<HTMLInputElement>('input[type="search"]').setValue('aco')
+
+    let resolve: (value: Championship) => void = () => {}
+    vi.mocked(getChampionship).mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    await router.push('/manage/c2/participants')
+    await flushPromises()
+
+    expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
+      'Meus campeonatos',
+      'Participantes',
+    ])
+
+    resolve({ ...championship, id: 'c2', name: 'Copa 2027' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Copa 2027')
+    expect(wrapper.text()).not.toContain('Copa 2026')
+    expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('')
+    expect(rowNames(wrapper)).toHaveLength(3)
+  })
+
   it('shows not found for an unknown championship without listing robots', async () => {
     vi.mocked(getChampionship).mockResolvedValue(null)
     const { wrapper } = await mountView('/manage/nope/participants')

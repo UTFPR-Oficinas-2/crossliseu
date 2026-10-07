@@ -190,6 +190,28 @@ describe('MatchesView', () => {
     expect(empty.wrapper.find('[role="tablist"]').exists()).toBe(false)
   })
 
+  it('drops the previous name from the breadcrumb when the championship changes', async () => {
+    const { wrapper, router } = await mountView()
+
+    let resolve: (value: Championship) => void = () => {}
+    vi.mocked(getChampionship).mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    await router.push('/manage/c2/matches')
+    await flushPromises()
+
+    expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
+      'Meus campeonatos',
+      'Lutas',
+    ])
+
+    resolve({ ...championship, id: 'c2', name: 'Copa 2027' })
+    await flushPromises()
+    expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
+      'Meus campeonatos',
+      'Copa 2027',
+      'Lutas',
+    ])
+  })
+
   it('shows not found for an unknown championship', async () => {
     vi.mocked(getChampionship).mockResolvedValue(null)
     const { wrapper } = await mountView('/manage/nope/matches')
