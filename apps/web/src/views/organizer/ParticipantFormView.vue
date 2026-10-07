@@ -173,7 +173,7 @@ async function onSubmit(next: 'list' | 'another') {
     bannerError.value = described.message
     apiFieldErrors.value = described.fields
   } finally {
-    saving.value = false
+    if (!isUnmounted) saving.value = false
   }
 }
 
@@ -197,7 +197,7 @@ onBeforeUnmount(() => {
     <h1 class="participant-form__title text-display-page">
       {{ mode === 'create' ? 'Adicionar participante' : 'Editar participante' }}
     </h1>
-    <p class="participant-form__muted text-body-m">
+    <p v-if="loadState === 'ready'" class="participant-form__muted text-body-m">
       {{
         mode === 'create'
           ? 'Cadastre um robô e a equipe dele neste campeonato.'
@@ -363,8 +363,9 @@ onBeforeUnmount(() => {
   gap: var(--space-4);
 }
 
+/* The 176px action token is borrowed as the minimum field width before the pair stacks */
 .participant-form__pair > * {
-  flex: 1 1 0;
+  flex: 1 1 var(--size-live-action);
   min-width: 0;
 }
 

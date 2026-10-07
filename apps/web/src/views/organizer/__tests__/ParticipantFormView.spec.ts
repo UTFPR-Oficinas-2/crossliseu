@@ -283,6 +283,7 @@ describe('ParticipantFormView', () => {
     const { wrapper } = await mountView('/manage/c1/participants/nope/edit')
 
     expect(wrapper.text()).toContain('Participante não encontrado.')
+    expect(wrapper.text()).not.toContain('Altere os dados do robô')
     expect(wrapper.find('form').exists()).toBe(false)
     const back = wrapper.findAll('a').find((a) => a.text() === 'Voltar para participantes')!
     expect(back.attributes('href')).toBe('/manage/c1/participants')
