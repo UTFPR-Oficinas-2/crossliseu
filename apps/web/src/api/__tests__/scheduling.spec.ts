@@ -47,16 +47,21 @@ describe('robots API', () => {
     }
 
     await createRobot(body, 'tok')
-    expect(lastRequest(fetchMock)).toMatchObject({
+    // toEqual: an extra key is a 400 in production (forbidNonWhitelisted)
+    expect(lastRequest(fetchMock)).toEqual({
+      url: expect.stringMatching(/\/robots$/),
       method: 'POST',
       body,
       authorization: 'Bearer tok',
     })
-    expect(lastRequest(fetchMock).url).toMatch(/\/robots$/)
 
     await updateRobot('r 1', { name: 'Titã II' }, 'tok')
-    expect(lastRequest(fetchMock)).toMatchObject({ method: 'PATCH', body: { name: 'Titã II' } })
-    expect(lastRequest(fetchMock).url).toMatch(/\/robots\/r%201$/)
+    expect(lastRequest(fetchMock)).toEqual({
+      url: expect.stringMatching(/\/robots\/r%201$/),
+      method: 'PATCH',
+      body: { name: 'Titã II' },
+      authorization: 'Bearer tok',
+    })
   })
 
   it('deletes with the token and resolves on 204', async () => {
@@ -82,15 +87,21 @@ describe('matches API', () => {
     const fetchMock = stubFetch()
 
     await createMatch({ championshipId: 'c1', robotAId: 'r1', robotBId: 'r2' }, 'tok')
-    expect(lastRequest(fetchMock)).toMatchObject({
+    // toEqual: an extra key such as weightClass is a 400 in production (forbidNonWhitelisted)
+    expect(lastRequest(fetchMock)).toEqual({
+      url: expect.stringMatching(/\/matches$/),
       method: 'POST',
       body: { championshipId: 'c1', robotAId: 'r1', robotBId: 'r2' },
       authorization: 'Bearer tok',
     })
 
     await updateMatch('m1', { robotBId: 'r3' }, 'tok')
-    expect(lastRequest(fetchMock)).toMatchObject({ method: 'PATCH', body: { robotBId: 'r3' } })
-    expect(lastRequest(fetchMock).url).toMatch(/\/matches\/m1$/)
+    expect(lastRequest(fetchMock)).toEqual({
+      url: expect.stringMatching(/\/matches\/m1$/),
+      method: 'PATCH',
+      body: { robotBId: 'r3' },
+      authorization: 'Bearer tok',
+    })
   })
 
   it('deletes with the token', async () => {
