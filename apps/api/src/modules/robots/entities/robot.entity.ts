@@ -1,8 +1,12 @@
 import type { Relation } from 'typeorm';
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
 
+// Partial expression index from migration RobotNameUniquePerChampionship1791500000000:
+// (championship_id, lower(name)) WHERE deleted_at IS NULL. TypeORM can't express it, so
+// `synchronize: false` keeps migration:generate from dropping it.
+@Index('UQ_robots_championship_id_lower_name', { synchronize: false })
 @Entity('robots')
 export class Robot extends BaseEntity {
     // TypeORM calls the constructor without arguments when hydrating rows

@@ -1,9 +1,23 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+    ConflictException,
+    Injectable,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { RobotsRepository } from './robots.repository.js';
 import { Robot } from './entities/robot.entity.js';
 import { CreateRobotDto } from './dto/create-robot.dto.js';
 import { UpdateRobotDto } from './dto/update-robot.dto.js';
 import { ChampionshipsService } from '../championships/championships.service.js';
+
+/** Postgres unique_violation: two saves raced past assertNameAvailable and hit the name index */
+function isUniqueViolation(error: unknown): boolean {
+    return (
+        error instanceof QueryFailedError &&
+        (error.driverError as { code?: unknown }).code === '23505'
+    );
+}
 
 @Injectable()
 export class RobotsService {
@@ -19,10 +33,11 @@ export class RobotsService {
 
         // Throws championship_not_found when it does not exist
         await this.championshipsService.findOne(championshipId);
+        await this.assertNameAvailable(championshipId, name);
 
         const robot: Robot = new Robot(name, weightClass, team, championshipId);
 
-        return this.robotsRepository.create(robot);
+        return this.rethrowNameTaken(() => this.robotsRepository.create(robot));
     }
 
     findAll(championshipId?: string) {
@@ -41,8 +56,19 @@ export class RobotsService {
     }
 
     async update(id: string, updateRobotDto: UpdateRobotDto) {
-        await this.findOne(id);
-        await this.robotsRepository.update(id, updateRobotDto);
+        const robot = await this.findOne(id);
+
+        if (updateRobotDto.name !== undefined) {
+            await this.assertNameAvailable(
+                robot.championshipId,
+                updateRobotDto.name,
+                id,
+            );
+        }
+
+        await this.rethrowNameTaken(() =>
+            this.robotsRepository.update(id, updateRobotDto),
+        );
 
         return this.findOne(id);
     }
@@ -50,5 +76,36 @@ export class RobotsService {
     async remove(id: string) {
         await this.findOne(id);
         await this.robotsRepository.remove(id);
+    }
+
+    /** "O nome do robô não pode se repetir dentro do mesmo campeonato" (Figma 09b), ignoring case */
+    private async assertNameAvailable(
+        championshipId: string,
+        name: string,
+        robotId?: string,
+    ) {
+        const existing = await this.robotsRepository.findByName(
+            championshipId,
+            name,
+        );
+
+        if (existing && existing.id !== robotId) {
+            this.logger.error('robot_name_taken', { championshipId, name });
+            throw new ConflictException('robot_name_taken');
+        }
+    }
+
+    private async rethrowNameTaken<T>(save: () => Promise<T>): Promise<T> {
+        try {
+            return await save();
+        } catch (error) {
+            if (isUniqueViolation(error)) {
+                this.logger.error('robot_name_taken', {
+                    reason: 'unique_violation',
+                });
+                throw new ConflictException('robot_name_taken');
+            }
+            throw error;
+        }
     }
 }

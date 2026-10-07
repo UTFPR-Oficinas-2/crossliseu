@@ -86,4 +86,16 @@ describe('entity metadata', () => {
         expect(columns).toHaveLength(3);
         expect(columns.every((column) => !column.isNullable)).toBe(true);
     });
+
+    it('robot names are unique per championship through a migration-managed index', async () => {
+        const dataSource = await buildDataSource();
+        const index = dataSource
+            .getMetadata(Robot)
+            .indices.find(
+                (entry) =>
+                    entry.name === 'UQ_robots_championship_id_lower_name',
+            );
+
+        expect(index?.synchronize).toBe(false);
+    });
 });
