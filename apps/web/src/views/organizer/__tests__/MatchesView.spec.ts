@@ -114,6 +114,24 @@ describe('MatchesView', () => {
     ])
   })
 
+  it('keeps explicit table roles so the reflowing rows stay a table for assistive tech', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('table').attributes('role')).toBe('table')
+    expect(wrapper.findAll('[role="columnheader"]').map((th) => th.text())).toEqual([
+      'Confronto',
+      'Status',
+      'Ações',
+    ])
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows).toHaveLength(4)
+    for (const row of rows) {
+      expect(row.attributes('role')).toBe('row')
+      expect(row.findAll('[role="rowheader"]')).toHaveLength(1)
+      expect(row.findAll('[role="cell"]')).toHaveLength(2)
+    }
+  })
+
   it('offers Editar only on scheduled matches, and Criar luta', async () => {
     const { wrapper } = await mountView()
     const edits = wrapper.findAll('a').filter((a) => a.text() === 'Editar')

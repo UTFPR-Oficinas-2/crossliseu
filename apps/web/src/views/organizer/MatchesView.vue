@@ -136,38 +136,48 @@ const breadcrumb = computed(() => [
       <div id="matches-list" role="tabpanel">
         <p v-if="rows.length === 0" class="matches__muted text-body-m">{{ activeFilterEmpty }}</p>
         <div v-else class="matches__card">
-          <table class="matches__table">
-            <thead class="text-overline">
-              <tr>
-                <th scope="col">Confronto</th>
-                <th scope="col">Status</th>
-                <th scope="col"><span class="visually-hidden">Ações</span></th>
+          <!-- The rows are flex containers so they can wrap on narrow screens. Changing a table's
+               display drops its semantics in some browsers, so the roles are stated explicitly. -->
+          <table class="matches__table" role="table">
+            <thead class="text-overline" role="rowgroup">
+              <tr class="matches__row" role="row">
+                <th scope="col" role="columnheader" class="matches__cell--pair">Confronto</th>
+                <th scope="col" role="columnheader" class="matches__cell--status">Status</th>
+                <th scope="col" role="columnheader" class="matches__cell--actions">
+                  <span class="visually-hidden">Ações</span>
+                </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               <tr
                 v-for="{ match, robotA, robotB } in rows"
                 :key="match.id"
+                class="matches__row"
                 :class="{ 'matches__row--finished': match.state === 'finished' }"
+                role="row"
               >
-                <th scope="row" class="matches__pair text-heading-s">
+                <th
+                  scope="row"
+                  role="rowheader"
+                  class="matches__cell--pair matches__pair text-heading-s"
+                >
                   <span class="matches__name">{{ robotA }}</span>
                   <span class="matches__versus" aria-hidden="true">×</span>
                   <span class="visually-hidden">contra</span>
                   <span class="matches__name">{{ robotB }}</span>
                 </th>
-                <td><StatusPill v-bind="matchStatePill[match.state]" /></td>
-                <td>
-                  <div class="matches__actions">
-                    <AppButton
-                      v-if="match.state === 'waiting'"
-                      variant="secondary"
-                      :to="{ name: 'match-edit', params: { championshipId, matchId: match.id } }"
-                      :aria-label="`Editar luta ${robotA} contra ${robotB}`"
-                    >
-                      Editar
-                    </AppButton>
-                  </div>
+                <td role="cell" class="matches__cell--status">
+                  <StatusPill v-bind="matchStatePill[match.state]" />
+                </td>
+                <td role="cell" class="matches__cell--actions">
+                  <AppButton
+                    v-if="match.state === 'waiting'"
+                    variant="secondary"
+                    :to="{ name: 'match-edit', params: { championshipId, matchId: match.id } }"
+                    :aria-label="`Editar luta ${robotA} contra ${robotB}`"
+                  >
+                    Editar
+                  </AppButton>
                 </td>
               </tr>
             </tbody>
@@ -216,37 +226,40 @@ const breadcrumb = computed(() => [
   gap: var(--space-3);
 }
 
-/* The card may scroll on very narrow screens; the page itself never scrolls sideways */
 .matches__card {
-  overflow-x: auto;
   padding: var(--space-6px) var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
 }
 
-.matches__table {
-  width: 100%;
-  border-collapse: collapse;
+.matches__table,
+.matches__table thead,
+.matches__table tbody {
+  display: block;
 }
 
-/* Figma rows: 14px above and below, 16px between columns, a soft rule under each row */
-.matches__table th,
-.matches__table td {
-  padding: var(--space-14px) var(--space-4) var(--space-14px) 0;
+/* Each row wraps instead of scrolling. Header and body cells share the same flex bases, so on
+   desktop they line up as columns; on narrow screens the cells drop onto new lines.
+   Figma rows: 14px above and below, 16px between columns, a soft rule under each row */
+.matches__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-14px) 0;
   border-bottom: 1px solid var(--color-border-soft);
-  text-align: left;
-  vertical-align: middle;
-  overflow-wrap: anywhere;
 }
 
-.matches__table th:last-child,
-.matches__table td:last-child {
-  padding-right: 0;
-}
-
-.matches__table tbody tr:last-child > * {
+.matches__table tbody .matches__row:last-child {
   border-bottom: none;
+}
+
+.matches__row > * {
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  overflow-wrap: break-word;
 }
 
 .matches__table thead th {
@@ -254,9 +267,26 @@ const breadcrumb = computed(() => [
   font-weight: inherit;
 }
 
-/* Names wrap between words only; a long name widens the table and the card scrolls instead */
-.matches__table .matches__pair {
-  overflow-wrap: normal;
+/* The 176px action token is borrowed for every column: the pair grows from it, and the status
+   and action columns keep it (Figma: 212px and 186px) */
+.matches__cell--pair {
+  flex: 1 1 var(--size-live-action);
+}
+
+.matches__cell--status {
+  display: flex;
+  flex: 0 1 var(--size-live-action);
+}
+
+.matches__cell--actions {
+  display: flex;
+  flex: 0 1 var(--size-live-action);
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+/* Names wrap between words; a single word longer than the line is the only one that breaks */
+.matches__pair {
   color: var(--color-text);
   text-transform: uppercase;
 }
@@ -268,10 +298,5 @@ const breadcrumb = computed(() => [
 
 .matches__row--finished .matches__pair {
   color: var(--color-muted);
-}
-
-.matches__actions {
-  display: flex;
-  justify-content: flex-end;
 }
 </style>

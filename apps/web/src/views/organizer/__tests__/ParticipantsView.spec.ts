@@ -102,6 +102,28 @@ describe('ParticipantsView', () => {
     ])
   })
 
+  it('keeps explicit table roles so the reflowing rows stay a table for assistive tech', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('table').attributes('role')).toBe('table')
+    expect(wrapper.findAll('[role="columnheader"]').map((th) => th.text())).toEqual([
+      'Robô',
+      'Equipe',
+      'Categoria',
+      'Ações',
+    ])
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows.map((tr) => tr.attributes('role'))).toEqual(['row', 'row', 'row'])
+    expect(rows.map((tr) => tr.get('[role="rowheader"]').text())).toEqual(['Titã', 'Aço', 'Marte'])
+    const cells = rows[0]!.findAll('[role="cell"]')
+    expect(cells).toHaveLength(3)
+    expect(cells.slice(0, 2).map((td) => td.text())).toEqual(['Equipe Volt', 'Peso leve'])
+    expect(cells[2]!.findAll('a, button').map((el) => el.attributes('aria-label'))).toEqual([
+      'Editar Titã',
+      'Remover Titã',
+    ])
+  })
+
   it('links to the create and edit forms', async () => {
     const { wrapper } = await mountView()
     const links = wrapper.findAll('a')

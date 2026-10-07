@@ -142,23 +142,35 @@ async function remove(robot: Robot) {
       </EmptyState>
 
       <div v-else class="participants__card">
-        <table class="participants__table">
-          <thead class="text-overline">
-            <tr>
-              <th scope="col">Robô</th>
-              <th scope="col">Equipe</th>
-              <th scope="col">Categoria</th>
-              <th scope="col"><span class="visually-hidden">Ações</span></th>
+        <!-- The rows are flex containers so they can wrap on narrow screens. Changing a table's
+             display drops its semantics in some browsers, so the roles are stated explicitly. -->
+        <table class="participants__table" role="table">
+          <thead class="text-overline" role="rowgroup">
+            <tr class="participants__row" role="row">
+              <th scope="col" role="columnheader" class="participants__cell--robot">Robô</th>
+              <th scope="col" role="columnheader" class="participants__cell--team">Equipe</th>
+              <th scope="col" role="columnheader" class="participants__cell--weight">Categoria</th>
+              <th scope="col" role="columnheader" class="participants__cell--actions">
+                <span class="visually-hidden">Ações</span>
+              </th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="robot in visible" :key="robot.id">
-              <th scope="row" class="participants__robot text-heading-s">{{ robot.name }}</th>
-              <td class="participants__team text-body-m">{{ robot.team }}</td>
-              <td class="participants__weight text-mono-s">
+          <tbody role="rowgroup">
+            <tr v-for="robot in visible" :key="robot.id" class="participants__row" role="row">
+              <th
+                scope="row"
+                role="rowheader"
+                class="participants__cell--robot participants__robot text-heading-s"
+              >
+                {{ robot.name }}
+              </th>
+              <td role="cell" class="participants__cell--team participants__team text-body-m">
+                {{ robot.team }}
+              </td>
+              <td role="cell" class="participants__cell--weight participants__weight text-mono-s">
                 {{ weightClassLabel(robot.weightClass) }}
               </td>
-              <td>
+              <td role="cell" class="participants__cell--actions">
                 <div class="participants__actions">
                   <AppButton
                     variant="secondary"
@@ -244,42 +256,65 @@ async function remove(robot: Robot) {
   color: var(--color-red);
 }
 
-/* The card may scroll on very narrow screens; the page itself never scrolls sideways */
 .participants__card {
-  overflow-x: auto;
   padding: var(--space-6px) var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
 }
 
-.participants__table {
-  width: 100%;
-  border-collapse: collapse;
+.participants__table,
+.participants__table thead,
+.participants__table tbody {
+  display: block;
 }
 
-/* Figma rows: 14px above and below, 16px between columns, a soft rule under each row */
-.participants__table th,
-.participants__table td {
-  padding: var(--space-14px) var(--space-4) var(--space-14px) 0;
+/* Each row wraps instead of scrolling. Header and body cells share the same flex bases, so on
+   desktop they line up as columns; on narrow screens the cells drop onto new lines.
+   Figma rows: 14px above and below, 16px between columns, a soft rule under each row */
+.participants__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-14px) 0;
   border-bottom: 1px solid var(--color-border-soft);
-  text-align: left;
-  vertical-align: middle;
-  overflow-wrap: anywhere;
 }
 
-.participants__table th:last-child,
-.participants__table td:last-child {
-  padding-right: 0;
-}
-
-.participants__table tbody tr:last-child > * {
+.participants__table tbody .participants__row:last-child {
   border-bottom: none;
+}
+
+.participants__row > * {
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  overflow-wrap: break-word;
 }
 
 .participants__table thead th {
   color: var(--color-muted);
   font-weight: inherit;
+}
+
+/* The 176px action token is borrowed as the robot and team width before the row wraps */
+.participants__cell--robot {
+  flex: 1 1 var(--size-live-action);
+}
+
+.participants__cell--team {
+  flex: 0 1 var(--size-live-action);
+}
+
+/* The 120px button token is borrowed for the class column (Figma: 118px) */
+.participants__cell--weight {
+  flex: 0 0 var(--size-button-min);
+}
+
+/* Editar and Remover side by side; they stack when the row is narrower than both */
+.participants__cell--actions {
+  flex: 0 1 calc(2 * var(--size-button-min) + var(--space-2));
+  margin-left: auto;
 }
 
 .participants__robot {
@@ -301,5 +336,11 @@ async function remove(robot: Robot) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+/* 120px wide on desktop; on a narrow row both buttons shrink to their content to stay side by side */
+.participants__actions > * {
+  flex: 1 1 0;
+  min-width: auto;
 }
 </style>
