@@ -66,6 +66,14 @@ export class RobotsService {
             );
         }
 
+        if (
+            updateRobotDto.weightClass !== undefined &&
+            updateRobotDto.weightClass !== robot.weightClass
+        ) {
+            // A match pairs robots of one weight class (MatchesService.resolveRobots)
+            await this.assertHasNoMatches(id);
+        }
+
         await this.rethrowNameTaken(() =>
             this.robotsRepository.update(id, updateRobotDto),
         );
@@ -75,6 +83,8 @@ export class RobotsService {
 
     async remove(id: string) {
         await this.findOne(id);
+        // Matches keep pointing at their robots; a soft-deleted robot would orphan them
+        await this.assertHasNoMatches(id);
         await this.robotsRepository.remove(id);
     }
 
@@ -92,6 +102,13 @@ export class RobotsService {
         if (existing && existing.id !== robotId) {
             this.logger.error('robot_name_taken', { championshipId, name });
             throw new ConflictException('robot_name_taken');
+        }
+    }
+
+    private async assertHasNoMatches(id: string) {
+        if (await this.robotsRepository.hasMatches(id)) {
+            this.logger.error('robot_has_matches', { id });
+            throw new ConflictException('robot_has_matches');
         }
     }
 

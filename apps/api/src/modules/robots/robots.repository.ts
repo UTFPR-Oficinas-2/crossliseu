@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Robot } from './entities/robot.entity.js';
 import { Raw, Repository } from 'typeorm';
+import { Match } from '../matches/entities/match.entity.js';
 
 @Injectable()
 export class RobotsRepository {
@@ -44,5 +45,14 @@ export class RobotsRepository {
 
     remove(id: string) {
         return this.repository.softDelete({ id });
+    }
+
+    /** Whether a live (not soft-deleted) match uses the robot on either side */
+    hasMatches(id: string): Promise<boolean> {
+        // Queried through the entity manager, not MatchesService: MatchesModule already imports
+        // RobotsModule (same approach as ChampionshipsRepository.countRobotsAndMatches)
+        return this.repository.manager.exists(Match, {
+            where: [{ robotAId: id }, { robotBId: id }],
+        });
     }
 }

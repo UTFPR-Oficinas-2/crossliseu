@@ -26,7 +26,10 @@ function robot(
     return entity;
 }
 
-function setup(robots: Robot[]) {
+function setup(
+    robots: Robot[],
+    { hasMatches = false }: { hasMatches?: boolean } = {},
+) {
     const robotsRepository = {
         create: vi.fn((entity: Robot) => Promise.resolve(entity)),
         findOne: vi.fn((id: string) =>
@@ -42,6 +45,7 @@ function setup(robots: Robot[]) {
                 ) ?? null,
             ),
         ),
+        hasMatches: vi.fn().mockResolvedValue(hasMatches),
         update: vi.fn().mockResolvedValue(undefined),
         remove: vi.fn().mockResolvedValue(undefined),
     };
@@ -174,5 +178,74 @@ describe('RobotsService.update', () => {
         await expect(service.update(TITA_ID, { name: 'Titã' })).rejects.toThrow(
             new NotFoundException('robot_not_found'),
         );
+    });
+});
+
+describe('RobotsService.remove', () => {
+    it('soft-deletes a robot without matches', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
+
+        await service.remove(TITA_ID);
+
+        expect(robotsRepository.hasMatches).toHaveBeenCalledWith(TITA_ID);
+        expect(robotsRepository.remove).toHaveBeenCalledWith(TITA_ID);
+    });
+
+    it('keeps a robot that is in a match', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')], {
+            hasMatches: true,
+        });
+
+        await expect(service.remove(TITA_ID)).rejects.toThrow(
+            new ConflictException('robot_has_matches'),
+        );
+        expect(robotsRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown robot', async () => {
+        const { service } = setup([]);
+
+        await expect(service.remove(TITA_ID)).rejects.toThrow(
+            new NotFoundException('robot_not_found'),
+        );
+    });
+});
+
+describe('RobotsService.update while in a match', () => {
+    it('rejects a weight class change', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')], {
+            hasMatches: true,
+        });
+
+        await expect(
+            service.update(TITA_ID, { weightClass: 'heavyweight' }),
+        ).rejects.toThrow(new ConflictException('robot_has_matches'));
+        expect(robotsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('allows other changes and the same weight class', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')], {
+            hasMatches: true,
+        });
+        const dto = {
+            name: 'Titã II',
+            team: 'Equipe Nova',
+            weightClass: 'lightweight' as const,
+        };
+
+        await service.update(TITA_ID, dto);
+
+        expect(robotsRepository.hasMatches).not.toHaveBeenCalled();
+        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, dto);
+    });
+
+    it('allows a weight class change when the robot has no matches', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
+
+        await service.update(TITA_ID, { weightClass: 'heavyweight' });
+
+        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, {
+            weightClass: 'heavyweight',
+        });
     });
 });
