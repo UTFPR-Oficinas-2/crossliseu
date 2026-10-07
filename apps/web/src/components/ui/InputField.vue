@@ -13,6 +13,7 @@ const {
   required = false,
   name,
   autocomplete,
+  hideLabel = false,
 } = defineProps<{
   label: string
   placeholder?: string
@@ -23,6 +24,8 @@ const {
   required?: boolean
   name?: string
   autocomplete?: string
+  /** Keeps the label for screen readers only */
+  hideLabel?: boolean
 }>()
 
 const model = defineModel<string>({ default: '' })
@@ -43,7 +46,13 @@ const describedBy = computed(() => {
     class="input-field"
     :class="{ 'input-field--error': error, 'input-field--disabled': disabled }"
   >
-    <label class="input-field__label text-label-s" :for="id">{{ label }}</label>
+    <label
+      class="input-field__label text-label-s"
+      :class="{ 'visually-hidden': hideLabel }"
+      :for="id"
+    >
+      {{ label }}
+    </label>
     <input
       :id="id"
       v-model="model"
