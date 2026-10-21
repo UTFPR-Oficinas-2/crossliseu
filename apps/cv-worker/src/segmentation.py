@@ -26,3 +26,14 @@ def clean_mask(mask, kernel_size=5):
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
     return mask
+
+def segment_color(frame_hsv, ranges, kernel_size=5):
+    mask = create_mask(frame_hsv, ranges)
+    return clean_mask(mask, kernel_size)
+
+
+def segment_all(frame_hsv, colors, kernel_size=5):
+    return {
+        name: segment_color(frame_hsv, ranges, kernel_size)
+        for name, ranges in colors.items()
+    } 
