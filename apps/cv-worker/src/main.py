@@ -35,7 +35,7 @@ def cv_worker():
 
         # Display // Just for tests
         cv2.imshow("BLUE MASK", blue_mask_c)
-        cv2.imshow("RED MASK", red_mask_c)
+        #cv2.imshow("RED MASK", red_mask_c)
 
         # cv2.setMouseCallback(
         #     "ORIGINAL",
