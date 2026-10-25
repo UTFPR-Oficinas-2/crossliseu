@@ -8,7 +8,6 @@
     "type": "module",
     "scripts": {
         "build": "nest build",
-        "deploy": "nest deploy",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
         "start": "nest start",
         "start:dev": "nest start --watch",
@@ -48,7 +47,6 @@
     },
     "devDependencies": {
         "@nestjs/cli": "^12.0.3",
-        "@nestjs/mau": "^0.0.6",
         "@nestjs/schematics": "^12.0.0",
         "@nestjs/testing": "^12.0.1",
         "@types/bcrypt": "^6.0.0",
