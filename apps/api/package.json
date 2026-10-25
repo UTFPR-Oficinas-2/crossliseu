@@ -8,7 +8,6 @@
     "type": "module",
     "scripts": {
         "build": "nest build",
-        "deploy": "nest deploy",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
         "start": "nest start",
         "start:dev": "nest start --watch",
@@ -48,7 +47,6 @@
     },
     "devDependencies": {
         "@nestjs/cli": "^12.0.3",
-        "@nestjs/mau": "^0.0.6",
         "@nestjs/schematics": "^12.0.0",
         "@nestjs/testing": "^12.0.1",
         "@types/bcrypt": "^6.0.0",
@@ -57,7 +55,7 @@
         "@types/passport-jwt": "^4.0.1",
         "@types/passport-local": "^1.0.38",
         "@types/supertest": "^7.0.0",
-        "@vitest/coverage-v8": "^4.1.2",
+        "@vitest/coverage-v8": "^4.1.12",
         "oxlint": "^1.58.0",
         "oxlint-tsgolint": "^7.0.2001",
         "prettier": "^3.4.2",
@@ -66,9 +64,12 @@
         "ts-node": "^10.9.2",
         "typescript": "^6.0.2",
         "vite-tsconfig-paths": "^5.1.4",
-        "vitest": "^4.1.2"
+        "vitest": "^4.1.12"
     },
     "allowScripts": {
         "bcrypt@6.0.0": true
+    },
+    "overrides": {
+        "multer": "^2.5.0"
     }
 }
