@@ -46,7 +46,7 @@
         "typeorm": "^1.1.1"
     },
     "devDependencies": {
-        "@nestjs/cli": "^12.0.3",
+        "@nestjs/cli": "^12.0.11",
         "@nestjs/schematics": "^12.0.0",
         "@nestjs/testing": "^12.0.1",
         "@types/bcrypt": "^6.0.0",
@@ -67,7 +67,9 @@
         "vitest": "^4.1.12"
     },
     "allowScripts": {
-        "bcrypt@6.0.0": true
+        "bcrypt@6.0.0": true,
+        "@scarf/scarf@1.4.0": true,
+        "fsevents@2.3.3": true
     },
     "overrides": {
         "multer": "^2.5.0"
