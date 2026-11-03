@@ -33,4 +33,4 @@ Reply when the fight is paused:
 - It keeps a single rule for the server and firmware: only a running fight can end by surrender, just like only a running fight can end by time.
 - A competitor who really wants to give up can press the button again once the fight is resumed, or ask the operator to end it.
 
-The ESP32 should not hide the buttons while paused; it sends the message and lets the server decide, since the server is the only source of truth.
+The firmware does not filter button presses by fight status: it sends every `surrender` and lets the server decide, since the server is the only source of truth.
