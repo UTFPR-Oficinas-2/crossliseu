@@ -14,14 +14,25 @@ Before saying a task is done: run `type-check` and `lint`, and fix what they rep
 
 File: https://www.figma.com/design/kGzPxE42HygJmS0DEqQKwx (fileKey `kGzPxE42HygJmS0DEqQKwx`)
 
-Sections: **Fundações** (variables, text styles, components), **Público**, **Organizador**,
-**Operador**, **Árbitro (celular)**. Names, dates and counts in the file are demo data.
+Pages: **README** (start here: index, domain rules, removed features, open questions),
+**Foundations** (variables, text styles, components), **Público**, **Organizador**, **Operador**,
+**Árbitro**, and **Arquivo · não implementar** (removed screens, never build them).
+Names, dates and counts in the file are demo data.
+
+- Each frame is one route in one state, named `<ID> <tela> · <estado>` (`OPE-03 Luta · em andamento`).
+  Phone layouts (< 768 px) repeat the ID and end with `· celular`.
+- Every frame has an **annotation** with its route, Vue view file, state, GitHub issues, milestone,
+  data source and behaviour rules. If the picture and the annotation disagree, the annotation wins.
+- Section names carry the milestone and issues (`Marco 3 · operar a luta com a arena (#37 #38)`).
+  Build Marco 3 first, then Marco 4, then Final delivery.
 
 ### How to implement a Figma node
 
 1. Work from the node link the user gives you (one frame or component at a time). If you only
-   have the file link, call `get_metadata` to find the node — don't pull a whole section.
-2. Call `get_design_context` for the node, and `get_screenshot` when layout is unclear.
+   have the file link, call `get_metadata` with no node id to list the pages, then on the page
+   to find the frame by its ID — don't pull a whole section.
+2. Call `get_design_context` for the node and read its annotation first. Call `get_screenshot`
+   when layout is unclear.
 3. **The returned code is a React + Tailwind reference, not code to paste.** Translate it into
    Vue SFCs and scoped CSS that follow the rules below.
 4. Map every Figma variable / text style to the existing tokens and classes. If a value has no
@@ -73,20 +84,23 @@ Use these classes instead of setting font-family/size/weight in components.
 
 | Figma                                                | Vue (`src/components/ui/`)                                |
 | ---------------------------------------------------- | --------------------------------------------------------- |
-| `Button / Primary · Secondary · Ghost · Destructive` | `AppButton.vue` (`variant` prop)                          |
-| `Status / Pill`                                      | `StatusPill.vue`                                          |
+| `Button` (Variant = Primary · Secondary · Ghost · Destructive) | `AppButton.vue` (`variant` prop)                |
+| `Status / Pill` (Tone = Neutral · Accent · Info · Success · Warning · Danger) | `StatusPill.vue` (`tone` prop)   |
 | `Tab / Item`                                         | `TabItem.vue` (`active` prop)                             |
 | `Sidebar / Item`                                     | `SidebarItem.vue` (`active` prop)                         |
-| `Input / Field`                                      | `InputField.vue` (supports `v-model` and an `error` prop) |
+| `Input / Field` (State = Default · Focus · Error · Disabled) | `InputField.vue` (`v-model`, `error`, `disabled`)  |
 | `Select / Menu` · `Select / Option`                  | `SelectField.vue` (`v-model`, `options`, `error` prop)    |
+| `Choice / Item` (State = Default · Selected · Disabled) | `ChoiceItem.vue` (new; radio card for arena and fight pickers) |
 | `Card / Championship`                                | `ChampionshipCard.vue`                                    |
-| `Row / Fight`                                        | `FightRow.vue`                                            |
-| `Competitor / Tile`                                  | `CompetitorTile.vue` (`side: 'A' \| 'B'` prop)            |
-| `Metric / Overview`                                  | `OverviewMetric.vue`                                      |
+| `Row / Fight` (`hasAction`)                          | `FightRow.vue`                                            |
+| `Competitor / Tile` (Side = A · B)                   | `CompetitorTile.vue` (`side: 'A' \| 'B'` prop)            |
+| `Metric / Overview`                                  | `OverviewMetric.vue` (no planned screen uses it now)      |
 | `Navigation / Public · App · Operator`               | `PublicNav.vue`, `AppNav.vue`, `OperatorNav.vue`          |
+| `Navigation / Mobile` · `Navigation / Operator · Mobile` | Same nav components below 768 px                      |
 
-Figma variants become typed props (string-literal unions), not separate components.
-Text properties become props or slots.
+Figma variants become typed props (string-literal unions) using the variant value in lowercase
+(`Tone=Warning` → `tone="warning"`), not separate components. Text properties become props or
+slots. Each component's Figma description repeats its Vue file and props.
 
 ## Coding rules
 
@@ -109,8 +123,8 @@ Text properties become props or slots.
 - Lado A = blue, Lado B = pink, **always with a visible text label**. Never color alone.
 - Red is only for destructive actions and errors. Orange is the primary action.
 - Referee pages are designed at 390 × 844. Use touch targets of at least 48 px and no hover-only UI.
-- Public and organizer pages are designed for desktop only; responsive layouts are still open.
-  Keep them fluid (no horizontal scroll down to ~360 px), but don't invent mobile designs.
+- Public, organizer and operator pages have desktop frames (1440) and phone frames (390,
+  `· celular`). Switch layouts at 768 px and keep everything fluid down to ~360 px.
 
 ## Domain rules the UI must respect
 
@@ -118,9 +132,19 @@ Text properties become props or slots.
   (pendente, processando, concluído, falhou) are separate. Never merge them into one status.
 - Referee screens show each referee's own values only. **Don't calculate or show an official
   total score** — the scoring formula is still undecided.
-- Surrender reporting doesn't physically disable a robot. Keep the on-screen wording that says so.
-- The operator can't start a fight until all three referees are connected.
-- Fight order is manual. Don't build brackets, seeding or automatic advancement.
+- The server owns the fight (status, timer, end reason). Nothing is blocked by an offline arena
+  or by referees who aren't connected: show the status, never disable Start because of it.
+- Surrender only comes from the arena box buttons and only counts while the fight is running.
+  The web app has no surrender buttons; the operator ends the fight (`operator_ended`) and can
+  correct the reason before closing it (#57).
+- `endReason` labels: `time_out` = TEMPO ESGOTADO, `operator_ended` = ENCERRADA PELO OPERADOR,
+  `surrender_A` / `surrender_B` = DESISTÊNCIA DO LADO A / B.
+- Arenas are global (not per championship), one ESP32 box each.
+- Referees join with their own link, without an account. No "ready" step and no correction window.
+  Scoring is +1 / −1 per side, nothing else.
+- A fight can end in a draw (EMPATE). The public sees scheduled fights as well as results.
+- Robô 1 is Lado A and Robô 2 is Lado B, fixed when the fight is created. Fight order is manual.
+  Don't build brackets, seeding or automatic advancement.
 - There is no public self-registration on the sign-in page.
 - Being signed in doesn't grant management access. Hide controls the user can't use, but
   assume the backend enforces permissions.
