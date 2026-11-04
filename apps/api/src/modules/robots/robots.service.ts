@@ -5,7 +5,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
-import { RobotsRepository } from './robots.repository.js';
+import { RobotsRepository, RobotWriteResult } from './robots.repository.js';
 import { Robot } from './entities/robot.entity.js';
 import { CreateRobotDto } from './dto/create-robot.dto.js';
 import { UpdateRobotDto } from './dto/update-robot.dto.js';
@@ -43,7 +43,15 @@ export class RobotsService {
             createdByUserId,
         );
 
-        return this.rethrowNameTaken(() => this.robotsRepository.create(robot));
+        const created = await this.rethrowNameTaken(() =>
+            this.robotsRepository.create(robot),
+        );
+        if (!created) {
+            // The championship was deleted after the check above
+            this.logger.warn('championship_not_found', { id: championshipId });
+            throw new NotFoundException('championship_not_found');
+        }
+        return created;
     }
 
     findAll(championshipId?: string) {
@@ -54,7 +62,7 @@ export class RobotsService {
         const robot = await this.robotsRepository.findOne(id);
 
         if (!robot) {
-            this.logger.error('robot_not_found', { id: id });
+            this.logger.warn('robot_not_found', { id: id });
             throw new NotFoundException('robot_not_found');
         }
 
@@ -72,17 +80,17 @@ export class RobotsService {
             );
         }
 
-        if (
+        // A match pairs robots of one weight class (MatchesService.pairRobots)
+        const requireNoMatches =
             updateRobotDto.weightClass !== undefined &&
-            updateRobotDto.weightClass !== robot.weightClass
-        ) {
-            // A match pairs robots of one weight class (MatchesService.resolveRobots)
-            await this.assertHasNoMatches(id);
-        }
+            updateRobotDto.weightClass !== robot.weightClass;
 
-        await this.rethrowNameTaken(() =>
-            this.robotsRepository.update(id, updateRobotDto),
+        const result = await this.rethrowNameTaken(() =>
+            this.robotsRepository.update(id, updateRobotDto, {
+                requireNoMatches,
+            }),
         );
+        this.assertWritten(id, result);
 
         return this.findOne(id);
     }
@@ -90,8 +98,7 @@ export class RobotsService {
     async remove(id: string) {
         await this.findOne(id);
         // Matches keep pointing at their robots; a soft-deleted robot would orphan them
-        await this.assertHasNoMatches(id);
-        await this.robotsRepository.remove(id);
+        this.assertWritten(id, await this.robotsRepository.remove(id));
     }
 
     /** "O nome do robô não pode se repetir dentro do mesmo campeonato" (Figma 09b), ignoring case */
@@ -111,8 +118,13 @@ export class RobotsService {
         }
     }
 
-    private async assertHasNoMatches(id: string) {
-        if (await this.robotsRepository.hasMatches(id)) {
+    /** Maps a locked write's refusal to its error; the robot may have changed since it was read */
+    private assertWritten(id: string, result: RobotWriteResult) {
+        if (result === 'not_found') {
+            this.logger.warn('robot_not_found', { id });
+            throw new NotFoundException('robot_not_found');
+        }
+        if (result === 'has_matches') {
             this.logger.error('robot_has_matches', { id });
             throw new ConflictException('robot_has_matches');
         }

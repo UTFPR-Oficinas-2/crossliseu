@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { User } from './entities/user.entity.js';
-import { Repository, UpdateResult } from 'typeorm';
 
 @Injectable()
 export class UsersRepository {
@@ -10,27 +10,8 @@ export class UsersRepository {
         private readonly repository: Repository<User>,
     ) {}
 
-    create(user: User) {
-        return this.repository.save(user);
-    }
-
-    findAll() {
-        return this.repository.find();
-    }
-
-    findOneById(id: string): Promise<User | null> {
-        return this.repository.findOneBy({ id });
-    }
-
+    /** The live (not soft-deleted) user with exactly this username */
     findOneByUsername(username: string): Promise<User | null> {
         return this.repository.findOneBy({ username });
-    }
-
-    update(id: string, partialUser: Partial<User>): Promise<UpdateResult> {
-        return this.repository.update({ id }, partialUser);
-    }
-
-    delete(id: string) {
-        return this.repository.softDelete({ id });
     }
 }

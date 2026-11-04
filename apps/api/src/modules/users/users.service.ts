@@ -1,43 +1,19 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { UpdateUserDto } from './dto/update-user.dto.js';
+import { Injectable, Logger } from '@nestjs/common';
 import { User } from './entities/user.entity.js';
 import { UsersRepository } from './users.repository.js';
 
+/**
+ * Users exist only for login. There is no sign-up and no user management API: the first user
+ * comes from the admin seed (src/database/seeds/create-admin.seed.ts).
+ */
 @Injectable()
 export class UsersService {
     logger: Logger = new Logger(UsersService.name);
 
-    // add repo
     constructor(private readonly usersRepository: UsersRepository) {}
 
-    findAll() {
-        // TODO
-        return `This action returns all users`;
-    }
-
-    findOneById(id: string) {
-        // TODO
-        return `This action returns a #${id} user`;
-    }
-
-    async findByUsername(username: string): Promise<User> {
-        const user = await this.usersRepository.findOneByUsername(username);
-
-        if (!user) {
-            this.logger.error('UserNotFound', { username });
-            throw new NotFoundException('UserNotFound');
-        }
-
-        return user;
-    }
-
-    update(id: string, updateUserDto: UpdateUserDto) {
-        // TODO
-        return `This action updates a #${id} user`;
-    }
-
-    delete(id: string) {
-        // TODO
-        return `This action removes a #${id} user`;
+    /** Null when no live user has this username; the caller decides how to report it */
+    findByUsername(username: string): Promise<User | null> {
+        return this.usersRepository.findOneByUsername(username);
     }
 }

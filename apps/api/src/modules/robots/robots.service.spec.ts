@@ -3,7 +3,10 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { RobotsService } from './robots.service.js';
 import { Robot } from './entities/robot.entity.js';
-import type { RobotsRepository } from './robots.repository.js';
+import type {
+    RobotsRepository,
+    RobotWriteResult,
+} from './robots.repository.js';
 import type { ChampionshipsService } from '../championships/championships.service.js';
 
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
@@ -33,7 +36,9 @@ function setup(
     { hasMatches = false }: { hasMatches?: boolean } = {},
 ) {
     const robotsRepository = {
-        create: vi.fn((entity: Robot) => Promise.resolve(entity)),
+        create: vi.fn((entity: Robot): Promise<Robot | null> =>
+            Promise.resolve(entity),
+        ),
         findOne: vi.fn((id: string) =>
             Promise.resolve(robots.find((entity) => entity.id === id) ?? null),
         ),
@@ -47,9 +52,22 @@ function setup(
                 ) ?? null,
             ),
         ),
-        hasMatches: vi.fn().mockResolvedValue(hasMatches),
-        update: vi.fn().mockResolvedValue(undefined),
-        remove: vi.fn().mockResolvedValue(undefined),
+        // Checks for matches in the same locked transaction as the write
+        update: vi.fn(
+            (
+                _id: string,
+                _patch: Partial<Robot>,
+                opts: { requireNoMatches: boolean },
+            ): Promise<RobotWriteResult> =>
+                Promise.resolve(
+                    opts.requireNoMatches && hasMatches
+                        ? 'has_matches'
+                        : 'done',
+                ),
+        ),
+        remove: vi.fn((): Promise<RobotWriteResult> =>
+            Promise.resolve(hasMatches ? 'has_matches' : 'done'),
+        ),
     };
     const championshipsService = {
         findOne: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
@@ -140,9 +158,11 @@ describe('RobotsService.update', () => {
 
         await service.update(TITA_ID, { name: 'TITÃ' });
 
-        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, {
-            name: 'TITÃ',
-        });
+        expect(robotsRepository.update).toHaveBeenCalledWith(
+            TITA_ID,
+            { name: 'TITÃ' },
+            { requireNoMatches: false },
+        );
     });
 
     it('rejects the name of another robot in the championship', async () => {
@@ -163,9 +183,11 @@ describe('RobotsService.update', () => {
         await service.update(TITA_ID, { team: 'Equipe Nova' });
 
         expect(robotsRepository.findByName).not.toHaveBeenCalled();
-        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, {
-            team: 'Equipe Nova',
-        });
+        expect(robotsRepository.update).toHaveBeenCalledWith(
+            TITA_ID,
+            { team: 'Equipe Nova' },
+            { requireNoMatches: false },
+        );
     });
 
     it('maps a unique index race on update to robot_name_taken', async () => {
@@ -192,19 +214,17 @@ describe('RobotsService.remove', () => {
 
         await service.remove(TITA_ID);
 
-        expect(robotsRepository.hasMatches).toHaveBeenCalledWith(TITA_ID);
         expect(robotsRepository.remove).toHaveBeenCalledWith(TITA_ID);
     });
 
     it('keeps a robot that is in a match', async () => {
-        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')], {
+        const { service } = setup([robot(TITA_ID, 'Titã')], {
             hasMatches: true,
         });
 
         await expect(service.remove(TITA_ID)).rejects.toThrow(
             new ConflictException('robot_has_matches'),
         );
-        expect(robotsRepository.remove).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown robot', async () => {
@@ -225,7 +245,11 @@ describe('RobotsService.update while in a match', () => {
         await expect(
             service.update(TITA_ID, { weightClass: 'featherweight' }),
         ).rejects.toThrow(new ConflictException('robot_has_matches'));
-        expect(robotsRepository.update).not.toHaveBeenCalled();
+        expect(robotsRepository.update).toHaveBeenCalledWith(
+            TITA_ID,
+            { weightClass: 'featherweight' },
+            { requireNoMatches: true },
+        );
     });
 
     it('allows other changes and the same weight class', async () => {
@@ -240,8 +264,9 @@ describe('RobotsService.update while in a match', () => {
 
         await service.update(TITA_ID, dto);
 
-        expect(robotsRepository.hasMatches).not.toHaveBeenCalled();
-        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, dto);
+        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, dto, {
+            requireNoMatches: false,
+        });
     });
 
     it('allows a weight class change when the robot has no matches', async () => {
@@ -249,8 +274,68 @@ describe('RobotsService.update while in a match', () => {
 
         await service.update(TITA_ID, { weightClass: 'featherweight' });
 
-        expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, {
-            weightClass: 'featherweight',
-        });
+        expect(robotsRepository.update).toHaveBeenCalledWith(
+            TITA_ID,
+            { weightClass: 'featherweight' },
+            { requireNoMatches: true },
+        );
+    });
+});
+
+describe('RobotsService logging', () => {
+    it('logs an unknown robot at warn, not error', async () => {
+        const { service } = setup([]);
+        const warn = vi
+            .spyOn(service.logger, 'warn')
+            .mockImplementation(() => {});
+        const error = vi
+            .spyOn(service.logger, 'error')
+            .mockImplementation(() => {});
+
+        await expect(service.findOne(TITA_ID)).rejects.toThrow(
+            new NotFoundException('robot_not_found'),
+        );
+        expect(warn).toHaveBeenCalledWith('robot_not_found', { id: TITA_ID });
+        expect(error).not.toHaveBeenCalled();
+    });
+});
+
+describe('RobotsService writes that lose a race', () => {
+    it('reports an update of a robot deleted after it was read as not found', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
+        robotsRepository.update.mockResolvedValueOnce('not_found');
+
+        await expect(
+            service.update(TITA_ID, { team: 'Equipe Nova' }),
+        ).rejects.toThrow(new NotFoundException('robot_not_found'));
+    });
+
+    it('reports a weight change that met a new match in the lock as robot_has_matches', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
+        robotsRepository.update.mockResolvedValueOnce('has_matches');
+
+        await expect(
+            service.update(TITA_ID, { weightClass: 'featherweight' }),
+        ).rejects.toThrow(new ConflictException('robot_has_matches'));
+    });
+
+    it('reports a delete of a robot deleted after it was read as not found', async () => {
+        const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
+        robotsRepository.remove.mockResolvedValueOnce('not_found');
+
+        await expect(service.remove(TITA_ID)).rejects.toThrow(
+            new NotFoundException('robot_not_found'),
+        );
+    });
+});
+
+describe('RobotsService.create while the championship is deleted', () => {
+    it('reports a championship deleted before the insert took its lock', async () => {
+        const { service, robotsRepository } = setup([]);
+        robotsRepository.create.mockResolvedValueOnce(null);
+
+        await expect(service.create(createDto, USER_ID)).rejects.toThrow(
+            new NotFoundException('championship_not_found'),
+        );
     });
 });
