@@ -10,6 +10,9 @@ erDiagram
   championships ||--o{ matches : "hosts"
   robots ||--o{ matches : "fights as robot_a"
   robots ||--o{ matches : "fights as robot_b"
+  user ||--o{ championships : creates
+  user ||--o{ matches : creates
+  user ||--o{ robots : creates
 
   users {
     uuid id PK
@@ -22,6 +25,7 @@ erDiagram
   }
   championships {
     uuid id PK
+    created_by user_id FK
     string name
     timestamptz start_date
     timestamptz end_date
@@ -33,6 +37,7 @@ erDiagram
   robots {
     uuid id PK
     uuid championship_id FK
+    created_by user_id FK
     string name "unique per championship, case-insensitive, among non-deleted"
     string weight_class
     string team
@@ -45,6 +50,7 @@ erDiagram
     uuid championship_id FK
     uuid robot_a_id FK
     uuid robot_b_id FK
+    created_by user_id FK
     string weight_class
     string state "e.g. waiting"
     timestamptz created_at
