@@ -10,9 +10,9 @@ erDiagram
   championships ||--o{ matches : "hosts"
   robots ||--o{ matches : "fights as robot_a"
   robots ||--o{ matches : "fights as robot_b"
-  user ||--o{ championships : creates
-  user ||--o{ matches : creates
-  user ||--o{ robots : creates
+  users ||--o{ championships : creates
+  users ||--o{ matches : creates
+  users ||--o{ robots : creates
 
   users {
     uuid id PK
