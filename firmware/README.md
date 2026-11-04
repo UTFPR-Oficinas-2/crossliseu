@@ -2,6 +2,8 @@
 
 Experimental ESP32 sketch: a countdown timer driving an RGB LED strip, with a physical stop button. Part of the [Crossliseu](../README.md) monorepo. Code comments are in Portuguese.
 
+The box talks to the API over the [`/arena` WebSocket protocol](../docs/arena-protocol.md), which also defines the LED colors and the module functions (`showTime`, `showMessage`, `setLedState`, `pollButtons`).
+
 ## Usage
 
 Open the sketch in the Arduino IDE (or PlatformIO) with an ESP32 board, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
