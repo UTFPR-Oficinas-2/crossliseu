@@ -5,18 +5,8 @@ organizers manage them; an operator runs each fight; three referees score from t
 
 ## Stack and commands
 
-- Vue 3 (`<script setup lang="ts">`), TypeScript, Vite, Vue Router, Pinia, Vitest.
 - Client-rendered SPA. The backend is NestJS in `apps/api`; live updates are planned (WebSockets) but not implemented.
 - No Tailwind, no UI kit, no React. Styling is plain CSS with custom properties.
-- Prettier: no semicolons, single quotes, print width 100.
-
-```bash
-npm run dev          # dev server
-npm run type-check   # vue-tsc — must pass before you finish
-npm run lint         # oxlint + eslint (auto-fix)
-npm run format       # prettier on src/
-npm run test:unit    # vitest
-```
 
 Before saying a task is done: run `type-check` and `lint`, and fix what they report.
 
@@ -75,27 +65,9 @@ Use these classes instead of setting font-family/size/weight in components.
 
 ## Project structure
 
-```
-src/
-  api/           fetch client for apps/api (client.ts, auth.ts, championships.ts, robots.ts, matches.ts)
-  styles/        tokens.css, typography.css, base.css (reset + body)
-  components/
-    ui/          design-system components (one per Figma component)
-  layouts/       PublicLayout, OrganizerLayout, OperatorLayout, RefereeLayout
-  views/
-    public/      HomeView, ChampionshipView, MatchDetailsView, SignInView, NotFoundView
-    dev/         ComponentsPreviewView (dev builds only)
-    organizer/   MyChampionshipsView, ChampionshipFormView, OverviewView, ParticipantsView,
-                 MatchesView
-    operator/    MatchOperationView (one view, three states)
-    referee/     RefereeSessionView (join → scoring → finished states), InvalidAccessView
-    <section>/components/   blocks used only inside that section
-  types/         domain types (Championship, Robot, Match, RefereeScore, …)
-  mocks/         typed demo data, used in dev when `VITE_API_URL` is unset
-  stores/        Pinia stores
-  router/
-  test/          Vitest setup
-```
+- `src/components/ui/` holds one design-system component per Figma component.
+- Blocks used only inside one section live in `src/views/<section>/components/`.
+- `src/mocks/` is typed demo data, used in dev when `VITE_API_URL` is unset.
 
 ### Figma component → Vue file
 
