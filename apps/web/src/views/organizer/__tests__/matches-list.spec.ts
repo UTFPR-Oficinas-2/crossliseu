@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { MatchSummary, Robot } from '@/types'
-import { inMatchFilter, matchFilterFrom, matchRows, matchesSubtitle } from '../matches-list'
+import {
+  MATCH_FILTERS,
+  inMatchFilter,
+  matchFilterFrom,
+  matchRows,
+  matchesSubtitle,
+} from '../matches-list'
+
+describe('MATCH_FILTERS', () => {
+  it('are the API states plus Todas', () => {
+    expect(MATCH_FILTERS.map((f) => f.value)).toEqual(['all', 'scheduled', 'ongoing', 'finished'])
+  })
+})
 
 describe('matchFilterFrom', () => {
   it('reads known tabs and falls back to all', () => {
@@ -10,6 +22,9 @@ describe('matchFilterFrom', () => {
     expect(matchFilterFrom('paused')).toBe('all')
     expect(matchFilterFrom(['scheduled'])).toBe('all')
     expect(matchFilterFrom(undefined)).toBe('all')
+    // Values from before the API state names
+    expect(matchFilterFrom('waiting')).toBe('all')
+    expect(matchFilterFrom('running')).toBe('all')
   })
 })
 

@@ -191,6 +191,17 @@ describe('MatchesView', () => {
 
     const bogus = await mountView('/manage/c1/matches?state=bogus')
     expect(tab(bogus.wrapper, 'Todas').attributes('aria-selected')).toBe('true')
+
+    const legacy = await mountView('/manage/c1/matches?state=waiting')
+    expect(tab(legacy.wrapper, 'Todas').attributes('aria-selected')).toBe('true')
+  })
+
+  it('shows a paused fight with the amber PAUSADA pill', async () => {
+    const { wrapper } = await mountView()
+    const pill = wrapper.findAll('tbody tr')[2]!.get('.status-pill')
+
+    expect(pill.text()).toBe('Pausada')
+    expect(pill.classes()).toContain('status-pill--warning')
   })
 
   it('shows empty states', async () => {
