@@ -1,6 +1,6 @@
-// DRAFT: domain types inferred from the Figma screens. The backend is not finished, so these are
-// not an API contract and will change. They follow the apps/api conventions where they exist
-// (uuid string ids, camelCase, createdAt/modifiedAt, Match.weightClass). Dates are ISO strings.
+// Domain types. Where apps/api has the entity (championships, robots, matches) these mirror it:
+// state names, weight classes, end reasons, uuid string ids, camelCase, createdAt/modifiedAt.
+// Fields marked "demo data only" have no API source yet. Dates are ISO strings.
 
 // Status unions. Each one is a separate concern and must never be merged with another.
 
