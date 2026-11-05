@@ -31,6 +31,13 @@ describe('FightRow', () => {
     expect(competitors(mountRow({ state: 'finished', winner: 'B' }))).toBe('COBALTO venceu MARTE')
   })
 
+  it('shows no result when the winner is unknown (prop omitted), never a draw', () => {
+    const wrapper = mountRow({ state: 'finished' })
+
+    expect(competitors(wrapper)).toBe('MARTE × COBALTO')
+    expect(wrapper.text()).not.toContain('Empate')
+  })
+
   it('marks a draw with "Empate"', () => {
     const wrapper = mountRow({ state: 'finished', winner: null })
 

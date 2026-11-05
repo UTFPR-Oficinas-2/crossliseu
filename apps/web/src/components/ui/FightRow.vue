@@ -12,20 +12,20 @@ const {
   robotA,
   robotB,
   state,
-  winner = null,
+  winner,
 } = defineProps<{
   fightNumber: number
   robotA: string
   robotB: string
   /** Match state only; recording/upload/analysis state is separate and never shown here */
   state: MatchState
-  /** Finished fights: the winning side, or `null` for a draw */
+  /** Finished fights: the winning side, `null` for a draw, omitted when the result is unknown */
   winner?: Side | null
 }>()
 
 const pill = computed(() => matchStatePill[state])
 
-const hasWinner = computed(() => state === 'finished' && winner !== null)
+const hasWinner = computed(() => state === 'finished' && (winner === 'A' || winner === 'B'))
 const isDraw = computed(() => state === 'finished' && winner === null)
 
 const pair = computed(() =>
