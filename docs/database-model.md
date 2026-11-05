@@ -23,8 +23,11 @@ erDiagram
   users ||--o{ championships : creates
   users ||--o{ matches : creates
   users ||--o{ robots : creates
+  matches ||--o{ match_pauses : "paused during"
+  users ||--o{ match_pauses : pauses
   matches ||--o{ match_score_events : "scored in"
   robots  ||--o{ match_score_events : "scored for"
+  robots ||--o{ matches : "wins"
 
   users {
     uuid id PK
@@ -37,7 +40,7 @@ erDiagram
   }
   championships {
     uuid id PK
-    created_by user_id FK
+    uuid created_by_user_id FK
     string name
     timestamptz start_date
     timestamptz end_date
@@ -48,9 +51,9 @@ erDiagram
   robots {
     uuid id PK
     uuid championship_id FK
-    uuid created_by FK
+    uuid created_by_user_id FK
     string name
-    string weight_class "(fairyweight | antweight | beetleweight | hobbyweight | featherweight | lightweight"
+    string weight_class "(fairyweight | antweight | beetleweight | hobbyweight | featherweight | lightweight)"
     string team
     timestamptz created_at
     timestamptz modified_at "nullable"
@@ -77,7 +80,15 @@ erDiagram
     uuid id PK
     uuid match_id FK
     uuid robot_id FK
-    int judge_id "(1 | 2 | 3)"
+    int judge_seat "(1 | 2 | 3)"
     int action "+1 | -1"
+    timestamptz created_at
+  }
+  match_pauses {
+    uuid id PK
+    uuid match_id FK
+    uuid paused_by_user_id FK
+    timestamptz paused_at
+    timestamptz resumed_at "nullable, null while the match is paused"
   }
 ```
