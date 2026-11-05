@@ -1,12 +1,15 @@
 # Database model
 
-This diagram shows the database we are working toward. It is not the current
-schema. Some tables, columns, relationships and allowed values below don't exist
-yet, or exist in a different form. Use it to guide new entities and migrations.
+This diagram shows the schema created by the baseline migration
+(`InitialSchema`). Allowed values in parentheses are enforced by CHECK
+constraints. The migration also adds partial unique indexes that the diagram
+doesn't show: case-insensitive `username` and `email` among live users,
+case-insensitive robot `name` per championship among live robots, and at most
+one open pause (`resumed_at IS NULL`) per match.
 
-For the schema as it is today, read the migrations in
-`apps/api/src/database/migrations/`. Those are the source of truth for what is
-actually deployed.
+The migrations in `apps/api/src/database/migrations/` stay the source of truth
+for what is deployed. Update this diagram when a new migration changes the
+schema.
 
 ```mermaid
 ---
