@@ -32,7 +32,7 @@ const {
 const pill = computed(() => {
   switch (status) {
     case 'ongoing':
-      return { label: 'Em andamento', tone: 'live' as const }
+      return { label: 'Em andamento', tone: 'accent' as const }
     case 'closed':
       // TODO design: Figma only defines "Em andamento"
       return { label: 'Encerrado', tone: 'neutral' as const }

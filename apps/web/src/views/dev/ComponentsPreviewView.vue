@@ -23,7 +23,6 @@ const buttonVariants = [
 ] as const
 
 const statusPills = [
-  { tone: 'live', label: 'Em andamento' },
   { tone: 'neutral', label: 'Aguardando' },
   { tone: 'success', label: 'Encerrada' },
   { tone: 'warning', label: 'Pausada' },

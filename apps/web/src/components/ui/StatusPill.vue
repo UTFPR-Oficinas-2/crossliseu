@@ -1,14 +1,11 @@
 <script setup lang="ts">
-// Figma: `Status / Pill` (node 9:39). The component defines the green "EM ANDAMENTO" look
-// (`live`); the orange (`accent`) and blue (`info`) looks come from instances in frame
-// `06 / Organizador · Meus campeonatos`. The other tones reuse the same shape with another
-// palette color. The label is always visible,
-// so status never relies on color alone.
-type Tone = 'neutral' | 'live' | 'success' | 'danger' | 'warning' | 'accent' | 'info'
+// Figma: `Status / Pill` (node 9:39). Six tones, listed in `status-pill.ts`. The label is always
+// visible, so status never relies on color alone.
+import type { StatusTone } from './status-pill'
 
 const { label, tone = 'neutral' } = defineProps<{
   label: string
-  tone?: Tone
+  tone?: StatusTone
 }>()
 </script>
 
@@ -40,7 +37,6 @@ const { label, tone = 'neutral' } = defineProps<{
   background: currentColor;
 }
 
-.status-pill--live,
 .status-pill--success {
   color: var(--color-green);
 }

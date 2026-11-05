@@ -17,7 +17,7 @@ const { fightNumber, robotA, robotB, status } = defineProps<{
 const pill = computed(() => {
   switch (status) {
     case 'running':
-      return { label: 'Em andamento', tone: 'live' as const }
+      return { label: 'Em andamento', tone: 'accent' as const }
     case 'paused':
       return { label: 'Pausada', tone: 'warning' as const }
     case 'done':

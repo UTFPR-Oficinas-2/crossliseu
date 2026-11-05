@@ -118,7 +118,7 @@ const live = computed(() => {
   const status = fight.state === 'paused' ? 'Pausada' : 'Ao vivo'
   return {
     pillLabel: fight.arenaName ? `${status} · ${fight.arenaName}` : status,
-    pillTone: fight.state === 'paused' ? ('warning' as const) : ('live' as const),
+    pillTone: fight.state === 'paused' ? ('warning' as const) : ('accent' as const),
     // Screen readers would otherwise read "×" as a multiplication sign
     matchup: `${fight.robotAName} contra ${fight.robotBName}`,
     // "Copa Crossliseu 2026 · Luta 07 de 15"
