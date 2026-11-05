@@ -11,6 +11,7 @@ import { Robot } from '../robots/entities/robot.entity.js';
 import type { MatchesRepository } from './matches.repository.js';
 import type { ChampionshipsService } from '../championships/championships.service.js';
 import type { RobotsService } from '../robots/robots.service.js';
+import type { WeightClass } from '../robots/weight-class.js';
 
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_CHAMPIONSHIP_ID = '22222222-2222-4222-8222-222222222222';
@@ -18,30 +19,38 @@ const ROBOT_A_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ROBOT_B_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ROBOT_C_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const SCHEDULED_AT = new Date('2026-11-10T14:00:00Z');
 
 function robot(
     id: string,
-    { championshipId = CHAMPIONSHIP_ID, weightClass = 'lightweight' } = {},
+    {
+        championshipId = CHAMPIONSHIP_ID,
+        weightClass = 'lightweight',
+    }: { championshipId?: string; weightClass?: WeightClass } = {},
 ): Robot {
     const entity = new Robot(
         `robot-${id}`,
         weightClass,
         'team',
         championshipId,
+        USER_ID,
     );
     entity.id = id;
     return entity;
 }
 
-function match(status: MatchState = 'waiting'): Match {
+function match(state: MatchState = 'scheduled'): Match {
     const entity = new Match(
         'lightweight',
         CHAMPIONSHIP_ID,
         ROBOT_A_ID,
         ROBOT_B_ID,
+        USER_ID,
+        SCHEDULED_AT,
     );
     entity.id = MATCH_ID;
-    entity.status = status;
+    entity.state = state;
     return entity;
 }
 
@@ -86,16 +95,17 @@ const dto = {
     championshipId: CHAMPIONSHIP_ID,
     robotAId: ROBOT_A_ID,
     robotBId: ROBOT_B_ID,
+    scheduledAt: SCHEDULED_AT,
 };
 
 describe('MatchesService.create', () => {
-    it('saves a waiting match with the championship and both robots', async () => {
+    it('saves a scheduled match by its creator with the championship and both robots', async () => {
         const { service, matchesRepository, championshipsService } = setup([
             robot(ROBOT_A_ID),
             robot(ROBOT_B_ID),
         ]);
 
-        const created = await service.create(dto);
+        const created = await service.create(dto, USER_ID);
 
         expect(championshipsService.findOne).toHaveBeenCalledWith(
             CHAMPIONSHIP_ID,
@@ -106,28 +116,30 @@ describe('MatchesService.create', () => {
             championshipId: CHAMPIONSHIP_ID,
             robotAId: ROBOT_A_ID,
             robotBId: ROBOT_B_ID,
-            status: 'waiting',
+            state: 'scheduled',
+            createdByUserId: USER_ID,
+            scheduledAt: SCHEDULED_AT,
         });
     });
 
     it('stores the weight class shared by the robots', async () => {
         const { service } = setup([
-            robot(ROBOT_A_ID, { weightClass: 'heavyweight' }),
-            robot(ROBOT_B_ID, { weightClass: 'heavyweight' }),
+            robot(ROBOT_A_ID, { weightClass: 'featherweight' }),
+            robot(ROBOT_B_ID, { weightClass: 'featherweight' }),
         ]);
 
-        const created = await service.create(dto);
+        const created = await service.create(dto, USER_ID);
 
-        expect(created.weightClass).toBe('heavyweight');
+        expect(created.weightClass).toBe('featherweight');
     });
 
     it('rejects robots of different weight classes', async () => {
         const { service, matchesRepository } = setup([
             robot(ROBOT_A_ID, { weightClass: 'lightweight' }),
-            robot(ROBOT_B_ID, { weightClass: 'heavyweight' }),
+            robot(ROBOT_B_ID, { weightClass: 'featherweight' }),
         ]);
 
-        await expect(service.create(dto)).rejects.toThrow(
+        await expect(service.create(dto, USER_ID)).rejects.toThrow(
             new BadRequestException('match_weight_class_mismatch'),
         );
         expect(matchesRepository.create).not.toHaveBeenCalled();
@@ -137,7 +149,7 @@ describe('MatchesService.create', () => {
         const { service, matchesRepository } = setup([robot(ROBOT_A_ID)]);
 
         await expect(
-            service.create({ ...dto, robotBId: ROBOT_A_ID }),
+            service.create({ ...dto, robotBId: ROBOT_A_ID }, USER_ID),
         ).rejects.toThrow(new BadRequestException('match_robots_must_differ'));
         expect(matchesRepository.create).not.toHaveBeenCalled();
     });
@@ -148,7 +160,7 @@ describe('MatchesService.create', () => {
             robot(ROBOT_B_ID, { championshipId: OTHER_CHAMPIONSHIP_ID }),
         ]);
 
-        await expect(service.create(dto)).rejects.toThrow(
+        await expect(service.create(dto, USER_ID)).rejects.toThrow(
             new BadRequestException('robot_not_in_championship'),
         );
         expect(matchesRepository.create).not.toHaveBeenCalled();
@@ -157,7 +169,7 @@ describe('MatchesService.create', () => {
     it('rejects an unknown robot', async () => {
         const { service, matchesRepository } = setup([robot(ROBOT_A_ID)]);
 
-        await expect(service.create(dto)).rejects.toThrow(
+        await expect(service.create(dto, USER_ID)).rejects.toThrow(
             new NotFoundException('robot_not_found'),
         );
         expect(matchesRepository.create).not.toHaveBeenCalled();
@@ -172,7 +184,7 @@ describe('MatchesService.create', () => {
             new NotFoundException('championship_not_found'),
         );
 
-        await expect(service.create(dto)).rejects.toThrow(
+        await expect(service.create(dto, USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),
         );
         expect(matchesRepository.create).not.toHaveBeenCalled();
@@ -211,6 +223,24 @@ describe('MatchesService.update', () => {
         });
     });
 
+    it('reschedules a match', async () => {
+        const { service, matchesRepository } = setup(
+            [robot(ROBOT_A_ID), robot(ROBOT_B_ID)],
+            [match()],
+        );
+        const scheduledAt = new Date('2026-11-11T09:30:00Z');
+
+        const updated = await service.update(MATCH_ID, { scheduledAt });
+
+        expect(matchesRepository.update).toHaveBeenCalledWith(MATCH_ID, {
+            robotAId: ROBOT_A_ID,
+            robotBId: ROBOT_B_ID,
+            weightClass: 'lightweight',
+            scheduledAt,
+        });
+        expect(updated.scheduledAt).toEqual(scheduledAt);
+    });
+
     it('checks the merged pair against the match championship', async () => {
         const { service, matchesRepository } = setup(
             [
@@ -232,7 +262,7 @@ describe('MatchesService.update', () => {
             [
                 robot(ROBOT_A_ID),
                 robot(ROBOT_B_ID),
-                robot(ROBOT_C_ID, { weightClass: 'heavyweight' }),
+                robot(ROBOT_C_ID, { weightClass: 'featherweight' }),
             ],
             [match()],
         );
@@ -256,12 +286,12 @@ describe('MatchesService.update', () => {
         ).rejects.toThrow(new BadRequestException('match_robots_must_differ'));
     });
 
-    it.each(['running', 'paused', 'finished'] as const)(
+    it.each(['ongoing', 'paused', 'finished'] as const)(
         'rejects editing a %s match',
-        async (status) => {
+        async (state) => {
             const { service, matchesRepository } = setup(
                 [robot(ROBOT_A_ID), robot(ROBOT_B_ID), robot(ROBOT_C_ID)],
-                [match(status)],
+                [match(state)],
             );
 
             await expect(
@@ -281,7 +311,7 @@ describe('MatchesService.update', () => {
 });
 
 describe('MatchesService.remove', () => {
-    it('soft-deletes a waiting match', async () => {
+    it('soft-deletes a scheduled match', async () => {
         const { service, matchesRepository } = setup([], [match()]);
 
         await service.remove(MATCH_ID);
@@ -289,10 +319,10 @@ describe('MatchesService.remove', () => {
         expect(matchesRepository.remove).toHaveBeenCalledWith(MATCH_ID);
     });
 
-    it.each(['running', 'paused', 'finished'] as const)(
+    it.each(['ongoing', 'paused', 'finished'] as const)(
         'keeps a %s match',
-        async (status) => {
-            const { service, matchesRepository } = setup([], [match(status)]);
+        async (state) => {
+            const { service, matchesRepository } = setup([], [match(state)]);
 
             await expect(service.remove(MATCH_ID)).rejects.toThrow(
                 new ConflictException('match_not_editable'),

@@ -51,7 +51,7 @@ export class ChampionshipsRepository {
             .addSelect('COUNT(DISTINCT robot.id)', 'robotCount')
             .addSelect('COUNT(DISTINCT match.id)', 'fightsTotal')
             .addSelect(
-                'COUNT(DISTINCT match.id) FILTER (WHERE match.status = :finished)',
+                'COUNT(DISTINCT match.id) FILTER (WHERE match.state = :finished)',
                 'fightsDone',
             )
             // TypeORM adds `deletedAt IS NULL` to entity joins, keeping soft-deleted rows out

@@ -11,6 +11,7 @@ import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
 import { ChampionshipsService } from '../championships/championships.service.js';
 import { RobotsService } from '../robots/robots.service.js';
+import type { WeightClass } from '../robots/weight-class.js';
 
 @Injectable()
 export class MatchesService {
@@ -22,8 +23,9 @@ export class MatchesService {
         private readonly robotsService: RobotsService,
     ) {}
 
-    async create(createMatchDto: CreateMatchDto) {
-        const { championshipId, robotAId, robotBId } = createMatchDto;
+    async create(createMatchDto: CreateMatchDto, createdByUserId: string) {
+        const { championshipId, robotAId, robotBId, scheduledAt } =
+            createMatchDto;
 
         // Throws championship_not_found when it does not exist
         await this.championshipsService.findOne(championshipId);
@@ -39,6 +41,8 @@ export class MatchesService {
             championshipId,
             robotAId,
             robotBId,
+            createdByUserId,
+            scheduledAt,
         );
 
         return this.matchesRepository.create(match);
@@ -75,6 +79,9 @@ export class MatchesService {
             robotAId,
             robotBId,
             weightClass,
+            ...(updateMatchDto.scheduledAt && {
+                scheduledAt: updateMatchDto.scheduledAt,
+            }),
         });
 
         return this.findOne(id);
@@ -86,12 +93,12 @@ export class MatchesService {
         await this.matchesRepository.remove(id);
     }
 
-    /** Only scheduled (`waiting`) matches can be edited or deleted */
+    /** Only matches that have not started (`scheduled`) can be edited or deleted */
     private assertEditable(match: Match) {
-        if (match.status !== 'waiting') {
+        if (match.state !== 'scheduled') {
             this.logger.error('match_not_editable', {
                 id: match.id,
-                status: match.status,
+                state: match.state,
             });
             throw new ConflictException('match_not_editable');
         }
@@ -105,7 +112,7 @@ export class MatchesService {
         championshipId: string,
         robotAId: string,
         robotBId: string,
-    ): Promise<string> {
+    ): Promise<WeightClass> {
         if (robotAId === robotBId) {
             this.logger.error('match_robots_must_differ', { robotAId });
             throw new BadRequestException('match_robots_must_differ');

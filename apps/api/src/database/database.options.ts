@@ -27,7 +27,14 @@ export function databaseOptions(): DataSourceOptions {
         username: username,
         password: password,
         database: db,
-        entities: [Match, User, Championship, Robot, MatchPause, MatchScoreEvent],
+        entities: [
+            Match,
+            User,
+            Championship,
+            Robot,
+            MatchPause,
+            MatchScoreEvent,
+        ],
         migrations: [
             fileURLToPath(new URL('./migrations/*{.ts,.js}', import.meta.url)),
         ],

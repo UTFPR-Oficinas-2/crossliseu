@@ -15,6 +15,7 @@ import { ChampionshipsService } from './championships.service.js';
 import { CreateChampionshipDto } from './dto/create-championship.dto.js';
 import { UpdateChampionshipDto } from './dto/update-championship.dto.js';
 import { Public } from '../auth/public-decorator.js';
+import { CurrentUserId } from '../auth/current-user-id.decorator.js';
 
 @ApiTags('championships')
 @ApiBearerAuth()
@@ -23,8 +24,11 @@ export class ChampionshipsController {
     constructor(private readonly championshipsService: ChampionshipsService) {}
 
     @Post()
-    create(@Body() createChampionshipDto: CreateChampionshipDto) {
-        return this.championshipsService.create(createChampionshipDto);
+    create(
+        @Body() createChampionshipDto: CreateChampionshipDto,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.championshipsService.create(createChampionshipDto, userId);
     }
 
     @Public()

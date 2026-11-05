@@ -16,6 +16,7 @@ import { RobotsService } from './robots.service.js';
 import { CreateRobotDto } from './dto/create-robot.dto.js';
 import { UpdateRobotDto } from './dto/update-robot.dto.js';
 import { Public } from '../auth/public-decorator.js';
+import { CurrentUserId } from '../auth/current-user-id.decorator.js';
 
 @ApiTags('robots')
 @ApiBearerAuth()
@@ -24,8 +25,11 @@ export class RobotsController {
     constructor(private readonly robotsService: RobotsService) {}
 
     @Post()
-    create(@Body() createRobotDto: CreateRobotDto) {
-        return this.robotsService.create(createRobotDto);
+    create(
+        @Body() createRobotDto: CreateRobotDto,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.robotsService.create(createRobotDto, userId);
     }
 
     @Public()

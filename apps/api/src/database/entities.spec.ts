@@ -11,7 +11,14 @@ import { User } from '../modules/users/entities/user.entity.js';
 async function buildDataSource(): Promise<DataSource> {
     const dataSource = new DataSource({
         type: 'postgres',
-        entities: [Championship, Match, MatchPause, MatchScoreEvent, Robot, User],
+        entities: [
+            Championship,
+            Match,
+            MatchPause,
+            MatchScoreEvent,
+            Robot,
+            User,
+        ],
     });
     // buildMetadatas is protected; it only reads decorators and never connects
     await (
