@@ -11,9 +11,9 @@ actually deployed.
 ```mermaid
 ---
 config:
-  theme: default
-  look: classic
-  layout: dagre
+  theme: redux-color
+  look: neo
+  layout: elk
 ---
 erDiagram
   championships ||--o{ robots : "enrolls"
