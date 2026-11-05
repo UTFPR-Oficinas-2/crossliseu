@@ -1,11 +1,14 @@
 <script setup lang="ts">
-// Figma: `10b / Organizador · Nova / editar luta` (node 126:530). One form for both modes. Only
-// scheduled matches can be edited or deleted. Figma 10 has no delete action, so "Excluir luta"
-// lives here in edit mode.
+// Figma: `ORG-07a/b Nova luta` (nodes 196:430 and 126:530) and `ORG-08 Editar luta` (153:1135).
+// Creating takes two steps on one route: step 1 picks the category and the planned time, step 2
+// the two robots of that category. Editing is a single step with the robot pickers only: the
+// category is fixed by the match. Only scheduled matches can be edited or deleted. ORG-06 has no
+// delete action, so "Excluir luta" lives here in edit mode.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import AppButton from '@/components/ui/AppButton.vue'
+import InputField from '@/components/ui/InputField.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
@@ -17,8 +20,9 @@ import {
   updateMatch,
 } from '@/mocks'
 import { useAuthStore } from '@/stores/auth'
-import type { MatchSummary, Robot } from '@/types'
+import type { MatchSummary, Robot, WeightClass } from '@/types'
 import { matchStatePill } from '@/utils/match'
+import { WEIGHT_CLASSES } from '@/utils/robot'
 import LoadStatePanel from './components/LoadStatePanel.vue'
 import OrganizerBreadcrumb from './components/OrganizerBreadcrumb.vue'
 import OrganizerFooter from './components/OrganizerFooter.vue'
@@ -28,14 +32,17 @@ import {
   emptyMatchValues,
   matchPreview,
   matchValuesFrom,
-  pickRobot,
   robotHint,
   robotOptions,
+  robotsInClass,
   toMatchInput,
   validateMatchForm,
+  validateStep1,
+  withWeightClass,
   type MatchFormErrors,
   type MatchFormField,
   type MatchFormValues,
+  type RobotField,
 } from './match-form'
 
 const { mode, championshipId, matchId } = defineProps<{
@@ -55,8 +62,8 @@ const apiFieldErrors = ref<MatchFormErrors>({})
 const loadState = ref<'loading' | 'ready' | 'not-found' | 'not-editable' | 'error'>('loading')
 const missing = ref<'championship' | 'match'>('championship')
 const championshipName = ref('')
-// ISO time of the match being edited; null when creating
-const scheduledAt = ref<string | null>(null)
+// Create mode only: step 1 is the category and time, step 2 the robots. Edit is always step 2.
+const step = ref<1 | 2>(mode === 'create' ? 1 : 2)
 const robots = ref<Robot[]>([])
 const saving = ref(false)
 const deleting = ref(false)
@@ -66,13 +73,27 @@ let isUnmounted = false
 
 const busy = computed(() => saving.value || deleting.value)
 const fields = Object.keys(values) as MatchFormField[]
-const clientErrors = computed(() => validateMatchForm(robots.value, values))
+const step1Fields: MatchFormField[] = ['weightClass', 'scheduledAt']
+const robotFields: RobotField[] = ['robotAId', 'robotBId']
+const clientErrors = computed<MatchFormErrors>(() => ({
+  ...validateStep1(values),
+  ...validateMatchForm(robots.value, values),
+}))
 const fieldError = (field: MatchFormField) =>
   (touched.has(field) ? clientErrors.value[field] : undefined) ?? apiFieldErrors.value[field]
 const isDirty = computed(() => fields.some((field) => values[field] !== baseline.value[field]))
 const optionsA = computed(() => robotOptions(robots.value, values, 'robotAId'))
 const optionsB = computed(() => robotOptions(robots.value, values, 'robotBId'))
 const preview = computed(() => matchPreview(robots.value, values))
+const classRobots = computed(() => robotsInClass(robots.value, values.weightClass))
+const weightClassOptions = WEIGHT_CLASSES.map((value) => ({ value, label: value }))
+
+const subtitle = computed(() => {
+  if (mode === 'edit') return 'Só lutas programadas podem ser editadas ou excluídas.'
+  return step.value === 1
+    ? 'Passo 1 de 2 · escolha a categoria e o horário previsto.'
+    : 'Passo 2 de 2 · escolha dois robôs da categoria escolhida.'
+})
 const listRoute = computed(() => ({ name: 'championship-matches', params: { championshipId } }))
 
 const breadcrumb = computed(() => [
@@ -95,10 +116,34 @@ function reset(next: MatchFormValues) {
   Object.assign(values, next)
   baseline.value = { ...next }
   touched.clear()
+  step.value = mode === 'create' ? 1 : 2
 }
 
-function pick(slot: MatchFormField, robotId: string) {
-  Object.assign(values, pickRobot(robots.value, values, slot, robotId))
+function pick(slot: RobotField, robotId: string) {
+  values[slot] = robotId
+}
+
+function pickWeightClass(value: string) {
+  Object.assign(values, withWeightClass(robots.value, values, value as WeightClass | ''))
+}
+
+// Announce a failed step to keyboard and screen reader users
+async function focusFirstInvalid() {
+  await nextTick()
+  formEl.value?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+}
+
+async function onNext() {
+  step1Fields.forEach((field) => touched.add(field))
+  if (Object.keys(validateStep1(values)).length > 0) {
+    await focusFirstInvalid()
+    return
+  }
+  step.value = 2
+}
+
+function onBack() {
+  step.value = 1
 }
 
 // Single data entry point for this view
@@ -138,7 +183,6 @@ async function load() {
       loadState.value = 'not-editable'
       return
     }
-    scheduledAt.value = match?.scheduledAt ?? null
     reset(match ? matchValuesFrom(match) : emptyMatchValues())
     loadState.value = 'ready'
   } catch (error) {
@@ -157,18 +201,17 @@ watch(values, () => {
 
 async function onSubmit() {
   if (busy.value) return
-  fields.forEach((field) => touched.add(field))
+  // Enter on step 1 means "Próximo"
+  if (step.value === 1) return onNext()
+  robotFields.forEach((field) => touched.add(field))
   if (Object.keys(clientErrors.value).length > 0) {
-    // Announce the failure to keyboard and screen reader users
-    await nextTick()
-    formEl.value?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    await focusFirstInvalid()
     return
   }
   saving.value = true
   bannerError.value = null
   try {
-    // Interim until the step-1 time field exists: an edit keeps its time, a new match starts now
-    const input = toMatchInput(values, scheduledAt.value ?? new Date().toISOString())
+    const input = toMatchInput(values)
     const token = auth.token ?? ''
     if (mode === 'edit') await updateMatch(matchId!, input, token)
     else await createMatch(championshipId, input, token)
@@ -238,8 +281,8 @@ onBeforeUnmount(() => {
     <h1 class="match-form__title text-display-page">
       {{ mode === 'create' ? 'Nova luta' : 'Editar luta' }}
     </h1>
-    <p v-if="loadState === 'ready'" class="match-form__muted text-body-m">
-      Escolha dois robôs inscritos neste campeonato.
+    <p v-if="loadState === 'ready'" class="match-form__subtitle match-form__muted text-body-m">
+      {{ subtitle }}
     </p>
 
     <div v-if="loadState === 'not-editable'" class="match-form__notice">
@@ -257,16 +300,6 @@ onBeforeUnmount(() => {
       @retry="load"
     />
 
-    <div v-else-if="robots.length < 2" class="match-form__notice">
-      <p class="match-form__muted text-body-m">
-        Uma luta precisa de dois robôs inscritos neste campeonato. Cadastre os participantes
-        primeiro.
-      </p>
-      <AppButton :to="{ name: 'participant-create', params: { championshipId } }">
-        Adicionar participante
-      </AppButton>
-    </div>
-
     <div v-else class="match-form__columns">
       <form
         ref="formEl"
@@ -275,89 +308,171 @@ onBeforeUnmount(() => {
         aria-labelledby="match-form-heading"
         @submit.prevent="onSubmit"
       >
-        <h2 id="match-form-heading" class="match-form__heading text-heading-m">Confronto</h2>
+        <template v-if="step === 1">
+          <h2 id="match-form-heading" class="match-form__heading text-heading-m">
+            Categoria e horário
+          </h2>
 
-        <div class="match-form__pickers">
-          <SelectField
-            class="match-form__picker"
-            :model-value="values.robotAId"
-            label="Robô 1 *"
-            placeholder="Escolha um robô"
-            :group-label="optionsA.groupLabel"
-            :options="optionsA.options"
-            :hint="robotHint(robots, values.robotAId)"
-            :error="fieldError('robotAId')"
-            :disabled="busy"
-            required
-            @update:model-value="pick('robotAId', $event)"
-            @focusout="touched.add('robotAId')"
-          />
-          <span class="match-form__versus text-heading-m" aria-hidden="true">×</span>
-          <SelectField
-            class="match-form__picker"
-            :model-value="values.robotBId"
-            label="Robô 2 *"
-            placeholder="Escolha um robô"
-            :group-label="optionsB.groupLabel"
-            :options="optionsB.options"
-            :hint="robotHint(robots, values.robotBId)"
-            :error="fieldError('robotBId')"
-            :disabled="busy"
-            required
-            @update:model-value="pick('robotBId', $event)"
-            @focusout="touched.add('robotBId')"
-          />
-        </div>
+          <div class="match-form__fields">
+            <SelectField
+              :model-value="values.weightClass"
+              label="Categoria de peso *"
+              placeholder="Selecione a categoria"
+              hint="Uma luta só reúne robôs da mesma categoria."
+              :options="weightClassOptions"
+              :error="fieldError('weightClass')"
+              required
+              @update:model-value="pickWeightClass"
+              @focusout="touched.add('weightClass')"
+            />
+            <InputField
+              v-model="values.scheduledAt"
+              type="datetime-local"
+              name="scheduledAt"
+              label="Data e horário *"
+              :error="fieldError('scheduledAt')"
+              required
+              @focusout="touched.add('scheduledAt')"
+            />
+          </div>
 
-        <div v-if="bannerError" class="match-form__banner" role="alert">
-          <span class="match-form__banner-dot" aria-hidden="true" />
-          <p class="match-form__banner-text text-body-s">{{ bannerError }}</p>
-        </div>
+          <div class="match-form__actions">
+            <AppButton class="match-form__button" variant="secondary" :to="listRoute">
+              Cancelar
+            </AppButton>
+            <AppButton class="match-form__button" @click="onNext">Próximo</AppButton>
+          </div>
+        </template>
 
-        <div class="match-form__actions">
-          <AppButton
-            v-if="mode === 'edit'"
-            class="match-form__button match-form__delete"
-            variant="destructive"
-            :disabled="busy"
-            :aria-busy="deleting"
-            @click="onDelete"
-          >
-            Excluir luta
-          </AppButton>
-          <AppButton class="match-form__button" variant="secondary" :to="listRoute">
-            Cancelar
-          </AppButton>
-          <AppButton class="match-form__button" type="submit" :disabled="busy" :aria-busy="saving">
-            {{ mode === 'create' ? 'Criar luta' : 'Salvar luta' }}
-          </AppButton>
-        </div>
+        <template v-else>
+          <h2 id="match-form-heading" class="match-form__heading text-heading-m">Confronto</h2>
+
+          <div v-if="classRobots.length < 2" class="match-form__notice">
+            <p class="match-form__muted text-body-m">
+              Esta categoria precisa de pelo menos dois robôs inscritos.
+            </p>
+            <AppButton :to="{ name: 'participant-create', params: { championshipId } }">
+              Adicionar participante
+            </AppButton>
+          </div>
+
+          <div v-else class="match-form__pickers">
+            <SelectField
+              class="match-form__picker"
+              :model-value="values.robotAId"
+              label="Robô 1 *"
+              placeholder="Escolha um robô"
+              :group-label="optionsA.groupLabel"
+              :options="optionsA.options"
+              :hint="robotHint(robots, values.robotAId)"
+              :error="fieldError('robotAId')"
+              :disabled="busy"
+              required
+              @update:model-value="pick('robotAId', $event)"
+              @focusout="touched.add('robotAId')"
+            />
+            <span class="match-form__versus text-heading-m" aria-hidden="true">×</span>
+            <SelectField
+              class="match-form__picker"
+              :model-value="values.robotBId"
+              label="Robô 2 *"
+              placeholder="Escolha um robô"
+              :group-label="optionsB.groupLabel"
+              :options="optionsB.options"
+              :hint="robotHint(robots, values.robotBId)"
+              :error="fieldError('robotBId')"
+              :disabled="busy"
+              required
+              @update:model-value="pick('robotBId', $event)"
+              @focusout="touched.add('robotBId')"
+            />
+          </div>
+
+          <div v-if="bannerError" class="match-form__banner" role="alert">
+            <span class="match-form__banner-dot" aria-hidden="true" />
+            <p class="match-form__banner-text text-body-s">{{ bannerError }}</p>
+          </div>
+
+          <div class="match-form__actions">
+            <template v-if="mode === 'edit'">
+              <AppButton
+                class="match-form__button match-form__delete"
+                variant="destructive"
+                :disabled="busy"
+                :aria-busy="deleting"
+                @click="onDelete"
+              >
+                Excluir luta
+              </AppButton>
+              <AppButton class="match-form__button" variant="secondary" :to="listRoute">
+                Cancelar
+              </AppButton>
+            </template>
+            <AppButton
+              v-else
+              class="match-form__button"
+              variant="secondary"
+              :disabled="busy"
+              @click="onBack"
+            >
+              Voltar
+            </AppButton>
+            <AppButton
+              v-if="classRobots.length >= 2"
+              class="match-form__button"
+              type="submit"
+              :disabled="busy"
+              :aria-busy="saving"
+            >
+              {{ mode === 'create' ? 'Criar luta' : 'Salvar luta' }}
+            </AppButton>
+          </div>
+        </template>
       </form>
 
       <aside class="match-form__aside">
-        <section class="match-form__panel">
-          <h2 class="match-form__heading text-heading-s">Prévia na lista</h2>
-          <div class="match-form__matchup">
-            <p class="match-form__pair text-heading-xl">
-              {{ preview.robotA }}
-              <span class="match-form__versus text-heading-m" aria-hidden="true">×</span>
-              <span class="visually-hidden"> contra </span>
-              {{ preview.robotB }}
+        <template v-if="step === 1">
+          <section class="match-form__panel">
+            <h2 class="match-form__heading text-heading-s">Como funciona</h2>
+            <p class="match-form__muted text-body-s">
+              Escolha a categoria de peso e o horário previsto. No passo seguinte, só aparecem os
+              robôs inscritos nessa categoria.
             </p>
-            <p class="match-form__muted text-body-s">{{ preview.teams }}</p>
-            <StatusPill v-bind="matchStatePill.scheduled" />
-          </div>
-          <p class="match-form__muted text-body-s">
-            Assim a luta aparece na lista do campeonato. Os lados A e B são definidos na preparação.
-          </p>
-        </section>
-        <section class="match-form__panel match-form__panel--rules">
-          <h2 class="match-form__heading text-heading-s">Regras do confronto</h2>
-          <p class="match-form__muted text-body-s">
-            Dois robôs diferentes, ambos inscritos neste campeonato e da mesma categoria de peso.
-            Robôs de outras categorias não aparecem na lista.
-          </p>
-        </section>
+          </section>
+          <section class="match-form__panel match-form__panel--rules">
+            <h2 class="match-form__heading text-heading-s">Regras do confronto</h2>
+            <p class="match-form__muted text-body-s">
+              A categoria define quais robôs aparecem no próximo passo. Robôs de outras categorias
+              não são listados.
+            </p>
+          </section>
+        </template>
+        <template v-else>
+          <section class="match-form__panel">
+            <h2 class="match-form__heading text-heading-s">Prévia na lista</h2>
+            <div class="match-form__matchup">
+              <p class="match-form__pair text-heading-xl">
+                {{ preview.robotA }}
+                <span class="match-form__versus text-heading-m" aria-hidden="true">×</span>
+                <span class="visually-hidden"> contra </span>
+                {{ preview.robotB }}
+              </p>
+              <p class="match-form__muted text-body-s">{{ preview.teams }}</p>
+              <StatusPill v-bind="matchStatePill.scheduled" />
+            </div>
+            <p class="match-form__muted text-body-s">
+              Assim a luta aparece na lista do campeonato. O lado de cada robô é escolhido pelo
+              operador antes de iniciar.
+            </p>
+          </section>
+          <section class="match-form__panel match-form__panel--rules">
+            <h2 class="match-form__heading text-heading-s">Regras do confronto</h2>
+            <p class="match-form__muted text-body-s">
+              Dois robôs diferentes, ambos inscritos neste campeonato e da mesma categoria de peso.
+              Robôs de outras categorias não aparecem na lista.
+            </p>
+          </section>
+        </template>
       </aside>
     </div>
 
@@ -381,6 +496,12 @@ onBeforeUnmount(() => {
 
 .match-form__muted {
   color: var(--color-muted);
+}
+
+.match-form__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
 .match-form__notice {
