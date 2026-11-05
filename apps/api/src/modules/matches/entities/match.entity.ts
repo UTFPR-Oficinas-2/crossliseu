@@ -1,15 +1,27 @@
 import type { Relation } from 'typeorm';
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Check, Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
 import { Robot } from '../../robots/entities/robot.entity.js';
 import { User } from '../../users/entities/user.entity.js';
-import type { WeightClass } from '../../robots/weight-class.js';
+import {
+    WEIGHT_CLASS_CHECK,
+    type WeightClass,
+} from '../../robots/weight-class.js';
 
-// CHECK constraints in the baseline migration hold the state and end_reason columns to these values
 export type MatchState = 'scheduled' | 'ongoing' | 'paused' | 'finished';
 export type MatchEndReason = 'time_out' | 'manual' | 'surrender';
 
+// TypeORM compares CHECKs by name only: changing these values needs a hand-written migration
+@Check('CHK_matches_weight_class', WEIGHT_CLASS_CHECK)
+@Check(
+    'CHK_matches_state',
+    `"state" IN ('scheduled', 'ongoing', 'paused', 'finished')`,
+)
+@Check(
+    'CHK_matches_end_reason',
+    `"end_reason" IS NULL OR "end_reason" IN ('time_out', 'manual', 'surrender')`,
+)
 @Entity('matches')
 export class Match extends BaseEntity {
     // TypeORM calls the constructor without arguments when hydrating rows

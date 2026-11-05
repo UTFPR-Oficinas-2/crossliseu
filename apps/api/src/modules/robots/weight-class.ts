@@ -13,3 +13,6 @@ export const WEIGHT_CLASSES = [
 ] as const;
 
 export type WeightClass = (typeof WEIGHT_CLASSES)[number];
+
+/** Body of the weight_class CHECK constraints on robots and matches */
+export const WEIGHT_CLASS_CHECK = `"weight_class" IN (${WEIGHT_CLASSES.map((weightClass) => `'${weightClass}'`).join(', ')})`;

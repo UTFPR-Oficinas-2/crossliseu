@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { touched } from '../../database/base.entity.js';
 import { Championship } from './entities/championship.entity.js';
 import { In, Repository } from 'typeorm';
 import { Match } from '../matches/entities/match.entity.js';
@@ -76,7 +77,7 @@ export class ChampionshipsRepository {
     }
 
     update(id: string, partialChampionship: Partial<Championship>) {
-        return this.repository.update({ id }, partialChampionship);
+        return this.repository.update({ id }, touched(partialChampionship));
     }
 
     remove(id: string) {

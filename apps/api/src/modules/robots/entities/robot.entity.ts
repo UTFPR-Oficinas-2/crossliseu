@@ -1,14 +1,16 @@
 import type { Relation } from 'typeorm';
-import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
 import { User } from '../../users/entities/user.entity.js';
-import type { WeightClass } from '../weight-class.js';
+import { WEIGHT_CLASS_CHECK, type WeightClass } from '../weight-class.js';
 
 // Partial expression index from the baseline migration:
 // (championship_id, lower(name)) WHERE deleted_at IS NULL. TypeORM can't express it, so
 // `synchronize: false` keeps migration:generate from dropping it.
 @Index('UQ_robots_championship_id_lower_name', { synchronize: false })
+// TypeORM compares CHECKs by name only: changing WEIGHT_CLASSES needs a hand-written migration
+@Check('CHK_robots_weight_class', WEIGHT_CLASS_CHECK)
 @Entity('robots')
 export class Robot extends BaseEntity {
     // TypeORM calls the constructor without arguments when hydrating rows
@@ -41,7 +43,6 @@ export class Robot extends BaseEntity {
     @Column({ name: 'name', type: 'varchar', nullable: false })
     name: string;
 
-    // CHECK constraint in the baseline migration limits it to WEIGHT_CLASSES
     @Column({ name: 'weight_class', type: 'varchar', nullable: false })
     weightClass: WeightClass;
 

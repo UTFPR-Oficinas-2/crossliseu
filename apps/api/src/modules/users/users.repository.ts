@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity.js';
 import { Repository, UpdateResult } from 'typeorm';
-import { Match } from '../matches/entities/match.entity.js';
+import { touched } from '../../database/base.entity.js';
 
 @Injectable()
 export class UsersRepository {
@@ -27,8 +27,8 @@ export class UsersRepository {
         return this.repository.findOneBy({ username });
     }
 
-    update(id: string, partialUser: Partial<Match>): Promise<UpdateResult> {
-        return this.repository.update({ id }, partialUser);
+    update(id: string, partialUser: Partial<User>): Promise<UpdateResult> {
+        return this.repository.update({ id }, touched(partialUser));
     }
 
     delete(id: string) {

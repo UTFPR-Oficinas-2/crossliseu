@@ -166,4 +166,32 @@ describe('entity metadata', () => {
             expect(index?.synchronize).toBe(false);
         },
     );
+
+    it.each([User, Championship, Robot, Match] as const)(
+        'modified_at of %o has no default, so it stays NULL until the first update',
+        async (entity) => {
+            const dataSource = await buildDataSource();
+            const column = dataSource
+                .getMetadata(entity)
+                .findColumnWithDatabaseName('modified_at');
+
+            expect(column?.isNullable).toBe(true);
+            expect(column?.default).toBeUndefined();
+        },
+    );
+
+    it.each([
+        [Robot, 'CHK_robots_weight_class'],
+        [Match, 'CHK_matches_weight_class'],
+        [Match, 'CHK_matches_state'],
+        [Match, 'CHK_matches_end_reason'],
+        [MatchScoreEvent, 'CHK_match_score_events_judge_seat'],
+        [MatchScoreEvent, 'CHK_match_score_events_action'],
+    ] as const)('%o declares %s', async (entity, name) => {
+        const dataSource = await buildDataSource();
+
+        expect(
+            dataSource.getMetadata(entity).checks.map((check) => check.name),
+        ).toContain(name);
+    });
 });

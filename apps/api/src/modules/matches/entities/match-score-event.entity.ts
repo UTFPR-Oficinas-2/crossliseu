@@ -1,5 +1,6 @@
 import type { Relation } from 'typeorm';
 import {
+    Check,
     Column,
     CreateDateColumn,
     Entity,
@@ -14,6 +15,8 @@ export type JudgeSeat = 1 | 2 | 3;
 export type ScoreAction = 1 | -1;
 
 /** One judge's +1 / -1 for a robot. Append-only: no soft delete, no modified_at. */
+@Check('CHK_match_score_events_judge_seat', '"judge_seat" IN (1, 2, 3)')
+@Check('CHK_match_score_events_action', '"action" IN (1, -1)')
 @Entity('match_score_events')
 export class MatchScoreEvent {
     @PrimaryGeneratedColumn('uuid')
@@ -33,7 +36,6 @@ export class MatchScoreEvent {
     @JoinColumn({ name: 'robot_id' })
     robot?: Relation<Robot>;
 
-    // CHECK constraints in the baseline migration: judge_seat IN (1,2,3), action IN (1,-1)
     @Column({ name: 'judge_seat', type: 'int', nullable: false })
     judgeSeat: JudgeSeat;
 
