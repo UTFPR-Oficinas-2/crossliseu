@@ -36,14 +36,34 @@ describe('participantsSubtitle', () => {
 
 describe('filterRobots', () => {
   it('returns everything for a blank query', () => {
-    expect(filterRobots(robots, '   ')).toBe(robots)
+    expect(filterRobots(robots, '   ', 'all')).toBe(robots)
   })
 
   it('matches the robot name or the team, ignoring case and accents', () => {
-    expect(filterRobots(robots, 'ACO').map((r) => r.name)).toEqual(['Aço'])
-    expect(filterRobots(robots, ' volt ').map((r) => r.name)).toEqual(['Titã', 'Marte'])
-    expect(filterRobots(robots, 'tita').map((r) => r.name)).toEqual(['Titã'])
-    expect(filterRobots(robots, 'zzz')).toEqual([])
+    expect(filterRobots(robots, 'ACO', 'all').map((r) => r.name)).toEqual(['Aço'])
+    expect(filterRobots(robots, ' volt ', 'all').map((r) => r.name)).toEqual(['Titã', 'Marte'])
+    expect(filterRobots(robots, 'tita', 'all').map((r) => r.name)).toEqual(['Titã'])
+    expect(filterRobots(robots, 'zzz', 'all')).toEqual([])
+  })
+})
+
+describe('filterRobots by category', () => {
+  it('keeps only the chosen weight class', () => {
+    const mixed = [
+      ...robots,
+      { ...robots[0]!, id: 'b', name: 'Bigorna', weightClass: 'antweight' as const },
+    ]
+
+    expect(filterRobots(mixed, '', 'antweight').map((r) => r.name)).toEqual(['Bigorna'])
+  })
+
+  it('combines the category with the search', () => {
+    const mixed = [
+      ...robots,
+      { ...robots[0]!, id: 'b', name: 'Bigorna', weightClass: 'antweight' as const },
+    ]
+
+    expect(filterRobots(mixed, 'tita', 'antweight')).toEqual([])
   })
 })
 

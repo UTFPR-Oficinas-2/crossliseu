@@ -1,14 +1,18 @@
 <script setup lang="ts">
 // Figma: `09 / Organizador · Participantes` (node 22:336), empty state 22:487. The API has only
 // name, team and weight class, so the Aptos/Pendentes tabs, the combat category and
-// "responsável" are not built. "Categoria" shows the API weight class as is ("beetleweight").
+// "responsável" are not built. "Categoria" shows the API weight class as is ("beetleweight"),
+// and the toolbar filters by it (ORG-03).
 import { computed, ref, watch } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import InputField from '@/components/ui/InputField.vue'
+import SelectField from '@/components/ui/SelectField.vue'
+import type { SelectOption } from '@/components/ui/select-field'
 import { ApiError } from '@/api/client'
 import { deleteRobot, getChampionship, getRobots } from '@/mocks'
 import { useAuthStore } from '@/stores/auth'
-import type { Robot } from '@/types'
+import type { Robot, WeightClass } from '@/types'
+import { WEIGHT_CLASSES } from '@/utils/robot'
 import EmptyState from './components/EmptyState.vue'
 import LoadStatePanel from './components/LoadStatePanel.vue'
 import OrganizerBreadcrumb from './components/OrganizerBreadcrumb.vue'
@@ -23,6 +27,7 @@ const loadState = ref<'loading' | 'ready' | 'not-found' | 'error'>('loading')
 const championshipName = ref('')
 const robots = ref<Robot[]>([])
 const search = ref('')
+const category = ref<WeightClass | 'all'>('all')
 const removingId = ref<string | null>(null)
 const removeError = ref<string | null>(null)
 
@@ -33,7 +38,7 @@ async function load() {
   loadState.value = 'loading'
   // Nothing from the previous championship may linger in the breadcrumb or the search
   championshipName.value = ''
-  search.value = ''
+  clearFilters()
   removeError.value = null
   try {
     // Championship first: a malformed id is "not found" here, while GET /robots would reject it
@@ -56,7 +61,30 @@ async function load() {
 }
 watch(() => championshipId, load, { immediate: true })
 
-const visible = computed(() => filterRobots(robots.value, search.value))
+function clearFilters() {
+  search.value = ''
+  category.value = 'all'
+}
+
+const ALL_CATEGORIES = 'Todas as categorias'
+
+// Only the weight classes that have robots, in API order
+const categoryOptions = computed<SelectOption[]>(() => [
+  { value: 'all', label: ALL_CATEGORIES },
+  ...WEIGHT_CLASSES.filter((w) => robots.value.some((r) => r.weightClass === w)).map((w) => ({
+    value: w,
+    label: w,
+  })),
+])
+
+const categoryModel = computed({
+  get: () => category.value,
+  set: (value: string) => {
+    category.value = value === 'all' ? 'all' : (value as WeightClass)
+  },
+})
+
+const visible = computed(() => filterRobots(robots.value, search.value, category.value))
 const subtitle = computed(() => participantsSubtitle(robots.value))
 const breadcrumb = computed(() => [
   { label: 'Meus campeonatos', to: { name: 'my-championships' } },
@@ -121,14 +149,25 @@ async function remove(robot: Robot) {
     />
 
     <template v-else>
-      <InputField
-        v-model="search"
-        type="search"
-        name="search"
-        label="Buscar participantes"
-        hide-label
-        placeholder="Buscar robô ou equipe"
-      />
+      <div class="participants__toolbar">
+        <InputField
+          v-model="search"
+          class="participants__search"
+          type="search"
+          name="search"
+          label="Buscar participantes"
+          hide-label
+          placeholder="Buscar robô ou equipe"
+        />
+        <SelectField
+          v-model="categoryModel"
+          class="participants__category"
+          label="Categoria"
+          hide-label
+          :placeholder="ALL_CATEGORIES"
+          :options="categoryOptions"
+        />
+      </div>
 
       <div v-if="removeError" class="participants__banner" role="alert">
         <span class="participants__banner-dot" aria-hidden="true" />
@@ -138,9 +177,9 @@ async function remove(robot: Robot) {
       <EmptyState
         v-if="visible.length === 0"
         title="Nenhum participante corresponde a essa busca."
-        text="Ajuste a busca ou cadastre um novo participante."
+        text="Ajuste os filtros ou cadastre um novo participante."
       >
-        <AppButton variant="secondary" @click="search = ''">Limpar busca</AppButton>
+        <AppButton variant="secondary" @click="clearFilters">Limpar busca</AppButton>
       </EmptyState>
 
       <div v-else class="participants__card">
@@ -233,6 +272,21 @@ async function remove(robot: Robot) {
 
 .participants__add {
   min-height: var(--size-control-lg);
+}
+
+.participants__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.participants__search {
+  flex: 1 1 var(--size-toolbar-select);
+}
+
+.participants__category {
+  flex: 0 1 var(--size-toolbar-select);
 }
 
 .participants__banner {
@@ -344,5 +398,6 @@ async function remove(robot: Robot) {
 .participants__actions > * {
   flex: 1 1 0;
   min-width: auto;
+  min-height: var(--size-control-compact);
 }
 </style>

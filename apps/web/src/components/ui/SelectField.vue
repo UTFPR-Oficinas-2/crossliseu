@@ -15,6 +15,7 @@ const {
   error,
   disabled = false,
   required = false,
+  hideLabel = false,
 } = defineProps<{
   label: string
   options: readonly SelectOption[]
@@ -25,6 +26,8 @@ const {
   error?: string
   disabled?: boolean
   required?: boolean
+  /** Keeps the label for screen readers only */
+  hideLabel?: boolean
 }>()
 
 const model = defineModel<string>({ default: '' })
@@ -144,7 +147,12 @@ function onFocusOut(event: FocusEvent) {
     }"
     @focusout="onFocusOut"
   >
-    <span :id="labelId" class="select-field__label text-label-s" @click="trigger?.focus()">
+    <span
+      :id="labelId"
+      class="select-field__label text-label-s"
+      :class="{ 'visually-hidden': hideLabel }"
+      @click="trigger?.focus()"
+    >
       {{ label }}
     </span>
     <div class="select-field__control">

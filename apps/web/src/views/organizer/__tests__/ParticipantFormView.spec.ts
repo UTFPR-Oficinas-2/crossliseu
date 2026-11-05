@@ -143,6 +143,15 @@ describe('ParticipantFormView', () => {
     expect(getRobots).not.toHaveBeenCalled()
   })
 
+  it('has no subtitle and explains that the operator picks the side', async () => {
+    const { wrapper } = await mountView('/manage/c1/participants/new')
+
+    expect(wrapper.get('h1').element.nextElementSibling?.tagName).not.toBe('P')
+    expect(wrapper.text()).toContain(
+      'Assim o robô aparece para operador, árbitros e público. O lado (A ou B) é escolhido pelo operador antes de iniciar cada luta.',
+    )
+  })
+
   it('create: submitting empty shows the required messages and does not save', async () => {
     const { wrapper } = await mountView('/manage/c1/participants/new')
 

@@ -161,11 +161,36 @@ describe('ParticipantsView', () => {
     expect(rowNames(wrapper)).toHaveLength(3)
   })
 
+  it('filters by category and clears both filters', async () => {
+    const { wrapper } = await mountView()
+    const picker = wrapper.get('[role="combobox"]')
+
+    expect(picker.text()).toBe('Todas as categorias')
+    await picker.trigger('click')
+    await wrapper
+      .findAll('[role="option"]')
+      .find((o) => o.text().includes('antweight'))!
+      .trigger('click')
+    expect(rowNames(wrapper)).toEqual(['Marte'])
+
+    await wrapper.get<HTMLInputElement>('input[type="search"]').setValue('aco')
+    expect(wrapper.text()).toContain('Ajuste os filtros ou cadastre um novo participante.')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Limpar busca')!
+      .trigger('click')
+
+    expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('')
+    expect(wrapper.get('[role="combobox"]').text()).toBe('Todas as categorias')
+    expect(rowNames(wrapper)).toHaveLength(3)
+  })
+
   it('labels the search field for screen readers only', async () => {
     const { wrapper } = await mountView()
     const label = wrapper.get('label')
 
     expect(label.text()).toBe('Buscar participantes')
+    expect(wrapper.get('.select-field__label').classes()).toContain('visually-hidden')
     expect(label.classes()).toContain('visually-hidden')
     expect(wrapper.get('input[type="search"]').attributes('placeholder')).toBe(
       'Buscar robô ou equipe',

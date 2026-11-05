@@ -110,7 +110,10 @@ async function onSubmit() {
       if (isUnmounted) return
       // Not dirty any more: skip the leave confirmation
       baseline.value = { ...values }
-      await router.push({ name: 'championship-participants', params: { championshipId: created.id } })
+      await router.push({
+        name: 'championship-participants',
+        params: { championshipId: created.id },
+      })
     } else {
       const updated = await updateChampionship(championshipId!, input, token)
       if (isUnmounted) return

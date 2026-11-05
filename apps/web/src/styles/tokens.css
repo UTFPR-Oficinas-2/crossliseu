@@ -71,6 +71,7 @@
   --size-aside: 360px; /* organizer form aside column */
   --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
   --size-menu-max: 320px; /* select menu height before it scrolls */
+  --size-toolbar-select: 292px; /* category picker beside a list search */
   --size-fight-pair-min: 180px; /* Row / Fight competitors before the row wraps */
 
   /* Radius */
