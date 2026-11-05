@@ -72,21 +72,15 @@ const activeFilterEmpty = computed(
  * are not rendered as a card rather than shown with made-up values.
  */
 function toCardProps(championship: Championship) {
-  const { startDate, status, robotCount, fightsDone, fightsTotal } = championship
-  if (
-    !startDate ||
-    !status ||
-    robotCount === undefined ||
-    fightsDone === undefined ||
-    fightsTotal === undefined
-  ) {
+  const { startDate, endDate, status, fightsDone, fightsTotal } = championship
+  if (!startDate || !status || fightsDone === undefined || fightsTotal === undefined) {
     return null
   }
   return {
     name: championship.name,
-    date: startDate,
+    startDate,
+    endDate,
     status,
-    robotCount,
     fightsDone,
     fightsTotal,
     // Without the page the card keeps its default link (home)
