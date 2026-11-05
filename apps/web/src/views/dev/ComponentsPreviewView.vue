@@ -82,11 +82,11 @@ const championships = [
 ] as const
 
 const fights = [
-  { fightNumber: 1, robotA: 'Claudio', robotB: 'Gepeto', status: 'done' },
-  { fightNumber: 2, robotA: 'Ses', robotB: 'Braz', status: 'running' },
-  { fightNumber: 3, robotA: 'Faísca', robotB: 'Trovão', status: 'paused' },
-  { fightNumber: 4, robotA: 'Martelinho', robotB: 'Destruidor Supremo II', status: 'waiting' },
-  { fightNumber: 5, robotA: 'Volt', robotB: 'Ferrugem', status: 'cancelled' },
+  { fightNumber: 1, robotA: 'Claudio', robotB: 'Gepeto', state: 'finished', winner: 'A' },
+  { fightNumber: 2, robotA: 'Ses', robotB: 'Braz', state: 'ongoing' },
+  { fightNumber: 3, robotA: 'Faísca', robotB: 'Trovão', state: 'paused' },
+  { fightNumber: 4, robotA: 'Martelinho', robotB: 'Destruidor Supremo II', state: 'scheduled' },
+  { fightNumber: 5, robotA: 'Volt', robotB: 'Ferrugem', state: 'finished', winner: null },
 ] as const
 
 const operatorExits = ref(0)
@@ -288,7 +288,7 @@ const signOuts = ref(0)
         <FightRow v-for="fight in fights" :key="fight.fightNumber" v-bind="fight">
           <AppButton variant="secondary" :to="{ name: 'dev-components' }">Detalhes</AppButton>
         </FightRow>
-        <FightRow :fight-number="6" robot-a="Sem ações" robot-b="Slot vazio" status="waiting" />
+        <FightRow :fight-number="6" robot-a="Sem ações" robot-b="Slot vazio" state="scheduled" />
       </div>
     </section>
 

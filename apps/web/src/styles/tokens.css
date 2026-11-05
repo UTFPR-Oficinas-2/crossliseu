@@ -68,6 +68,7 @@
   --size-aside: 360px; /* organizer form aside column */
   --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
   --size-menu-max: 320px; /* select menu height before it scrolls */
+  --size-fight-pair-min: 180px; /* Row / Fight competitors before the row wraps */
 
   /* Radius */
   --radius-xs: 2px;
