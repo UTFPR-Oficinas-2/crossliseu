@@ -10,6 +10,7 @@ const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_CHAMPIONSHIP_ID = '22222222-2222-4222-8222-222222222222';
 const TITA_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const MARTE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 function robot(
     id: string,
@@ -21,6 +22,7 @@ function robot(
         'lightweight',
         'Equipe Volt',
         championshipId,
+        USER_ID,
     );
     entity.id = id;
     return entity;
@@ -79,20 +81,23 @@ describe('RobotsService.create', () => {
     it('saves the robot in its championship', async () => {
         const { service, robotsRepository, championshipsService } = setup([]);
 
-        const created = await service.create(createDto);
+        const created = await service.create(createDto, USER_ID);
 
         expect(championshipsService.findOne).toHaveBeenCalledWith(
             CHAMPIONSHIP_ID,
         );
         expect(robotsRepository.create).toHaveBeenCalledOnce();
-        expect(created).toMatchObject(createDto);
+        expect(created).toMatchObject({
+            ...createDto,
+            createdByUserId: USER_ID,
+        });
     });
 
     it('rejects a name already used in the championship, ignoring case', async () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
 
         await expect(
-            service.create({ ...createDto, name: 'TITÃ' }),
+            service.create({ ...createDto, name: 'TITÃ' }, USER_ID),
         ).rejects.toThrow(new ConflictException('robot_name_taken'));
         expect(robotsRepository.create).not.toHaveBeenCalled();
     });
@@ -102,7 +107,7 @@ describe('RobotsService.create', () => {
             robot(TITA_ID, 'Titã', OTHER_CHAMPIONSHIP_ID),
         ]);
 
-        await service.create(createDto);
+        await service.create(createDto, USER_ID);
 
         expect(robotsRepository.create).toHaveBeenCalledOnce();
     });
@@ -111,7 +116,7 @@ describe('RobotsService.create', () => {
         const { service, robotsRepository } = setup([]);
         robotsRepository.create.mockRejectedValue(uniqueViolation());
 
-        await expect(service.create(createDto)).rejects.toThrow(
+        await expect(service.create(createDto, USER_ID)).rejects.toThrow(
             new ConflictException('robot_name_taken'),
         );
     });
@@ -122,7 +127,7 @@ describe('RobotsService.create', () => {
             new NotFoundException('championship_not_found'),
         );
 
-        await expect(service.create(createDto)).rejects.toThrow(
+        await expect(service.create(createDto, USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),
         );
         expect(robotsRepository.create).not.toHaveBeenCalled();
@@ -218,7 +223,7 @@ describe('RobotsService.update while in a match', () => {
         });
 
         await expect(
-            service.update(TITA_ID, { weightClass: 'heavyweight' }),
+            service.update(TITA_ID, { weightClass: 'featherweight' }),
         ).rejects.toThrow(new ConflictException('robot_has_matches'));
         expect(robotsRepository.update).not.toHaveBeenCalled();
     });
@@ -242,10 +247,10 @@ describe('RobotsService.update while in a match', () => {
     it('allows a weight class change when the robot has no matches', async () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
 
-        await service.update(TITA_ID, { weightClass: 'heavyweight' });
+        await service.update(TITA_ID, { weightClass: 'featherweight' });
 
         expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, {
-            weightClass: 'heavyweight',
+            weightClass: 'featherweight',
         });
     });
 });

@@ -9,6 +9,10 @@ import {
     ChampionshipsRepository,
 } from './championships.repository.js';
 import { Championship } from './entities/championship.entity.js';
+import {
+    championshipStatus,
+    type ChampionshipStatus,
+} from './championship-status.js';
 import { CreateChampionshipDto } from './dto/create-championship.dto.js';
 import { UpdateChampionshipDto } from './dto/update-championship.dto.js';
 
@@ -20,7 +24,10 @@ export class ChampionshipsService {
         private readonly championshipsRepository: ChampionshipsRepository,
     ) {}
 
-    create(createChampionshipDto: CreateChampionshipDto) {
+    async create(
+        createChampionshipDto: CreateChampionshipDto,
+        createdByUserId: string,
+    ) {
         const { name, startDate, endDate } = createChampionshipDto;
 
         this.assertValidDateRange(startDate, endDate);
@@ -29,9 +36,12 @@ export class ChampionshipsService {
             name,
             startDate,
             endDate,
+            createdByUserId,
         );
 
-        return this.championshipsRepository.create(championship);
+        const saved = await this.championshipsRepository.create(championship);
+
+        return this.findOne(saved.id);
     }
 
     async findAll() {
@@ -74,9 +84,12 @@ export class ChampionshipsService {
         await this.championshipsRepository.remove(id);
     }
 
+    /** Adds the robot and match counts and the status derived from the dates */
     private async withCounts(
         championships: Championship[],
-    ): Promise<(Championship & ChampionshipCounts)[]> {
+    ): Promise<
+        (Championship & ChampionshipCounts & { status: ChampionshipStatus })[]
+    > {
         const counts = await this.championshipsRepository.countRobotsAndMatches(
             championships.map((championship) => championship.id),
         );
@@ -88,6 +101,12 @@ export class ChampionshipsService {
                     robotCount: 0,
                     fightsTotal: 0,
                     fightsDone: 0,
+                },
+                {
+                    status: championshipStatus(
+                        championship.startDate,
+                        championship.endDate,
+                    ),
                 },
             ),
         );

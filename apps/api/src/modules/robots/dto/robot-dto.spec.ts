@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { CreateRobotDto } from './create-robot.dto.js';
 import { UpdateRobotDto } from './update-robot.dto.js';
 import { normalizeText } from './normalize.js';
+import { WEIGHT_CLASSES } from '../weight-class.js';
 
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -18,7 +19,7 @@ describe('robot DTOs', () => {
         const dto = plainToInstance(CreateRobotDto, {
             name: '  Titã  ',
             team: 'Equipe   Volt',
-            weightClass: 'heavyweight',
+            weightClass: 'featherweight',
             championshipId: CHAMPIONSHIP_ID,
         });
 
@@ -26,11 +27,24 @@ describe('robot DTOs', () => {
         expect(dto).toMatchObject({
             name: 'Titã',
             team: 'Equipe Volt',
-            weightClass: 'heavyweight',
+            weightClass: 'featherweight',
         });
     });
 
-    it.each(['lightweight', 'heavyweight'])(
+    it('rejects heavyweight, which is not a weight class', async () => {
+        const dto = plainToInstance(CreateRobotDto, {
+            name: 'Titã',
+            team: 'Equipe Volt',
+            weightClass: 'heavyweight',
+            championshipId: CHAMPIONSHIP_ID,
+        });
+
+        const [error] = await validate(dto);
+
+        expect(error?.property).toBe('weightClass');
+    });
+
+    it.each(WEIGHT_CLASSES)(
         'accepts the %s weight class',
         async (weightClass) => {
             const dto = plainToInstance(CreateRobotDto, {

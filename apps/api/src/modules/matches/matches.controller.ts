@@ -16,6 +16,7 @@ import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
+import { CurrentUserId } from '../auth/current-user-id.decorator.js';
 
 @ApiTags('matches')
 @ApiBearerAuth()
@@ -24,8 +25,11 @@ export class MatchesController {
     constructor(private readonly matchesService: MatchesService) {}
 
     @Post()
-    create(@Body() createMatchDto: CreateMatchDto) {
-        return this.matchesService.create(createMatchDto);
+    create(
+        @Body() createMatchDto: CreateMatchDto,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.matchesService.create(createMatchDto, userId);
     }
 
     @Public()

@@ -28,14 +28,20 @@ export class RobotsService {
         private readonly championshipsService: ChampionshipsService,
     ) {}
 
-    async create(createRobotDto: CreateRobotDto) {
+    async create(createRobotDto: CreateRobotDto, createdByUserId: string) {
         const { name, weightClass, team, championshipId } = createRobotDto;
 
         // Throws championship_not_found when it does not exist
         await this.championshipsService.findOne(championshipId);
         await this.assertNameAvailable(championshipId, name);
 
-        const robot: Robot = new Robot(name, weightClass, team, championshipId);
+        const robot: Robot = new Robot(
+            name,
+            weightClass,
+            team,
+            championshipId,
+            createdByUserId,
+        );
 
         return this.rethrowNameTaken(() => this.robotsRepository.create(robot));
     }

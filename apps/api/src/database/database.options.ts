@@ -4,6 +4,8 @@ import { Match } from '../modules/matches/entities/match.entity.js';
 import { User } from '../modules/users/entities/user.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
 import { Robot } from '../modules/robots/entities/robot.entity.js';
+import { MatchPause } from '../modules/matches/entities/match-pause.entity.js';
+import { MatchScoreEvent } from '../modules/matches/entities/match-score-event.entity.js';
 
 export function databaseOptions(): DataSourceOptions {
     const db: string = String(process.env.POSTGRES_DB);
@@ -25,7 +27,14 @@ export function databaseOptions(): DataSourceOptions {
         username: username,
         password: password,
         database: db,
-        entities: [Match, User, Championship, Robot],
+        entities: [
+            Match,
+            User,
+            Championship,
+            Robot,
+            MatchPause,
+            MatchScoreEvent,
+        ],
         migrations: [
             fileURLToPath(new URL('./migrations/*{.ts,.js}', import.meta.url)),
         ],
