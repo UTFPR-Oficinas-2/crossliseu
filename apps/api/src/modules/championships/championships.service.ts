@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ConflictException,
     Injectable,
     Logger,
     NotFoundException,
@@ -59,7 +60,7 @@ export class ChampionshipsService {
         const championship = await this.championshipsRepository.findOne(id);
 
         if (!championship) {
-            this.logger.error('championship_not_found', { id: id });
+            this.logger.warn('championship_not_found', { id: id });
             throw new NotFoundException('championship_not_found');
         }
 
@@ -79,9 +80,19 @@ export class ChampionshipsService {
         return this.findOne(id);
     }
 
+    /** Removes the championship with its robots and matches, unless a match is being fought */
     async remove(id: string) {
         await this.findEntity(id);
-        await this.championshipsRepository.remove(id);
+
+        const result = await this.championshipsRepository.removeCascade(id);
+        if (result === 'not_found') {
+            this.logger.warn('championship_not_found', { id });
+            throw new NotFoundException('championship_not_found');
+        }
+        if (result === 'has_live_match') {
+            this.logger.error('championship_has_live_match', { id });
+            throw new ConflictException('championship_has_live_match');
+        }
     }
 
     /** Adds the robot and match counts and the status derived from the dates */

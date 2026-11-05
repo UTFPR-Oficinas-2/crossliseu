@@ -5,14 +5,9 @@ import { MatchesController } from './matches.controller.js';
 import { MatchesService } from './matches.service.js';
 import { MatchesRepository } from './matches.repository.js';
 import { ChampionshipsModule } from '../championships/championships.module.js';
-import { RobotsModule } from '../robots/robots.module.js';
 
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([Match]),
-        ChampionshipsModule,
-        RobotsModule,
-    ],
+    imports: [TypeOrmModule.forFeature([Match]), ChampionshipsModule],
     controllers: [MatchesController],
     providers: [MatchesService, MatchesRepository],
     exports: [MatchesService],

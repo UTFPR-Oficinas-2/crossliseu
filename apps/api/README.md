@@ -30,6 +30,7 @@ npm run start:dev          # http://localhost:3000
 | `npm run format` | Format with Prettier |
 | `npm test` | Run unit tests (Vitest) |
 | `npm run test:cov` | Run unit tests with coverage |
+| `npm run test:db` | Run the database and e2e tests in `test/` against `POSTGRES_TEST_DB` (dropped and recreated on each run; needs Postgres up) |
 | `npm run migration:generate` / `migration:run` / `migration:revert` | Manage migrations, see [Migrations](#migrations) |
 | `npm run seed:admin` | Create the admin user, see [Seeding the admin](#seeding-the-admin) |
 
@@ -41,6 +42,7 @@ Database and `SECRET` come from the root `.env`. The API also reads:
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port |
 | `NODE_ENV` | | `production` disables Swagger |
+| `POSTGRES_TEST_DB` | | Database `npm run test:db` drops and recreates; must differ from `POSTGRES_DB` |
 
 ## Authentication
 
