@@ -3,21 +3,34 @@ import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
 import { Robot } from '../../robots/entities/robot.entity.js';
+import { User } from '../../users/entities/user.entity.js';
+import type { WeightClass } from '../../robots/weight-class.js';
 
-export type MatchState = 'waiting' | 'running' | 'finished' | 'paused';
+// CHECK constraints in the baseline migration hold the state and end_reason columns to these values
+export type MatchState = 'scheduled' | 'ongoing' | 'paused' | 'finished';
+export type MatchEndReason = 'time_out' | 'manual' | 'surrender';
 
 @Entity('matches')
 export class Match extends BaseEntity {
     // TypeORM calls the constructor without arguments when hydrating rows
     constructor(
-        weightClass?: string,
+        weightClass?: WeightClass,
         championshipId?: string,
         robotAId?: string,
         robotBId?: string,
+        createdByUserId?: string,
+        scheduledAt?: Date,
     ) {
         super();
 
-        if (!weightClass || !championshipId || !robotAId || !robotBId) {
+        if (
+            !weightClass ||
+            !championshipId ||
+            !robotAId ||
+            !robotBId ||
+            !createdByUserId ||
+            !scheduledAt
+        ) {
             return;
         }
 
@@ -25,14 +38,28 @@ export class Match extends BaseEntity {
         this.championshipId = championshipId;
         this.robotAId = robotAId;
         this.robotBId = robotBId;
-        this.status = 'waiting';
+        this.createdByUserId = createdByUserId;
+        this.scheduledAt = scheduledAt;
+        this.state = 'scheduled';
     }
 
     @Column({ name: 'weight_class', type: 'varchar', nullable: false })
-    weightClass: string;
+    weightClass: WeightClass;
 
     @Column({ name: 'state', type: 'varchar', nullable: false })
-    status: MatchState;
+    state: MatchState;
+
+    @Column({ name: 'end_reason', type: 'varchar', nullable: true })
+    endReason: MatchEndReason | null;
+
+    @Column({ name: 'scheduled_at', type: 'timestamptz', nullable: false })
+    scheduledAt: Date;
+
+    @Column({ name: 'started_at', type: 'timestamptz', nullable: true })
+    startedAt: Date | null;
+
+    @Column({ name: 'finished_at', type: 'timestamptz', nullable: true })
+    finishedAt: Date | null;
 
     @Column({ name: 'championship_id', type: 'uuid', nullable: false })
     championshipId: string;
@@ -54,4 +81,18 @@ export class Match extends BaseEntity {
     @ManyToOne(() => Robot, { nullable: false })
     @JoinColumn({ name: 'robot_b_id' })
     robotB?: Relation<Robot>;
+
+    @Column({ name: 'winner_robot_id', type: 'uuid', nullable: true })
+    winnerRobotId: string | null;
+
+    @ManyToOne(() => Robot, { nullable: true })
+    @JoinColumn({ name: 'winner_robot_id' })
+    winnerRobot?: Relation<Robot> | null;
+
+    @Column({ name: 'created_by_user_id', type: 'uuid', nullable: false })
+    createdByUserId: string;
+
+    @ManyToOne(() => User, { nullable: false })
+    @JoinColumn({ name: 'created_by_user_id' })
+    createdBy?: Relation<User>;
 }

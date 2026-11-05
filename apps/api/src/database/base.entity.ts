@@ -13,8 +13,14 @@ export abstract class BaseEntity {
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt: Date;
 
-    @UpdateDateColumn({ name: 'modified_at', type: 'timestamptz' })
-    modifiedAt: Date;
+    // NULL until the row is first updated
+    @UpdateDateColumn({
+        name: 'modified_at',
+        type: 'timestamptz',
+        nullable: true,
+        default: null,
+    })
+    modifiedAt: Date | null;
 
     @DeleteDateColumn({
         name: 'deleted_at',
