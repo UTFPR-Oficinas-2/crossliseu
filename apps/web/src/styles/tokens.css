@@ -32,6 +32,7 @@
   --space-8: 40px;
   --space-9: 48px;
   --space-page-x: 64px; /* page side padding (public and app navs) */
+  --space-page-x-mobile: 16px; /* page side padding below 768px */
   --space-page-y: 56px; /* public page content top/bottom padding */
   /* Off-scale values used by Figma components (progress bar, status pill, card gap, nav tags) */
   --space-5px: 5px;
@@ -56,6 +57,8 @@
   --size-nav-height: 88px; /* public and app navs */
   --size-nav-operator-height: 72px;
   --size-nav-referee-height: 64px;
+  --size-nav-mobile-height: 64px; /* public and app navs below 768px */
+  --size-control-compact: 40px; /* operator nav button, participant row buttons */
   --size-page-max: 1440px; /* public content max width (Figma desktop frame) */
   --size-sidebar: 260px; /* organizer sidebar width */
   --size-step-line: 3px; /* operator step indicator line */

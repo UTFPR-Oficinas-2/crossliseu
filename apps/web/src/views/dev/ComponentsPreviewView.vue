@@ -323,9 +323,11 @@ const signOuts = ref(0)
       <h2 class="text-heading-m">Navigation / Operator</h2>
       <div class="preview__nav">
         <OperatorNav
+          arena="Arena 01"
           championship="Crossliseu 2026 · Etapa Curitiba"
-          :fight-number="8"
-          arena="ARENA 01"
+          robot-a="Marte"
+          robot-b="Cobalto"
+          arena-connected
           @exit="operatorExits++"
         />
       </div>

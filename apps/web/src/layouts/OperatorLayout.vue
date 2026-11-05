@@ -5,8 +5,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
-import { getArenas, getChampionship, getMatch } from '@/mocks'
-import type { Arena, Championship, Match, MatchState } from '@/types'
+import { getArenas, getChampionship, getMatch, getRobots } from '@/mocks'
+import type { Arena, Championship, Match, MatchState, Robot } from '@/types'
 
 type StepId = 'preparation' | 'running' | 'closing'
 type StepStatus = 'done' | 'current' | 'upcoming'
@@ -30,23 +30,27 @@ const router = useRouter()
 const match = ref<Match | null>(null)
 const championship = ref<Championship | null>(null)
 const arena = ref<Arena | null>(null)
+const robots = ref<Robot[]>([])
 
 // Data loading lives here so it can be swapped for the API later.
 let loadId = 0
 async function load(matchId: string) {
   const current = ++loadId
   const loadedMatch = await getMatch(matchId)
-  const [loadedChampionship, arenas]: [Championship | null, Arena[]] = loadedMatch
-    ? await Promise.all([
-        getChampionship(loadedMatch.championshipId),
-        getArenas(loadedMatch.championshipId),
-      ])
-    : [null, []]
+  const [loadedChampionship, arenas, loadedRobots]: [Championship | null, Arena[], Robot[]] =
+    loadedMatch
+      ? await Promise.all([
+          getChampionship(loadedMatch.championshipId),
+          getArenas(loadedMatch.championshipId),
+          getRobots(loadedMatch.championshipId),
+        ])
+      : [null, [], []]
   // Ignore a stale response if the route changed while loading
   if (current !== loadId) return
   match.value = loadedMatch
   championship.value = loadedChampionship
   arena.value = arenas.find((a) => a.id === loadedMatch?.arenaId) ?? null
+  robots.value = loadedRobots
 }
 
 watch(
@@ -55,8 +59,14 @@ watch(
   { immediate: true },
 )
 
-// Figma shows the arena in uppercase: "Arena 01" → "ARENA 01"
-const arenaLabel = computed(() => arena.value?.name.toLocaleUpperCase('pt-BR') ?? '')
+const robotName = (id: string | undefined) => robots.value.find((r) => r.id === id)?.name ?? ''
+const robotNames = computed(() => ({
+  a: robotName(match.value?.robotAId),
+  b: robotName(match.value?.robotBId),
+}))
+
+// Demo value: there is no arena box connection data yet
+const arenaConnected = computed(() => arena.value !== null)
 
 // -1 when there is no match, so every step reads as upcoming
 const currentStepIndex = computed(() => {
@@ -84,9 +94,11 @@ function exitOperation() {
     <!-- Without a match there is no fight context to show, so the nav is omitted -->
     <OperatorNav
       v-if="match"
+      :arena="arena?.name ?? ''"
       :championship="championship?.name ?? ''"
-      :fight-number="match.number"
-      :arena="arenaLabel"
+      :robot-a="robotNames.a"
+      :robot-b="robotNames.b"
+      :arena-connected="arenaConnected"
       @exit="exitOperation"
     />
 

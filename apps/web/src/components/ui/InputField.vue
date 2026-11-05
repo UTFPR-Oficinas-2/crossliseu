@@ -2,15 +2,7 @@
 import { computed, useId } from 'vue'
 
 type InputType =
-  | 'text'
-  | 'email'
-  | 'password'
-  | 'search'
-  | 'tel'
-  | 'url'
-  | 'number'
-  | 'date'
-  | 'datetime-local'
+  'text' | 'email' | 'password' | 'search' | 'tel' | 'url' | 'number' | 'date' | 'datetime-local'
 
 const {
   label,
