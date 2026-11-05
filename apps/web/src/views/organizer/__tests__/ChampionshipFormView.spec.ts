@@ -105,6 +105,17 @@ describe('ChampionshipFormView', () => {
     confirmSpy.mockRestore()
   })
 
+  it('create: lists the Figma next steps and has no subtitle', async () => {
+    const { wrapper } = await mountView('/manage/new')
+
+    expect(wrapper.findAll('.championship-form__step').map((li) => li.text().slice(1))).toEqual([
+      'Cadastre os participantes e seus robôs.',
+      'Monte as lutas entre os participantes.',
+      'Na operação, escolha a arena e a luta.',
+    ])
+    expect(wrapper.get('h1').element.nextElementSibling?.tagName).not.toBe('P')
+  })
+
   it('create: starts empty with the create breadcrumb and title', async () => {
     const { wrapper } = await mountView('/manage/new')
 

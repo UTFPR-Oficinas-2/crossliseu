@@ -150,8 +150,8 @@ onBeforeUnmount(() => {
 
 const nextSteps = [
   'Cadastre os participantes e seus robôs.',
-  'Crie as lutas e defina a ordem.',
-  'Abra a preparação da luta para o operador.',
+  'Monte as lutas entre os participantes.',
+  'Na operação, escolha a arena e a luta.',
 ]
 </script>
 
@@ -181,14 +181,6 @@ const nextSteps = [
     <h1 class="championship-form__title text-display-page">
       {{ mode === 'create' ? 'Criar campeonato' : 'Editar campeonato' }}
     </h1>
-    <p class="championship-form__muted text-body-m">
-      {{
-        mode === 'create'
-          ? 'Preencha os dados principais. Participantes e lutas são cadastrados depois de salvar.'
-          : 'Altere os dados do campeonato. As mudanças aparecem na página pública assim que você salvar.'
-      }}
-    </p>
-
     <p
       v-if="loadState === 'loading'"
       class="championship-form__muted text-body-m"
