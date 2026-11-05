@@ -49,51 +49,54 @@ async function onSubmit() {
 
 <template>
   <div class="sign-in">
-    <form class="sign-in__card" @submit.prevent="onSubmit">
-      <header class="sign-in__header">
-        <p class="sign-in__kicker text-overline">Área restrita</p>
-        <h1 class="sign-in__title text-display-page">Entrar</h1>
-        <p class="sign-in__subtitle text-body-m">
-          Acesso para organizadores, operadores e árbitros autorizados.
+    <div class="sign-in__center">
+      <form class="sign-in__card" @submit.prevent="onSubmit">
+        <header class="sign-in__header">
+          <p class="sign-in__kicker text-overline">Área restrita</p>
+          <h1 class="sign-in__title text-display-page">Entrar</h1>
+          <p class="sign-in__subtitle text-body-m">
+            Acesso para organizadores e operadores. Árbitros entram pelo link que recebem do
+            operador.
+          </p>
+        </header>
+
+        <InputField
+          v-model="username"
+          label="Usuário"
+          name="username"
+          autocomplete="username"
+          required
+        />
+        <InputField
+          v-model="password"
+          label="Senha"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          required
+        />
+
+        <!-- Figma `Error` (19:242): a block of its own, not InputField's `error` prop -->
+        <div v-if="errorMessage" class="sign-in__error" role="alert">
+          <span class="sign-in__error-dot" aria-hidden="true" />
+          <p class="sign-in__error-text text-body-s">{{ errorMessage }}</p>
+        </div>
+
+        <AppButton
+          type="submit"
+          class="sign-in__submit"
+          :disabled="submitting"
+          :aria-busy="submitting"
+        >
+          Entrar
+        </AppButton>
+
+        <hr class="sign-in__divider" />
+        <p class="sign-in__note text-body-s">
+          Não há cadastro público. Para receber acesso, fale com o organizador do campeonato.
         </p>
-      </header>
-
-      <InputField
-        v-model="username"
-        label="Usuário"
-        name="username"
-        autocomplete="username"
-        required
-      />
-      <InputField
-        v-model="password"
-        label="Senha"
-        type="password"
-        name="password"
-        autocomplete="current-password"
-        required
-      />
-
-      <!-- Figma `Error` (19:242): a block of its own, not InputField's `error` prop -->
-      <div v-if="errorMessage" class="sign-in__error" role="alert">
-        <span class="sign-in__error-dot" aria-hidden="true" />
-        <p class="sign-in__error-text text-body-s">{{ errorMessage }}</p>
-      </div>
-
-      <AppButton
-        type="submit"
-        class="sign-in__submit"
-        :disabled="submitting"
-        :aria-busy="submitting"
-      >
-        Entrar
-      </AppButton>
-
-      <hr class="sign-in__divider" />
-      <p class="sign-in__note text-body-s">
-        Não há cadastro público. Para receber acesso, fale com o organizador do campeonato.
-      </p>
-    </form>
+      </form>
+    </div>
 
     <footer class="sign-in__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
@@ -109,6 +112,15 @@ async function onSubmit() {
   flex-direction: column;
   align-items: center;
   gap: var(--space-9);
+}
+
+/* Takes the free height so the card sits in the middle and the footer stays at the bottom */
+.sign-in__center {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
 }
 
 .sign-in__card {

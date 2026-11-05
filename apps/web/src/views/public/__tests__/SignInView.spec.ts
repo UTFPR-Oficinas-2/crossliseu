@@ -47,6 +47,14 @@ describe('SignInView', () => {
     vi.mocked(signIn).mockReset()
   })
 
+  it('says who signs in here and how referees get in', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('.sign-in__subtitle').text()).toBe(
+      'Acesso para organizadores e operadores. Árbitros entram pelo link que recebem do operador.',
+    )
+  })
+
   it('renders an empty form and no alert before submitting', async () => {
     const { wrapper } = await mountView()
 
