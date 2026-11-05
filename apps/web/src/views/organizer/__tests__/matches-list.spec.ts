@@ -4,21 +4,21 @@ import { inMatchFilter, matchFilterFrom, matchRows, matchesSubtitle } from '../m
 
 describe('matchFilterFrom', () => {
   it('reads known tabs and falls back to all', () => {
-    expect(matchFilterFrom('waiting')).toBe('waiting')
-    expect(matchFilterFrom('running')).toBe('running')
+    expect(matchFilterFrom('scheduled')).toBe('scheduled')
+    expect(matchFilterFrom('ongoing')).toBe('ongoing')
     expect(matchFilterFrom('finished')).toBe('finished')
     expect(matchFilterFrom('paused')).toBe('all')
-    expect(matchFilterFrom(['waiting'])).toBe('all')
+    expect(matchFilterFrom(['scheduled'])).toBe('all')
     expect(matchFilterFrom(undefined)).toBe('all')
   })
 })
 
 describe('inMatchFilter', () => {
   it('puts running and paused fights under "Em andamento"', () => {
-    expect(inMatchFilter('running', 'running')).toBe(true)
-    expect(inMatchFilter('paused', 'running')).toBe(true)
-    expect(inMatchFilter('waiting', 'running')).toBe(false)
-    expect(inMatchFilter('waiting', 'waiting')).toBe(true)
+    expect(inMatchFilter('ongoing', 'ongoing')).toBe(true)
+    expect(inMatchFilter('paused', 'ongoing')).toBe(true)
+    expect(inMatchFilter('scheduled', 'ongoing')).toBe(false)
+    expect(inMatchFilter('scheduled', 'scheduled')).toBe(true)
     expect(inMatchFilter('finished', 'finished')).toBe(true)
     expect(inMatchFilter('finished', 'all')).toBe(true)
   })
@@ -48,7 +48,8 @@ describe('matchRows', () => {
       weightClass: 'beetleweight',
       robotAId: 'r1',
       robotBId: 'gone',
-      state: 'waiting',
+      state: 'scheduled',
+      scheduledAt: '',
       createdAt: '',
       modifiedAt: '',
     }

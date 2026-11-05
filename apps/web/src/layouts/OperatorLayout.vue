@@ -18,8 +18,8 @@ const steps: { id: StepId; label: string }[] = [
 ]
 
 const stepByState: Record<MatchState, StepId> = {
-  waiting: 'preparation',
-  running: 'running',
+  scheduled: 'preparation',
+  ongoing: 'running',
   paused: 'running',
   finished: 'closing',
 }

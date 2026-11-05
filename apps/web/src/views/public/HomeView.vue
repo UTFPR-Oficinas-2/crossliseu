@@ -14,16 +14,16 @@ import type { Championship, ChampionshipStatus } from '@/types'
 type Filter = ChampionshipStatus | 'all'
 
 const filters: { value: Filter; label: string; empty: string }[] = [
-  { value: 'running', label: 'Em andamento', empty: 'Nenhum campeonato em andamento.' },
+  { value: 'ongoing', label: 'Em andamento', empty: 'Nenhum campeonato em andamento.' },
   { value: 'scheduled', label: 'Próximos', empty: 'Nenhum campeonato programado.' },
-  { value: 'finished', label: 'Encerrados', empty: 'Nenhum campeonato encerrado.' },
+  { value: 'closed', label: 'Encerrados', empty: 'Nenhum campeonato encerrado.' },
   { value: 'all', label: 'Todos', empty: 'Nenhum campeonato cadastrado ainda.' },
 ]
 
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
 const championships = ref<Championship[]>([])
 const liveFight = ref<LiveFight | null>(null)
-const activeFilter = ref<Filter>('running')
+const activeFilter = ref<Filter>('ongoing')
 
 // Single data entry point for this view
 async function load() {
@@ -33,7 +33,7 @@ async function load() {
     championships.value = championshipList
     liveFight.value = live
     // Figma opens on "Em andamento"; without any status data only "Todos" can list anything
-    activeFilter.value = championshipList.some((c) => c.status) ? 'running' : 'all'
+    activeFilter.value = championshipList.some((c) => c.status) ? 'ongoing' : 'all'
     loadState.value = 'ready'
   } catch (error) {
     console.error('Failed to load home data', error)

@@ -47,7 +47,7 @@ const robots = [
   robot('cobalto', 'Cobalto', 'Equipe Órbita', 'beetleweight'),
   robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'antweight'),
 ]
-const summary = (state: MatchState = 'waiting'): MatchSummary => ({
+const summary = (state: MatchState = 'scheduled'): MatchSummary => ({
   ...base,
   id: 'm1',
   championshipId: 'c1',
@@ -55,6 +55,7 @@ const summary = (state: MatchState = 'waiting'): MatchSummary => ({
   robotAId: 'tita',
   robotBId: 'marte',
   state,
+  scheduledAt: '2026-12-09T14:00:00.000Z',
 })
 
 let token = ''
@@ -197,7 +198,7 @@ describe('MatchFormView', () => {
 
     expect(createMatch).toHaveBeenCalledWith(
       'c1',
-      { robotAId: 'marte', robotBId: 'cobalto' },
+      { robotAId: 'marte', robotBId: 'cobalto', scheduledAt: expect.any(String) },
       token,
     )
     expect(router.currentRoute.value.name).toBe('championship-matches')
@@ -253,7 +254,11 @@ describe('MatchFormView', () => {
     await pick(wrapper, 1, 'Cobalto')
     await submit(wrapper)
 
-    expect(updateMatch).toHaveBeenCalledWith('m1', { robotAId: 'tita', robotBId: 'cobalto' }, token)
+    expect(updateMatch).toHaveBeenCalledWith(
+      'm1',
+      { robotAId: 'tita', robotBId: 'cobalto', scheduledAt: '2026-12-09T14:00:00.000Z' },
+      token,
+    )
     expect(router.currentRoute.value.name).toBe('championship-matches')
   })
 
@@ -270,7 +275,7 @@ describe('MatchFormView', () => {
   })
 
   it('edit: refuses a match that is no longer scheduled', async () => {
-    vi.mocked(getMatchSummaries).mockResolvedValue([summary('running')])
+    vi.mocked(getMatchSummaries).mockResolvedValue([summary('ongoing')])
     const { wrapper } = await mountView('/manage/c1/matches/m1/edit')
 
     expect(wrapper.find('form').exists()).toBe(false)

@@ -15,7 +15,7 @@ describe('demo championship writes', () => {
     )
     expect(created).toMatchObject({
       name: 'Copa Teste',
-      status: 'finished',
+      status: 'closed',
       robotCount: 0,
       fightsDone: 0,
       fightsTotal: 0,

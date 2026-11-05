@@ -19,7 +19,12 @@ import { deleteRobot, getChampionship, getRobots } from '@/mocks'
 const stub = { render: () => null }
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
 const championship: Championship = { ...base, id: 'c1', name: 'Copa 2026', startDate: '2026-12-09' }
-const robot = (id: string, name: string, team: string, weightClass: WeightClass = 'beetleweight'): Robot => ({
+const robot = (
+  id: string,
+  name: string,
+  team: string,
+  weightClass: WeightClass = 'beetleweight',
+): Robot => ({
   ...base,
   id,
   championshipId: 'c1',

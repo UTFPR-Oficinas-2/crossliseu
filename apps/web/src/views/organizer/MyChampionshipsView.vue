@@ -11,7 +11,7 @@ import { getManagedChampionships } from '@/mocks'
 import type { Championship } from '@/types'
 import { championshipMeta, championshipStatusPill } from '@/utils/championship'
 
-type Filter = 'all' | 'running' | 'finished'
+type Filter = 'all' | 'ongoing' | 'closed'
 
 const filters: { value: Filter; label: string; empty: string }[] = [
   {
@@ -19,8 +19,8 @@ const filters: { value: Filter; label: string; empty: string }[] = [
     label: 'Todos',
     empty: 'Nenhum campeonato ainda. Use "Criar campeonato" para começar.',
   },
-  { value: 'running', label: 'Em andamento', empty: 'Nenhum campeonato em andamento.' },
-  { value: 'finished', label: 'Encerrados', empty: 'Nenhum campeonato encerrado.' },
+  { value: 'ongoing', label: 'Em andamento', empty: 'Nenhum campeonato em andamento.' },
+  { value: 'closed', label: 'Encerrados', empty: 'Nenhum campeonato encerrado.' },
 ]
 
 const route = useRoute()
@@ -28,7 +28,7 @@ const router = useRouter()
 
 const activeFilter = computed<Filter>(() => {
   const value = route.query.status
-  return value === 'running' || value === 'finished' ? value : 'all'
+  return value === 'ongoing' || value === 'closed' ? value : 'all'
 })
 
 // Kept in the query string so reload and back restore the tab
@@ -140,7 +140,7 @@ const subtitle = computed(() => {
                 Ver pública
               </AppButton>
               <AppButton
-                :variant="c.status === 'running' ? 'primary' : 'secondary'"
+                :variant="c.status === 'ongoing' ? 'primary' : 'secondary'"
                 class="my-championships__action"
                 :to="{ name: 'championship-overview', params: { championshipId: c.id } }"
                 :aria-label="`Gerenciar ${c.name}`"

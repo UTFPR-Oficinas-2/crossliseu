@@ -3,9 +3,8 @@
 import { computed } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import StatusPill from '@/components/ui/StatusPill.vue'
-
 // Championship state only. Recording/upload states are separate and never shown here.
-type ChampionshipStatus = 'scheduled' | 'running' | 'finished'
+import type { ChampionshipStatus } from '@/types'
 
 const {
   name,
@@ -32,9 +31,9 @@ const {
 
 const pill = computed(() => {
   switch (status) {
-    case 'running':
+    case 'ongoing':
       return { label: 'Em andamento', tone: 'live' as const }
-    case 'finished':
+    case 'closed':
       // TODO design: Figma only defines "Em andamento"
       return { label: 'Encerrado', tone: 'neutral' as const }
     default:

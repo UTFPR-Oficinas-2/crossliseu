@@ -35,9 +35,11 @@ export const matchValuesFrom = (match: MatchSummary): MatchFormValues => ({
   robotBId: match.robotBId,
 })
 
-export const toMatchInput = (values: MatchFormValues): MatchInput => ({
+/** `scheduledAt` is an ISO timestamp */
+export const toMatchInput = (values: MatchFormValues, scheduledAt: string): MatchInput => ({
   robotAId: values.robotAId,
   robotBId: values.robotBId,
+  scheduledAt,
 })
 
 const slotNumber: Record<MatchFormField, 1 | 2> = { robotAId: 1, robotBId: 2 }
@@ -46,8 +48,7 @@ const otherSlot = (slot: MatchFormField): MatchFormField =>
 const findRobot = (robots: Robot[], id: string) => robots.find((r) => r.id === id)
 
 /** "Equipe Órbita · beetleweight" */
-export const robotSummary = (robot: Robot) =>
-  `${robot.team} · ${robot.weightClass}`
+export const robotSummary = (robot: Robot) => `${robot.team} · ${robot.weightClass}`
 
 /** Hint under a picker: the picked robot's team and weight class */
 export function robotHint(robots: Robot[], robotId: string): string | undefined {

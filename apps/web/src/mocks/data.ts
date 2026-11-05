@@ -8,7 +8,6 @@ import type {
   MatchReferee,
   Referee,
   RefereeAccess,
-  RefereeScore,
   Robot,
   WeightClass,
 } from '@/types'
@@ -24,7 +23,7 @@ export const championships: Championship[] = [
     name: 'Copa Crossliseu 2026',
     startDate: '2026-12-09',
     endDate: '2026-12-09',
-    status: 'running',
+    status: 'ongoing',
     robotCount: 16,
     fightsDone: 6,
     fightsTotal: 15,
@@ -56,7 +55,7 @@ export const championships: Championship[] = [
     name: 'Copa Crossliseu 2025',
     startDate: '2025-12-10',
     endDate: '2025-12-10',
-    status: 'finished',
+    status: 'closed',
     robotCount: 16,
     fightsDone: 15,
     fightsTotal: 15,
@@ -68,7 +67,7 @@ export const championships: Championship[] = [
     name: 'Torneio Interclasses',
     startDate: '2025-09-22',
     endDate: '2025-09-22',
-    status: 'finished',
+    status: 'closed',
     robotCount: 10,
     fightsDone: 9,
     fightsTotal: 9,
@@ -80,7 +79,7 @@ export const championships: Championship[] = [
     name: 'Seletiva Regional Sul',
     startDate: '2025-08-03',
     endDate: '2025-08-03',
-    status: 'finished',
+    status: 'closed',
     robotCount: 14,
     fightsDone: 13,
     fightsTotal: 13,
@@ -175,7 +174,9 @@ function match(overrides: MatchOverrides): Match {
     championshipId: COPA_2026_ID,
     arenaId: ARENA_01_ID,
     weightClass: 'beetleweight',
-    state: 'waiting',
+    state: 'scheduled',
+    // Fights every 15 minutes from 14:00 UTC on the Copa day
+    scheduledAt: new Date(Date.UTC(2026, 11, 9, 14, 15 * overrides.number)).toISOString(),
     roundDurationSeconds: 180,
     elapsedSeconds: 0,
     startedAt: null,
@@ -201,7 +202,9 @@ function finishedMatch(
   number: number,
   winner: string,
   loser: string,
-  reason: MatchEndReason,
+  endReason: MatchEndReason,
+  scoreA: number,
+  scoreB: number,
 ): Match {
   return match({
     number,
@@ -214,7 +217,7 @@ function finishedMatch(
     operatorName: 'M. Ribeiro',
     camera: 'Logitech C920 · 1080p',
     referees: allConnected,
-    result: { winnerSide: 'A', reason, durationSeconds: 180, confirmed: true },
+    result: { endReason, winnerRobotId: robotId(winner), scoreA, scoreB },
     recordingStatus: 'completed',
     uploadStatus: 'completed',
     analysisStatus: 'completed',
@@ -226,8 +229,8 @@ function finishedMatch(
 }
 
 export const matches: Match[] = [
-  finishedMatch(3, 'Atlas', 'Cobalto', 'knockout'),
-  finishedMatch(4, 'Quasar', 'Marte', 'points'),
+  finishedMatch(3, 'Atlas', 'Cobalto', 'time_out', 9, 4),
+  finishedMatch(4, 'Quasar', 'Marte', 'manual', 7, 5),
   // Fight 06: Aço beat Faísca by surrender; Faísca's heatmap is still processing
   match({
     number: 6,
@@ -240,7 +243,8 @@ export const matches: Match[] = [
     operatorName: 'M. Ribeiro',
     camera: 'Logitech C920 · 1080p',
     referees: allConnected,
-    result: { winnerSide: 'A', reason: 'surrender', durationSeconds: 133, confirmed: true },
+    // Totals: the three referees summed
+    result: { endReason: 'surrender', winnerRobotId: robotId('Aço'), scoreA: 11, scoreB: 5 },
     recordingStatus: 'completed',
     uploadStatus: 'completed',
     analysisStatus: 'processing',
@@ -256,7 +260,7 @@ export const matches: Match[] = [
     robotAId: robotId('Titã'),
     robotBId: robotId('Nêmesis'),
     weightClass: 'antweight',
-    state: 'running',
+    state: 'ongoing',
     elapsedSeconds: 78,
     startedAt: '2026-12-09T15:30:00.000-03:00',
     operatorName: 'M. Ribeiro',
@@ -291,33 +295,6 @@ export const matches: Match[] = [
     robotAId: robotId('Faísca'),
     robotBId: robotId('Quasar'),
   }),
-]
-
-export const refereeScores: RefereeScore[] = [
-  {
-    matchId: matchId(6),
-    seat: 1,
-    refereeId: ribeiro.id,
-    scoreA: 4,
-    scoreB: 2,
-    submittedAt: '2026-12-09T15:14:00.000-03:00',
-  },
-  {
-    matchId: matchId(6),
-    seat: 2,
-    refereeId: costa.id,
-    scoreA: 3,
-    scoreB: 2,
-    submittedAt: '2026-12-09T15:14:00.000-03:00',
-  },
-  {
-    matchId: matchId(6),
-    seat: 3,
-    refereeId: almeida.id,
-    scoreA: 4,
-    scoreB: 1,
-    submittedAt: '2026-12-09T15:15:00.000-03:00',
-  },
 ]
 
 export const refereeAccesses: RefereeAccess[] = [

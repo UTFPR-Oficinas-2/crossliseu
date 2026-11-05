@@ -42,7 +42,12 @@ const apiMatch: ApiMatch = {
   id: 'm1',
   championshipId: 'c1',
   weightClass: 'beetleweight',
-  status: 'paused',
+  state: 'paused',
+  scheduledAt: '2026-12-09T13:00:00.000Z',
+  startedAt: '2026-12-09T13:01:00.000Z',
+  finishedAt: null,
+  endReason: null,
+  winnerRobotId: null,
   robotAId: 'r1',
   robotBId: 'r2',
   robotA: apiRobot,
@@ -76,7 +81,7 @@ describe('@/mocks with the API configured', () => {
     expect(listRobots).toHaveBeenCalledWith('c1')
   })
 
-  it('maps match status to state and drops the embedded robots', async () => {
+  it('maps the match state and scheduledAt and drops the embedded robots', async () => {
     vi.mocked(listMatches).mockResolvedValue([apiMatch])
 
     expect(await getMatchSummaries('c1')).toEqual([
@@ -87,6 +92,7 @@ describe('@/mocks with the API configured', () => {
         robotAId: 'r1',
         robotBId: 'r2',
         state: 'paused',
+        scheduledAt: '2026-12-09T13:00:00.000Z',
         createdAt,
         modifiedAt,
       },
@@ -102,14 +108,23 @@ describe('@/mocks with the API configured', () => {
       { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' },
       'tok',
     )
-    await createMatch('c1', { robotAId: 'r1', robotBId: 'r2' }, 'tok')
+    await createMatch(
+      'c1',
+      { robotAId: 'r1', robotBId: 'r2', scheduledAt: '2026-12-09T13:00:00.000Z' },
+      'tok',
+    )
 
     expect(postRobot).toHaveBeenCalledWith(
       { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight', championshipId: 'c1' },
       'tok',
     )
     expect(postMatch).toHaveBeenCalledWith(
-      { robotAId: 'r1', robotBId: 'r2', championshipId: 'c1' },
+      {
+        robotAId: 'r1',
+        robotBId: 'r2',
+        scheduledAt: '2026-12-09T13:00:00.000Z',
+        championshipId: 'c1',
+      },
       'tok',
     )
   })

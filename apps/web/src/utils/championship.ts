@@ -15,9 +15,9 @@ export function championshipStatusFromDates(
   now: Date = new Date(),
 ): ChampionshipStatus {
   const today = utcDay(now)
-  if (utcDay(endDate) < today) return 'finished'
+  if (utcDay(endDate) < today) return 'closed'
   if (utcDay(startDate) > today) return 'scheduled'
-  return 'running'
+  return 'ongoing'
 }
 
 /** Figma 06: EM ANDAMENTO orange, PROGRAMADO blue, ENCERRADO muted */
@@ -25,9 +25,9 @@ export const championshipStatusPill: Record<
   ChampionshipStatus,
   { label: string; tone: 'accent' | 'info' | 'neutral' }
 > = {
-  running: { label: 'Em andamento', tone: 'accent' },
+  ongoing: { label: 'Em andamento', tone: 'accent' },
   scheduled: { label: 'Programado', tone: 'info' },
-  finished: { label: 'Encerrado', tone: 'neutral' },
+  closed: { label: 'Encerrado', tone: 'neutral' },
 }
 
 const dayMonthYear = new Intl.DateTimeFormat('pt-BR', {

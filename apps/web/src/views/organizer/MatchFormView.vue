@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Figma: `10b / Organizador · Nova / editar luta` (node 126:530). One form for both modes. Only
-// waiting matches can be edited or deleted. Figma 10 has no delete action, so "Excluir luta"
+// scheduled matches can be edited or deleted. Figma 10 has no delete action, so "Excluir luta"
 // lives here in edit mode.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
@@ -55,6 +55,8 @@ const apiFieldErrors = ref<MatchFormErrors>({})
 const loadState = ref<'loading' | 'ready' | 'not-found' | 'not-editable' | 'error'>('loading')
 const missing = ref<'championship' | 'match'>('championship')
 const championshipName = ref('')
+// ISO time of the match being edited; null when creating
+const scheduledAt = ref<string | null>(null)
 const robots = ref<Robot[]>([])
 const saving = ref(false)
 const deleting = ref(false)
@@ -132,10 +134,11 @@ async function load() {
       return
     }
     robots.value = loadedRobots
-    if (match && match.state !== 'waiting') {
+    if (match && match.state !== 'scheduled') {
       loadState.value = 'not-editable'
       return
     }
+    scheduledAt.value = match?.scheduledAt ?? null
     reset(match ? matchValuesFrom(match) : emptyMatchValues())
     loadState.value = 'ready'
   } catch (error) {
@@ -164,7 +167,8 @@ async function onSubmit() {
   saving.value = true
   bannerError.value = null
   try {
-    const input = toMatchInput(values)
+    // Interim until the step-1 time field exists: an edit keeps its time, a new match starts now
+    const input = toMatchInput(values, scheduledAt.value ?? new Date().toISOString())
     const token = auth.token ?? ''
     if (mode === 'edit') await updateMatch(matchId!, input, token)
     else await createMatch(championshipId, input, token)
@@ -341,7 +345,7 @@ onBeforeUnmount(() => {
               {{ preview.robotB }}
             </p>
             <p class="match-form__muted text-body-s">{{ preview.teams }}</p>
-            <StatusPill v-bind="matchStatePill.waiting" />
+            <StatusPill v-bind="matchStatePill.scheduled" />
           </div>
           <p class="match-form__muted text-body-s">
             Assim a luta aparece na lista do campeonato. Os lados A e B são definidos na preparação.

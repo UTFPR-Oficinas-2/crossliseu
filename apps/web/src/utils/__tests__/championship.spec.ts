@@ -12,26 +12,26 @@ describe('championshipStatusFromDates', () => {
   it('is scheduled when it starts after today', () => {
     expect(championshipStatusFromDates('2026-10-06', '2026-10-07', now)).toBe('scheduled')
   })
-  it('is running from the start day through the end day, inclusive', () => {
-    expect(championshipStatusFromDates('2026-10-05', '2026-10-05', now)).toBe('running')
-    expect(championshipStatusFromDates('2026-10-01', '2026-10-05', now)).toBe('running')
-    expect(championshipStatusFromDates('2026-10-05', '2026-10-09', now)).toBe('running')
+  it('is ongoing from the start day through the end day, inclusive', () => {
+    expect(championshipStatusFromDates('2026-10-05', '2026-10-05', now)).toBe('ongoing')
+    expect(championshipStatusFromDates('2026-10-01', '2026-10-05', now)).toBe('ongoing')
+    expect(championshipStatusFromDates('2026-10-05', '2026-10-09', now)).toBe('ongoing')
   })
-  it('is finished once the end day has passed', () => {
-    expect(championshipStatusFromDates('2026-10-01', '2026-10-04', now)).toBe('finished')
+  it('is closed once the end day has passed', () => {
+    expect(championshipStatusFromDates('2026-10-01', '2026-10-04', now)).toBe('closed')
   })
   it('accepts the API ISO timestamps', () => {
     expect(
       championshipStatusFromDates('2026-10-05T00:00:00.000Z', '2026-10-06T00:00:00.000Z', now),
-    ).toBe('running')
+    ).toBe('ongoing')
   })
 })
 
 describe('championshipStatusPill', () => {
   it('maps each status to the Figma 06 label and tone', () => {
-    expect(championshipStatusPill.running).toEqual({ label: 'Em andamento', tone: 'accent' })
+    expect(championshipStatusPill.ongoing).toEqual({ label: 'Em andamento', tone: 'accent' })
     expect(championshipStatusPill.scheduled).toEqual({ label: 'Programado', tone: 'info' })
-    expect(championshipStatusPill.finished).toEqual({ label: 'Encerrado', tone: 'neutral' })
+    expect(championshipStatusPill.closed).toEqual({ label: 'Encerrado', tone: 'neutral' })
   })
 })
 

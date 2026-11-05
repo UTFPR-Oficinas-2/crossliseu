@@ -5,10 +5,10 @@
 // Status unions. Each one is a separate concern and must never be merged with another.
 
 /** Championship lifecycle: Programado / Em andamento / Encerrado */
-export type ChampionshipStatus = 'scheduled' | 'running' | 'finished'
+export type ChampionshipStatus = 'scheduled' | 'ongoing' | 'closed'
 
-/** Fight state, separate from recording/upload/analysis */
-export type MatchState = 'waiting' | 'running' | 'paused' | 'finished'
+/** Fight state as the API names it, separate from recording/upload/analysis */
+export type MatchState = 'scheduled' | 'ongoing' | 'paused' | 'finished'
 
 /** Recording, upload and analysis state: pendente / processando / concluído / falhou */
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
@@ -25,17 +25,12 @@ export type Side = 'A' | 'B'
 /** Every match has exactly three referee seats */
 export type RefereeSeat = 1 | 2 | 3
 
-/** How a fight ended: desistência / pontos / nocaute */
-export type MatchEndReason = 'surrender' | 'points' | 'knockout'
+/** How a fight ended (apps/api `MatchEndReason`): time ran out, the operator stopped it, or a side surrendered */
+export type MatchEndReason = 'time_out' | 'manual' | 'surrender'
 
 /** Robot weight class, as the API names it (never translated). A match pairs robots of one class. */
 export type WeightClass =
-  | 'fairyweight'
-  | 'antweight'
-  | 'beetleweight'
-  | 'hobbyweight'
-  | 'featherweight'
-  | 'lightweight'
+  'fairyweight' | 'antweight' | 'beetleweight' | 'hobbyweight' | 'featherweight' | 'lightweight'
 
 /** Optional fields are missing from some demo data: hide their UI when they are missing. */
 export interface Championship {
@@ -91,22 +86,13 @@ export interface MatchReferee {
   ready: boolean
 }
 
-/** One referee's own values for one match. There is no official total: the formula is undecided. */
-export interface RefereeScore {
-  matchId: string
-  seat: RefereeSeat
-  refereeId: string
+/** A finished fight. Scores are totals (the three referees summed); partials are never shown. */
+export interface MatchResult {
+  endReason: MatchEndReason
+  /** `null` on a draw (EMPATE) */
+  winnerRobotId: string | null
   scoreA: number
   scoreB: number
-  submittedAt: string
-}
-
-export interface MatchResult {
-  winnerSide: Side
-  reason: MatchEndReason
-  durationSeconds: number
-  /** Operator confirmed the result (Resultado confirmado / Aguardando confirmação) */
-  confirmed: boolean
 }
 
 /** Heatmap generated from the recording, one per robot */
@@ -125,6 +111,8 @@ export interface MatchSummary {
   robotAId: string
   robotBId: string
   state: MatchState
+  /** When the fight is planned to start (ISO) */
+  scheduledAt: string
   createdAt: string
   modifiedAt: string
 }

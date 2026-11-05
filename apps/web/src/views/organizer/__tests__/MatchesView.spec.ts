@@ -36,6 +36,7 @@ const match = (
   robotAId,
   robotBId,
   state,
+  scheduledAt: '2026-12-09T14:00:00.000Z',
 })
 
 const robots = [
@@ -45,8 +46,8 @@ const robots = [
   robot('r4', 'Cobalto'),
 ]
 const matches = [
-  match('m1', 'r1', 'r2', 'waiting'),
-  match('m2', 'r3', 'r4', 'running'),
+  match('m1', 'r1', 'r2', 'scheduled'),
+  match('m2', 'r3', 'r4', 'ongoing'),
   match('m3', 'r1', 'r3', 'paused'),
   match('m4', 'r2', 'r4', 'finished'),
 ]
@@ -105,7 +106,7 @@ describe('MatchesView', () => {
       'Nêmesis × Cobalto',
     ])
     const statuses = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[0]!.text())
-    expect(statuses).toEqual(['Programada', 'Em andamento', 'Em andamento', 'Encerrada'])
+    expect(statuses).toEqual(['Programada', 'Em andamento', 'Pausada', 'Encerrada'])
     expect(wrapper.text()).toContain('4 lutas · montadas manualmente, sem chaveamento automático.')
     expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
       'Meus campeonatos',
@@ -167,7 +168,7 @@ describe('MatchesView', () => {
 
     await tab(wrapper, 'Programadas').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.state).toBe('waiting')
+    expect(router.currentRoute.value.query.state).toBe('scheduled')
     expect(pairs(wrapper)).toEqual(['Titã × Nêmesis'])
 
     await tab(wrapper, 'Em andamento').trigger('click')
@@ -185,7 +186,7 @@ describe('MatchesView', () => {
   })
 
   it('restores the tab from the query and ignores unknown values', async () => {
-    const running = await mountView('/manage/c1/matches?state=running')
+    const running = await mountView('/manage/c1/matches?state=ongoing')
     expect(tab(running.wrapper, 'Em andamento').attributes('aria-selected')).toBe('true')
 
     const bogus = await mountView('/manage/c1/matches?state=bogus')

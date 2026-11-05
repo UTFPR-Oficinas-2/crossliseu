@@ -1,24 +1,24 @@
 // Pure logic for MatchesView (Figma 10)
 import type { MatchState, MatchSummary, Robot } from '@/types'
 
-export type MatchFilter = 'all' | 'waiting' | 'running' | 'finished'
+export type MatchFilter = 'all' | 'scheduled' | 'ongoing' | 'finished'
 
 export const MATCH_FILTERS: { value: MatchFilter; label: string; empty: string }[] = [
   { value: 'all', label: 'Todas', empty: 'Nenhuma luta ainda.' },
-  { value: 'waiting', label: 'Programadas', empty: 'Nenhuma luta programada.' },
-  { value: 'running', label: 'Em andamento', empty: 'Nenhuma luta em andamento.' },
+  { value: 'scheduled', label: 'Programadas', empty: 'Nenhuma luta programada.' },
+  { value: 'ongoing', label: 'Em andamento', empty: 'Nenhuma luta em andamento.' },
   { value: 'finished', label: 'Encerradas', empty: 'Nenhuma luta encerrada.' },
 ]
 
 /** The `?state=` query value; anything unknown falls back to "Todas" */
 export function matchFilterFrom(value: unknown): MatchFilter {
-  return value === 'waiting' || value === 'running' || value === 'finished' ? value : 'all'
+  return value === 'scheduled' || value === 'ongoing' || value === 'finished' ? value : 'all'
 }
 
-/** "Em andamento" covers running and paused fights */
+/** "Em andamento" covers ongoing and paused fights */
 export function inMatchFilter(state: MatchState, filter: MatchFilter): boolean {
   if (filter === 'all') return true
-  if (filter === 'running') return state === 'running' || state === 'paused'
+  if (filter === 'ongoing') return state === 'ongoing' || state === 'paused'
   return state === filter
 }
 

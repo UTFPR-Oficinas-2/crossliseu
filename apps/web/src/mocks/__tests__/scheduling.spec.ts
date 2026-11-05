@@ -28,6 +28,8 @@ const marte: RobotInput = { name: 'Marte', team: 'Equipe Órbita', weightClass: 
 const aco: RobotInput = { name: 'Aço', team: 'Equipe Aço', weightClass: 'beetleweight' }
 const bigorna: RobotInput = { name: 'Bigorna', team: 'Equipe Bigorna', weightClass: 'antweight' }
 
+const at = '2026-12-09T14:00:00.000Z'
+
 const rejection = (status: number, code: string) => ({ status, details: [code] })
 
 async function championshipWithRobots() {
@@ -87,7 +89,7 @@ describe('demo robot writes', () => {
 
   it('keeps a robot that is in a match from being removed or reclassed', async () => {
     const { id, a, b } = await championshipWithRobots()
-    await createMatch(id, { robotAId: a.id, robotBId: b.id }, 't')
+    await createMatch(id, { robotAId: a.id, robotBId: b.id, scheduledAt: at }, 't')
 
     await expect(deleteRobot(a.id, 't')).rejects.toMatchObject(rejection(409, 'robot_has_matches'))
     await expect(
@@ -109,17 +111,18 @@ describe('demo robot writes', () => {
 })
 
 describe('demo match writes', () => {
-  it('creates a waiting match with the weight class of its robots', async () => {
+  it('creates a scheduled match with its time with the weight class of its robots', async () => {
     const { id, a, b } = await championshipWithRobots()
 
-    const created = await createMatch(id, { robotAId: a.id, robotBId: b.id }, 't')
+    const created = await createMatch(id, { robotAId: a.id, robotBId: b.id, scheduledAt: at }, 't')
 
     expect(created).toMatchObject({
       championshipId: id,
       robotAId: a.id,
       robotBId: b.id,
       weightClass: 'beetleweight',
-      state: 'waiting',
+      state: 'scheduled',
+      scheduledAt: at,
     })
     expect(await getMatchSummaries(id)).toEqual([created])
   })
@@ -128,39 +131,39 @@ describe('demo match writes', () => {
     const { id, a, heavy } = await championshipWithRobots()
     const outsider = await createRobot(await newChampionship(), tita, 't')
 
-    await expect(createMatch(id, { robotAId: a.id, robotBId: a.id }, 't')).rejects.toMatchObject(
-      rejection(400, 'match_robots_must_differ'),
-    )
     await expect(
-      createMatch(id, { robotAId: a.id, robotBId: heavy.id }, 't'),
+      createMatch(id, { robotAId: a.id, robotBId: a.id, scheduledAt: at }, 't'),
+    ).rejects.toMatchObject(rejection(400, 'match_robots_must_differ'))
+    await expect(
+      createMatch(id, { robotAId: a.id, robotBId: heavy.id, scheduledAt: at }, 't'),
     ).rejects.toMatchObject(rejection(400, 'match_weight_class_mismatch'))
     await expect(
-      createMatch(id, { robotAId: a.id, robotBId: outsider.id }, 't'),
+      createMatch(id, { robotAId: a.id, robotBId: outsider.id, scheduledAt: at }, 't'),
     ).rejects.toMatchObject(rejection(400, 'robot_not_in_championship'))
     await expect(
-      createMatch(id, { robotAId: a.id, robotBId: 'missing' }, 't'),
+      createMatch(id, { robotAId: a.id, robotBId: 'missing', scheduledAt: at }, 't'),
     ).rejects.toMatchObject(rejection(404, 'robot_not_found'))
   })
 
-  it('edits and deletes a waiting match', async () => {
+  it('edits and deletes a scheduled match', async () => {
     const { id, a, b, c } = await championshipWithRobots()
-    const created = await createMatch(id, { robotAId: a.id, robotBId: b.id }, 't')
+    const created = await createMatch(id, { robotAId: a.id, robotBId: b.id, scheduledAt: at }, 't')
 
     await expect(
-      updateMatch(created.id, { robotAId: a.id, robotBId: c.id }, 't'),
+      updateMatch(created.id, { robotAId: a.id, robotBId: c.id, scheduledAt: at }, 't'),
     ).resolves.toMatchObject({ robotBId: c.id, weightClass: 'beetleweight' })
     await deleteMatch(created.id, 't')
 
     expect(await getMatchSummaries(id)).toEqual([])
   })
 
-  it('refuses to edit or delete a match that is no longer waiting', async () => {
-    // Fight 07 in the demo data is running
+  it('refuses to edit or delete a match that is no longer scheduled', async () => {
+    // Fight 07 in the demo data is ongoing
     const running = matchId(7)
 
-    await expect(updateMatch(running, { robotAId: 'x', robotBId: 'y' }, 't')).rejects.toMatchObject(
-      rejection(409, 'match_not_editable'),
-    )
+    await expect(
+      updateMatch(running, { robotAId: 'x', robotBId: 'y', scheduledAt: at }, 't'),
+    ).rejects.toMatchObject(rejection(409, 'match_not_editable'))
     await expect(deleteMatch(running, 't')).rejects.toMatchObject(
       rejection(409, 'match_not_editable'),
     )

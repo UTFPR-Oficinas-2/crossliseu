@@ -16,7 +16,7 @@ const fixture: Championship[] = [
     ...base,
     id: 'c1',
     name: 'Copa Andamento',
-    status: 'running',
+    status: 'ongoing',
     startDate: '2026-10-04',
     endDate: '2026-10-06',
     robotCount: 16,
@@ -37,7 +37,7 @@ const fixture: Championship[] = [
     ...base,
     id: 'c3',
     name: 'Copa Encerrada',
-    status: 'finished',
+    status: 'closed',
     startDate: '2025-12-10',
     robotCount: 16,
     fightsDone: 15,
@@ -104,7 +104,7 @@ describe('MyChampionshipsView', () => {
 
     await tab(wrapper, 'Encerrados').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.status).toBe('finished')
+    expect(router.currentRoute.value.query.status).toBe('closed')
     expect(rowNames(wrapper)).toEqual(['Copa Encerrada'])
 
     await tab(wrapper, 'Em andamento').trigger('click')
@@ -118,7 +118,7 @@ describe('MyChampionshipsView', () => {
   })
 
   it('restores the filter from the query and ignores unknown values', async () => {
-    const running = await mountView('/manage?status=running')
+    const running = await mountView('/manage?status=ongoing')
     expect(tab(running.wrapper, 'Em andamento').attributes('aria-selected')).toBe('true')
     expect(rowNames(running.wrapper)).toEqual(['Copa Andamento'])
 
@@ -128,7 +128,7 @@ describe('MyChampionshipsView', () => {
 
   it('shows empty states', async () => {
     vi.mocked(getManagedChampionships).mockResolvedValue([fixture[2]!])
-    const { wrapper } = await mountView('/manage?status=running')
+    const { wrapper } = await mountView('/manage?status=ongoing')
     expect(wrapper.text()).toContain('Nenhum campeonato em andamento.')
 
     vi.mocked(getManagedChampionships).mockResolvedValue([])

@@ -173,7 +173,7 @@ const breadcrumb = computed(() => [
                 </td>
                 <td role="cell" class="matches__cell--actions">
                   <AppButton
-                    v-if="match.state === 'waiting'"
+                    v-if="match.state === 'scheduled'"
                     variant="secondary"
                     :to="{ name: 'match-edit', params: { championshipId, matchId: match.id } }"
                     :aria-label="`Editar luta ${robotA} contra ${robotB}`"

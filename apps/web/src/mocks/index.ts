@@ -9,7 +9,6 @@ import {
   listChampionships,
   updateChampionship as patchChampionship,
   type ApiChampionship,
-  type ApiChampionshipStatus,
 } from '@/api/championships'
 import { login } from '@/api/auth'
 import {
@@ -31,12 +30,10 @@ import { normalizeText } from '@/utils/robot'
 import type {
   Arena,
   Championship,
-  ChampionshipStatus,
   Match,
   MatchState,
   MatchSummary,
   RefereeAccess,
-  RefereeScore,
   Robot,
   WeightClass,
 } from '@/types'
@@ -53,19 +50,13 @@ const demoAuth = () =>
     ? import('./demo-auth')
     : Promise.reject(new Error('Demo sign-in is not available in production builds'))
 
-const championshipStatus: Record<ApiChampionshipStatus, ChampionshipStatus> = {
-  ongoing: 'running',
-  scheduled: 'scheduled',
-  closed: 'finished',
-}
-
 function toChampionship(api: ApiChampionship): Championship {
   return {
     id: api.id,
     name: api.name,
     startDate: api.startDate,
     endDate: api.endDate,
-    status: championshipStatus[api.status],
+    status: api.status,
     robotCount: api.robotCount,
     fightsDone: api.fightsDone,
     fightsTotal: api.fightsTotal,
@@ -300,7 +291,8 @@ function toMatchSummary(api: ApiMatch): MatchSummary {
     weightClass: api.weightClass,
     robotAId: api.robotAId,
     robotBId: api.robotBId,
-    state: api.status,
+    state: api.state,
+    scheduledAt: api.scheduledAt,
     createdAt: api.createdAt,
     modifiedAt: api.modifiedAt,
   }
@@ -314,6 +306,7 @@ const summaryOf = (match: MatchSummary): MatchSummary => ({
   robotAId: match.robotAId,
   robotBId: match.robotBId,
   state: match.state,
+  scheduledAt: match.scheduledAt,
   createdAt: match.createdAt,
   modifiedAt: match.modifiedAt,
 })
@@ -328,10 +321,16 @@ export async function getMatchSummaries(championshipId: string): Promise<MatchSu
 export interface MatchInput {
   robotAId: string
   robotBId: string
+  /** ISO timestamp */
+  scheduledAt: string
 }
 
 // Same checks and codes as `MatchesService.resolveRobots` in apps/api; returns the shared class
-function resolveDemoRobots(robots: Robot[], championshipId: string, input: MatchInput): WeightClass {
+function resolveDemoRobots(
+  robots: Robot[],
+  championshipId: string,
+  input: MatchInput,
+): WeightClass {
   if (input.robotAId === input.robotBId) throw demoError(400, 'match_robots_must_differ')
   const robotA = robots.find((r) => r.id === input.robotAId)
   const robotB = robots.find((r) => r.id === input.robotBId)
@@ -381,11 +380,11 @@ export async function createMatch(
 function findEditableDemoMatch(matches: Match[], id: string): Match {
   const match = matches.find((m) => m.id === id)
   if (!match) throw demoError(404, 'match_not_found')
-  if (match.state !== 'waiting') throw demoError(409, 'match_not_editable')
+  if (match.state !== 'scheduled') throw demoError(409, 'match_not_editable')
   return match
 }
 
-/** PATCH /matches/:id (JWT). Only waiting matches. */
+/** PATCH /matches/:id (JWT). Only scheduled matches. */
 export async function updateMatch(
   id: string,
   input: MatchInput,
@@ -399,7 +398,7 @@ export async function updateMatch(
   return summaryOf(match)
 }
 
-/** DELETE /matches/:id (JWT). Only waiting matches. */
+/** DELETE /matches/:id (JWT). Only scheduled matches. */
 export async function deleteMatch(id: string, token: string): Promise<void> {
   if (isApiEnabled) return removeMatch(id, token)
   const { matches } = await demo()
@@ -412,15 +411,10 @@ export async function getMatch(id: string): Promise<Match | null> {
   return matches.find((m) => m.id === id) ?? null
 }
 
-/** The fight currently running or paused, if any */
+/** The fight currently ongoing or paused, if any */
 export async function getLiveMatch(): Promise<Match | null> {
   const { matches } = await demo()
-  return matches.find((m) => m.state === 'running' || m.state === 'paused') ?? null
-}
-
-export async function getRefereeScores(matchId: string): Promise<RefereeScore[]> {
-  const { refereeScores } = await demo()
-  return refereeScores.filter((s) => s.matchId === matchId).sort((a, b) => a.seat - b.seat)
+  return matches.find((m) => m.state === 'ongoing' || m.state === 'paused') ?? null
 }
 
 export async function getRefereeAccess(token: string): Promise<RefereeAccess | null> {
@@ -431,7 +425,7 @@ export async function getRefereeAccess(token: string): Promise<RefereeAccess | n
 /** The fight shown on the home "ao vivo" strip */
 export interface LiveFight {
   matchId: string
-  state: Extract<MatchState, 'running' | 'paused'>
+  state: Extract<MatchState, 'ongoing' | 'paused'>
   /** Fight number ("Luta 07") */
   number: number
   /** Fights in the championship ("de 15") */
@@ -444,14 +438,14 @@ export interface LiveFight {
 }
 
 /**
- * The fight currently running or paused, with the names the strip needs. apps/api has no
+ * The fight currently ongoing or paused, with the names the strip needs. apps/api has no
  * match state, robots or arenas yet, so this resolves to `null` when the API is configured.
  */
 export async function getLiveFight(): Promise<LiveFight | null> {
   if (isApiEnabled) return null
 
   const match = await getLiveMatch()
-  if (!match || (match.state !== 'running' && match.state !== 'paused')) return null
+  if (!match || (match.state !== 'ongoing' && match.state !== 'paused')) return null
 
   const [championship, championshipRobots, championshipArenas, championshipMatches] =
     await Promise.all([
