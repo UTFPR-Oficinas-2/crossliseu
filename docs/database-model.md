@@ -37,7 +37,7 @@ erDiagram
     string email
     string password
     timestamptz created_at
-    timestamptz modified_at "nullable"
+    timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"
   }
   championships {
@@ -47,7 +47,7 @@ erDiagram
     timestamptz start_date
     timestamptz end_date
     timestamptz created_at
-    timestamptz modified_at "nullable"
+    timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"
   }
   robots {
@@ -58,7 +58,7 @@ erDiagram
     string weight_class "(fairyweight | antweight | beetleweight | hobbyweight | featherweight | lightweight)"
     string team
     timestamptz created_at
-    timestamptz modified_at "nullable"
+    timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"
   }
   matches {
@@ -75,7 +75,7 @@ erDiagram
     timestamptz started_at "nullable"
     timestamptz finished_at "nullable"
     timestamptz created_at
-    timestamptz modified_at "nullable"
+    timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"
   }
   match_score_events {

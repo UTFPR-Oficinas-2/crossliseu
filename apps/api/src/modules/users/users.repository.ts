@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity.js';
 import { Repository, UpdateResult } from 'typeorm';
-import { touched } from '../../database/base.entity.js';
 
 @Injectable()
 export class UsersRepository {
@@ -28,7 +27,7 @@ export class UsersRepository {
     }
 
     update(id: string, partialUser: Partial<User>): Promise<UpdateResult> {
-        return this.repository.update({ id }, touched(partialUser));
+        return this.repository.update({ id }, partialUser);
     }
 
     delete(id: string) {

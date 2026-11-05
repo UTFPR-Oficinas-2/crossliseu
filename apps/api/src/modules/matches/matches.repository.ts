@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { touched } from '../../database/base.entity.js';
 import { Match } from './entities/match.entity.js';
 import { Repository } from 'typeorm';
 
@@ -30,7 +29,7 @@ export class MatchesRepository {
     }
 
     update(id: string, partialMatch: Partial<Match>) {
-        return this.repository.update({ id }, touched(partialMatch));
+        return this.repository.update({ id }, partialMatch);
     }
 
     remove(id: string) {

@@ -108,7 +108,6 @@ describe('entity metadata', () => {
             'deleted_at',
             'end_reason',
             'finished_at',
-            'modified_at',
             'started_at',
             'winner_robot_id',
         ]);
@@ -168,15 +167,15 @@ describe('entity metadata', () => {
     );
 
     it.each([User, Championship, Robot, Match] as const)(
-        'modified_at of %o has no default, so it stays NULL until the first update',
+        'modified_at of %o is a NOT NULL update date stamped by TypeORM',
         async (entity) => {
             const dataSource = await buildDataSource();
             const column = dataSource
                 .getMetadata(entity)
                 .findColumnWithDatabaseName('modified_at');
 
-            expect(column?.isNullable).toBe(true);
-            expect(column?.default).toBeUndefined();
+            expect(column?.isUpdateDate).toBe(true);
+            expect(column?.isNullable).toBe(false);
         },
     );
 
