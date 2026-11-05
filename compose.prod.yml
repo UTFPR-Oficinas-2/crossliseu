@@ -39,6 +39,10 @@ services:
 
   postgres:
     image: postgres:18
+    # Loopback only, for SSH tunnels (ssh -L 5433:localhost:5432 ediasv.dev).
+    # Never drop the 127.0.0.1: Docker's iptables rules bypass UFW.
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
