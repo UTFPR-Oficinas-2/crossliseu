@@ -31,7 +31,6 @@ import type {
   Arena,
   Championship,
   Match,
-  MatchState,
   MatchSummary,
   RefereeAccess,
   Robot,
@@ -411,62 +410,8 @@ export async function getMatch(id: string): Promise<Match | null> {
   return matches.find((m) => m.id === id) ?? null
 }
 
-/** The fight currently ongoing or paused, if any */
-export async function getLiveMatch(): Promise<Match | null> {
-  const { matches } = await demo()
-  return matches.find((m) => m.state === 'ongoing' || m.state === 'paused') ?? null
-}
 
 export async function getRefereeAccess(token: string): Promise<RefereeAccess | null> {
   const { refereeAccesses } = await demo()
   return refereeAccesses.find((a) => a.token === token) ?? null
-}
-
-/** The fight shown on the home "ao vivo" strip */
-export interface LiveFight {
-  matchId: string
-  state: Extract<MatchState, 'ongoing' | 'paused'>
-  /** Fight number ("Luta 07") */
-  number: number
-  /** Fights in the championship ("de 15") */
-  fightsTotal: number
-  championshipName: string
-  arenaName: string | null
-  robotAName: string
-  robotBName: string
-  remainingSeconds: number
-}
-
-/**
- * The fight currently ongoing or paused, with the names the strip needs. apps/api has no
- * match state, robots or arenas yet, so this resolves to `null` when the API is configured.
- */
-export async function getLiveFight(): Promise<LiveFight | null> {
-  if (isApiEnabled) return null
-
-  const match = await getLiveMatch()
-  if (!match || (match.state !== 'ongoing' && match.state !== 'paused')) return null
-
-  const [championship, championshipRobots, championshipArenas, championshipMatches] =
-    await Promise.all([
-      getChampionship(match.championshipId),
-      getRobots(match.championshipId),
-      getArenas(match.championshipId),
-      getMatches(match.championshipId),
-    ])
-  const robotA = championshipRobots.find((r) => r.id === match.robotAId)
-  const robotB = championshipRobots.find((r) => r.id === match.robotBId)
-  if (!championship || !robotA || !robotB) return null
-
-  return {
-    matchId: match.id,
-    state: match.state,
-    number: match.number,
-    fightsTotal: championship.fightsTotal ?? championshipMatches.length,
-    championshipName: championship.name,
-    arenaName: championshipArenas.find((a) => a.id === match.arenaId)?.name ?? null,
-    robotAName: robotA.name,
-    robotBName: robotB.name,
-    remainingSeconds: Math.max(0, match.roundDurationSeconds - match.elapsedSeconds),
-  }
 }

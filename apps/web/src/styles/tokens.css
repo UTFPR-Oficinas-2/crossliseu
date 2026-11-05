@@ -47,7 +47,7 @@
 
   /* Sizes (component dimensions from Figma) */
   --size-control: 44px; /* button, tab and sidebar item height */
-  --size-control-lg: 48px; /* home live strip action button height */
+  --size-control-lg: 48px; /* large page action buttons */
   --size-field: 48px; /* input height */
   --size-button-min: 120px;
   --size-tab-min: 110px;
@@ -64,8 +64,7 @@
   --size-step-line: 3px; /* operator step indicator line */
   --size-referee-frame: 390px; /* referee mobile frame width */
   --size-avatar: 28px;
-  --size-accent-border: 4px; /* home live strip left border */
-  --size-live-action: 176px; /* home live strip action button width */
+  --size-live-action: 176px; /* organizer robot/team columns and aside widths */
   --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
   --size-form-card: 480px; /* sign-in card width */
   --size-dot: 8px; /* status dot, e.g. the error banner marker */

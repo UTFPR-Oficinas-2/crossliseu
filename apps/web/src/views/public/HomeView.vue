@@ -1,14 +1,13 @@
 <script setup lang="ts">
-// Figma: `01 / Público · Home` (node 2:13), `Home / Content` and its blocks. Navigation and page
-// padding come from PublicLayout.
+// Figma: `PUB-01 Home` (node 2:13, phone 155:820). Navigation and page padding come from
+// PublicLayout. There is no live-fight block: the home lists championships only.
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import ChampionshipCard from '@/components/ui/ChampionshipCard.vue'
-import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
 import { isApiEnabled } from '@/api/client'
-import { getChampionships, getLiveFight, type LiveFight } from '@/mocks'
+import { getChampionships } from '@/mocks'
 import type { Championship, ChampionshipStatus } from '@/types'
 
 type Filter = ChampionshipStatus | 'all'
@@ -20,20 +19,27 @@ const filters: { value: Filter; label: string; empty: string }[] = [
   { value: 'all', label: 'Todos', empty: 'Nenhum campeonato cadastrado ainda.' },
 ]
 
+const route = useRoute()
+const router = useRouter()
+
+// Kept in `?status=` so reload and back restore the tab; anything unknown opens "Em andamento"
+const activeFilter = computed<Filter>(() => {
+  const value = route.query.status
+  return filters.find((f) => f.value === value)?.value ?? 'ongoing'
+})
+
+function selectFilter(value: Filter) {
+  router.replace({ query: { ...route.query, status: value } })
+}
+
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
 const championships = ref<Championship[]>([])
-const liveFight = ref<LiveFight | null>(null)
-const activeFilter = ref<Filter>('ongoing')
 
 // Single data entry point for this view
 async function load() {
   loadState.value = 'loading'
   try {
-    const [championshipList, live] = await Promise.all([getChampionships(), getLiveFight()])
-    championships.value = championshipList
-    liveFight.value = live
-    // Figma opens on "Em andamento"; without any status data only "Todos" can list anything
-    activeFilter.value = championshipList.some((c) => c.status) ? 'ongoing' : 'all'
+    championships.value = await getChampionships()
     loadState.value = 'ready'
   } catch (error) {
     console.error('Failed to load home data', error)
@@ -43,13 +49,10 @@ async function load() {
 
 onMounted(load)
 
-// Championship and match pages are dev-only for now (see router); never link to a missing route
-const router = useRouter()
+// The championship page is dev-only for now (see router); never link to a missing route
 const hasChampionshipPage = router.hasRoute('championship')
-const hasMatchPage = router.hasRoute('match-details')
 
 const numberFormat = new Intl.NumberFormat('pt-BR')
-const pad2 = (value: number) => String(value).padStart(2, '0')
 
 const championshipCount = computed(() => {
   const count = championships.value.length
@@ -105,49 +108,13 @@ const hiddenNote = computed(() => {
     ? '1 campeonato sem dados suficientes para exibição.'
     : `${numberFormat.format(count)} campeonatos sem dados suficientes para exibição.`
 })
-
-const live = computed(() => {
-  const fight = liveFight.value
-  if (!fight) return null
-  const status = fight.state === 'paused' ? 'Pausada' : 'Ao vivo'
-  return {
-    pillLabel: fight.arenaName ? `${status} · ${fight.arenaName}` : status,
-    pillTone: fight.state === 'paused' ? ('warning' as const) : ('accent' as const),
-    // Screen readers would otherwise read "×" as a multiplication sign
-    matchup: `${fight.robotAName} contra ${fight.robotBName}`,
-    // "Copa Crossliseu 2026 · Luta 07 de 15"
-    context: `${fight.championshipName} · Luta ${pad2(fight.number)} de ${pad2(fight.fightsTotal)}`,
-    // "01:42"
-    clock: `${pad2(Math.floor(fight.remainingSeconds / 60))}:${pad2(fight.remainingSeconds % 60)}`,
-    to: hasMatchPage ? { name: 'match-details', params: { matchId: fight.matchId } } : null,
-  }
-})
 </script>
 
 <template>
   <div class="home">
     <header class="home__hero">
-      <p class="home__eyebrow text-overline">Robótica em combate · UTFPR</p>
       <h1 class="home__title text-display-page">Acompanhe a arena</h1>
-      <p class="home__lead text-body-l">
-        Campeonatos, confrontos e resultados da UTFPR em um só lugar.
-      </p>
     </header>
-
-    <section v-if="liveFight && live" class="home__live" aria-label="Luta ao vivo">
-      <div class="home__live-info">
-        <StatusPill :label="live.pillLabel" :tone="live.pillTone" />
-        <h2 class="home__live-title text-heading-l" :aria-label="live.matchup">
-          {{ liveFight.robotAName }} × {{ liveFight.robotBName }}
-        </h2>
-        <p class="home__muted text-body-s">{{ live.context }}</p>
-      </div>
-      <div class="home__live-clock">
-        <p class="home__live-time text-timer-l">{{ live.clock }}</p>
-        <p class="home__muted text-mono-s">TEMPO RESTANTE</p>
-      </div>
-      <AppButton v-if="live.to" class="home__live-action" :to="live.to">Acompanhar luta</AppButton>
-    </section>
 
     <section class="home__championships" aria-labelledby="home-championships-title">
       <div class="home__section-header">
@@ -176,7 +143,7 @@ const live = computed(() => {
             :label="filter.label"
             :active="activeFilter === filter.value"
             aria-controls="home-championships-grid"
-            @click="activeFilter = filter.value"
+            @click="selectFilter(filter.value)"
           />
         </div>
 
@@ -212,63 +179,13 @@ const live = computed(() => {
   gap: var(--space-10px);
 }
 
-.home__eyebrow {
-  color: var(--color-orange);
-}
-
 .home__title {
   color: var(--color-text);
   text-transform: uppercase;
 }
 
-.home__lead,
 .home__muted {
   color: var(--color-muted);
-}
-
-.home__live {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-28px);
-  padding: var(--space-22px) var(--space-6) var(--space-22px) var(--space-28px);
-  border: 1px solid var(--color-orange);
-  border-left-width: var(--size-accent-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
-}
-
-.home__live-info {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.home__live-title {
-  color: var(--color-text);
-  text-transform: uppercase;
-  overflow-wrap: break-word;
-}
-
-.home__live-clock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.home__live-time {
-  color: var(--color-orange);
-}
-
-.home__live-action {
-  width: var(--size-live-action);
-  min-height: var(--size-control-lg);
 }
 
 .home__championships {
@@ -328,5 +245,13 @@ const live = computed(() => {
   gap: var(--space-2);
   padding-top: var(--space-2);
   color: var(--color-muted);
+}
+
+/* Figma PUB-01 celular */
+@media (max-width: 767px) {
+  .home,
+  .home__grid {
+    gap: var(--space-5);
+  }
 }
 </style>
