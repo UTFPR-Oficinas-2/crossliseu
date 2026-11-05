@@ -70,7 +70,9 @@ const numberFormat = new Intl.NumberFormat('pt-BR')
 
 const subtitle = computed(() => {
   const count = championships.value.length
-  return `Você tem permissão para gerenciar ${numberFormat.format(count)} ${count === 1 ? 'campeonato' : 'campeonatos'}.`
+  return count === 1
+    ? '1 campeonato cadastrado.'
+    : `${numberFormat.format(count)} campeonatos cadastrados.`
 })
 </script>
 

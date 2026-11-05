@@ -60,20 +60,28 @@ export function formatDateRange(startDate: string, endDate?: string | null): str
 
 const numberFormat = new Intl.NumberFormat('pt-BR')
 
-/** Row meta line with only what the API returns: "10 dez 2025 · 16 robôs · 15 de 15 lutas" */
+/**
+ * Row meta line with only what the API returns: "10 dez 2025 · 16 robôs", plus
+ * "· 15 de 15 lutas" once the championship is closed (Figma ORG-01)
+ */
 export function championshipMeta(
   championship: Pick<
     Championship,
-    'startDate' | 'endDate' | 'robotCount' | 'fightsDone' | 'fightsTotal'
+    'status' | 'startDate' | 'endDate' | 'robotCount' | 'fightsDone' | 'fightsTotal'
   >,
 ): string {
-  const { startDate, endDate, robotCount, fightsDone, fightsTotal } = championship
+  const { status, startDate, endDate, robotCount, fightsDone, fightsTotal } = championship
   const segments: string[] = []
   if (startDate) segments.push(formatDateRange(startDate, endDate))
   if (robotCount !== undefined) {
     segments.push(`${numberFormat.format(robotCount)} ${robotCount === 1 ? 'robô' : 'robôs'}`)
   }
-  if (fightsTotal !== undefined && fightsTotal > 0 && fightsDone !== undefined) {
+  if (
+    status === 'closed' &&
+    fightsTotal !== undefined &&
+    fightsTotal > 0 &&
+    fightsDone !== undefined
+  ) {
     segments.push(
       `${numberFormat.format(fightsDone)} de ${numberFormat.format(fightsTotal)} ${fightsTotal === 1 ? 'luta' : 'lutas'}`,
     )

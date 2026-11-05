@@ -53,9 +53,10 @@ describe('formatDateRange', () => {
 })
 
 describe('championshipMeta', () => {
-  it('joins date range, robots and fights', () => {
+  it('joins date range, robots and fights for a closed championship', () => {
     expect(
       championshipMeta({
+        status: 'closed',
         startDate: '2025-12-10',
         endDate: '2025-12-10',
         robotCount: 16,
@@ -64,9 +65,16 @@ describe('championshipMeta', () => {
       }),
     ).toBe('10 dez 2025 · 16 robôs · 15 de 15 lutas')
   })
+  it('shows fights only once the championship is closed', () => {
+    const counts = { startDate: '2026-10-04', robotCount: 16, fightsDone: 6, fightsTotal: 15 }
+
+    expect(championshipMeta({ ...counts, status: 'ongoing' })).toBe('04 out 2026 · 16 robôs')
+    expect(championshipMeta({ ...counts, status: 'scheduled' })).toBe('04 out 2026 · 16 robôs')
+  })
   it('omits fights when there are none and uses singulars', () => {
     expect(
       championshipMeta({
+        status: 'closed',
         startDate: '2026-12-19',
         endDate: '2026-12-20',
         robotCount: 1,
@@ -76,6 +84,7 @@ describe('championshipMeta', () => {
     ).toBe('19 – 20 dez 2026 · 1 robô')
     expect(
       championshipMeta({
+        status: 'closed',
         startDate: '2026-12-19',
         endDate: null,
         robotCount: 0,

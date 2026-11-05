@@ -81,11 +81,11 @@ describe('MyChampionshipsView', () => {
     const { wrapper } = await mountView()
 
     expect(wrapper.findAll('li')).toHaveLength(3)
-    expect(wrapper.text()).toContain('Você tem permissão para gerenciar 3 campeonatos.')
+    expect(wrapper.text()).toContain('3 campeonatos cadastrados.')
 
     vi.mocked(getManagedChampionships).mockResolvedValue([fixture[0]!])
     const single = await mountView()
-    expect(single.wrapper.text()).toContain('Você tem permissão para gerenciar 1 campeonato.')
+    expect(single.wrapper.text()).toContain('1 campeonato cadastrado.')
   })
 
   it('highlights Gerenciar only for the running row and links to the public page', async () => {
@@ -128,6 +128,27 @@ describe('MyChampionshipsView', () => {
 
     const bogus = await mountView('/manage?status=bogus')
     expect(tab(bogus.wrapper, 'Todos').attributes('aria-selected')).toBe('true')
+
+    const legacy = await mountView('/manage?status=running')
+    expect(tab(legacy.wrapper, 'Todos').attributes('aria-selected')).toBe('true')
+  })
+
+  it('offers Todos, Em andamento and Encerrados only', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
+      'Todos',
+      'Em andamento',
+      'Encerrados',
+    ])
+  })
+
+  it('shows the fight count only on closed rows', async () => {
+    const { wrapper } = await mountView()
+    const metas = wrapper.findAll('li').map((li) => li.find('p').text())
+
+    expect(metas[0]).not.toContain('lutas')
+    expect(metas[2]).toContain('15 de 15 lutas')
   })
 
   it('shows empty states', async () => {
