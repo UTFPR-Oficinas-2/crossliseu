@@ -11,7 +11,6 @@ actually deployed.
 ```mermaid
 ---
 config:
-  theme: redux-color
   look: neo
   layout: elk
 ---
