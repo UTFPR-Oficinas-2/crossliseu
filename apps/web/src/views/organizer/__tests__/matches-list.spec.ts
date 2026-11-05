@@ -38,14 +38,14 @@ describe('matchRows', () => {
       championshipId: 'c1',
       name,
       team: 'Equipe',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
       createdAt: '',
       modifiedAt: '',
     })
     const match: MatchSummary = {
       id: 'm1',
       championshipId: 'c1',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
       robotAId: 'r1',
       robotBId: 'gone',
       state: 'waiting',

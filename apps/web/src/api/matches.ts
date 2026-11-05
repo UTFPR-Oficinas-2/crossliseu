@@ -2,6 +2,7 @@
 // create, and edit or delete while the match is `waiting`.
 import { apiRequest } from './client'
 import type { ApiRobot } from './robots'
+import type { WeightClass } from '@/types'
 
 /** `MatchState` in apps/api, serialized as `status` */
 export type ApiMatchStatus = 'waiting' | 'running' | 'paused' | 'finished'
@@ -10,7 +11,7 @@ export type ApiMatchStatus = 'waiting' | 'running' | 'paused' | 'finished'
 export interface ApiMatch {
   id: string
   /** Shared by both robots; the API takes it from them */
-  weightClass: string
+  weightClass: WeightClass
   status: ApiMatchStatus
   championshipId: string
   robotAId: string

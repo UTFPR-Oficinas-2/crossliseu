@@ -28,8 +28,14 @@ export type RefereeSeat = 1 | 2 | 3
 /** How a fight ended: desistência / pontos / nocaute */
 export type MatchEndReason = 'surrender' | 'points' | 'knockout'
 
-/** Robot weight class: only two for now (no kilograms). A match pairs robots of one class. */
-export type WeightClass = 'lightweight' | 'heavyweight'
+/** Robot weight class, as the API names it (never translated). A match pairs robots of one class. */
+export type WeightClass =
+  | 'fairyweight'
+  | 'antweight'
+  | 'beetleweight'
+  | 'hobbyweight'
+  | 'featherweight'
+  | 'lightweight'
 
 /** Optional fields are missing from some demo data: hide their UI when they are missing. */
 export interface Championship {
@@ -61,8 +67,7 @@ export interface Robot {
   team: string
   /** Demo data only: the API has no owner (Responsável), and the UI no longer shows it */
   owner?: string
-  /** A `WeightClass`; robots saved before weight classes were fixed may hold other text */
-  weightClass: string
+  weightClass: WeightClass
   /** Demo data only: combat category ("Arrasto", "Girante", "Cunha"), not shown */
   category?: string
   /** Demo data only: weigh-in status, not shown */
@@ -116,7 +121,7 @@ export interface MatchSummary {
   id: string
   championshipId: string
   /** Shared by both robots; see `Robot.weightClass` */
-  weightClass: string
+  weightClass: WeightClass
   robotAId: string
   robotBId: string
   state: MatchState

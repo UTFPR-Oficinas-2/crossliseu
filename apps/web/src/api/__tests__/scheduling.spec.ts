@@ -42,7 +42,7 @@ describe('robots API', () => {
     const body = {
       name: 'Titã',
       team: 'Equipe Volt',
-      weightClass: 'lightweight' as const,
+      weightClass: 'beetleweight' as const,
       championshipId: 'c1',
     }
 

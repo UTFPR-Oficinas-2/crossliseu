@@ -7,7 +7,7 @@ import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
 import type { MatchInput } from '@/mocks'
-import type { Championship, MatchState, MatchSummary, Robot } from '@/types'
+import type { Championship, MatchState, MatchSummary, Robot, WeightClass } from '@/types'
 import MatchFormView from '../MatchFormView.vue'
 import { MATCH_MESSAGES } from '../match-form'
 
@@ -33,7 +33,7 @@ const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
 const championship: Championship = { ...base, id: 'c1', name: 'Copa 2026', startDate: '2026-12-09' }
-const robot = (id: string, name: string, team: string, weightClass: string): Robot => ({
+const robot = (id: string, name: string, team: string, weightClass: WeightClass): Robot => ({
   ...base,
   id,
   championshipId: 'c1',
@@ -42,16 +42,16 @@ const robot = (id: string, name: string, team: string, weightClass: string): Rob
   weightClass,
 })
 const robots = [
-  robot('tita', 'Titã', 'Equipe Volt', 'lightweight'),
-  robot('marte', 'Marte', 'Equipe Órbita', 'lightweight'),
-  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'lightweight'),
-  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'heavyweight'),
+  robot('tita', 'Titã', 'Equipe Volt', 'beetleweight'),
+  robot('marte', 'Marte', 'Equipe Órbita', 'beetleweight'),
+  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'beetleweight'),
+  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'antweight'),
 ]
 const summary = (state: MatchState = 'waiting'): MatchSummary => ({
   ...base,
   id: 'm1',
   championshipId: 'c1',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   robotAId: 'tita',
   robotBId: 'marte',
   state,
@@ -163,8 +163,8 @@ describe('MatchFormView', () => {
     const marte = options(wrapper, 1)[1]!
     expect(marte.attributes('aria-disabled')).toBe('true')
     expect(marte.text()).toContain('Já escolhido como Robô 1')
-    expect(wrapper.text()).toContain('Participantes · Peso leve')
-    expect(wrapper.text()).toContain('Equipe Órbita · Peso leve')
+    expect(wrapper.text()).toContain('Participantes · beetleweight')
+    expect(wrapper.text()).toContain('Equipe Órbita · beetleweight')
   })
 
   it('clears Robô 2 when Robô 1 switches to another weight class', async () => {
@@ -231,7 +231,7 @@ describe('MatchFormView', () => {
 
     expect(aside()).toContain('Marte')
     expect(aside()).toContain('Cobalto')
-    expect(aside()).toContain('Equipe Órbita × Equipe Órbita · Peso leve')
+    expect(aside()).toContain('Equipe Órbita × Equipe Órbita · beetleweight')
   })
 
   it('asks for participants when fewer than two robots exist', async () => {

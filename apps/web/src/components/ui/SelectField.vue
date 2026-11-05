@@ -18,7 +18,7 @@ const {
 } = defineProps<{
   label: string
   options: readonly SelectOption[]
-  /** Overline above the options, e.g. "Participantes · Peso leve" */
+  /** Overline above the options, e.g. "Participantes · beetleweight" */
   groupLabel?: string
   placeholder?: string
   hint?: string

@@ -44,13 +44,13 @@ const invalidEmail = ref('arbitro@')
 const disabledCode = ref('ARB-4821')
 
 const robotOptions: SelectOption[] = [
-  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · Peso leve' },
-  { value: 'nemesis', label: 'Nêmesis', meta: 'Equipe Impacto · Peso leve' },
-  { value: 'cobalto', label: 'Cobalto', meta: 'Equipe Órbita · Peso leve' },
+  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · beetleweight' },
+  { value: 'nemesis', label: 'Nêmesis', meta: 'Equipe Impacto · beetleweight' },
+  { value: 'cobalto', label: 'Cobalto', meta: 'Equipe Órbita · beetleweight' },
   {
     value: 'marte',
     label: 'Marte',
-    meta: 'Equipe Órbita · Peso leve',
+    meta: 'Equipe Órbita · beetleweight',
     disabled: true,
     disabledReason: 'Já escolhido como Robô 1',
   },
@@ -251,8 +251,8 @@ const signOuts = ref(0)
           v-model="pickedRobot"
           label="Robô 2 *"
           :options="robotOptions"
-          group-label="Participantes · Peso leve"
-          hint="Equipe Órbita · Peso leve"
+          group-label="Participantes · beetleweight"
+          hint="Equipe Órbita · beetleweight"
         />
         <SelectField
           v-model="emptyRobot"

@@ -111,7 +111,7 @@ function robot(
   owner: string,
   category: string,
   status: Robot['status'] = 'eligible',
-  weightClass: WeightClass = 'lightweight',
+  weightClass: WeightClass = 'beetleweight',
 ): Robot {
   return {
     id: `6f1c2a40-0003-4000-8000-${String(n).padStart(12, '0')}`,
@@ -128,8 +128,8 @@ function robot(
 }
 
 export const robots: Robot[] = [
-  robot(1, 'Titã', 'Equipe Volt', 'A. Moraes', 'Arrasto', 'eligible', 'heavyweight'),
-  robot(2, 'Nêmesis', 'Equipe Impacto', 'R. Silveira', 'Girante', 'eligible', 'heavyweight'),
+  robot(1, 'Titã', 'Equipe Volt', 'A. Moraes', 'Arrasto', 'eligible', 'antweight'),
+  robot(2, 'Nêmesis', 'Equipe Impacto', 'R. Silveira', 'Girante', 'eligible', 'antweight'),
   robot(3, 'Aço', 'Equipe Aço', 'C. Bianchi', 'Cunha'),
   robot(4, 'Faísca', 'Equipe Faísca', 'J. Prado', 'Girante'),
   robot(5, 'Marte', 'Equipe Órbita', 'L. Tavares', 'Arrasto', 'pending-weigh-in'),
@@ -174,7 +174,7 @@ function match(overrides: MatchOverrides): Match {
     id: matchId(overrides.number),
     championshipId: COPA_2026_ID,
     arenaId: ARENA_01_ID,
-    weightClass: 'lightweight',
+    weightClass: 'beetleweight',
     state: 'waiting',
     roundDurationSeconds: 180,
     elapsedSeconds: 0,
@@ -255,7 +255,7 @@ export const matches: Match[] = [
     order: 7,
     robotAId: robotId('Titã'),
     robotBId: robotId('Nêmesis'),
-    weightClass: 'heavyweight',
+    weightClass: 'antweight',
     state: 'running',
     elapsedSeconds: 78,
     startedAt: '2026-12-09T15:30:00.000-03:00',

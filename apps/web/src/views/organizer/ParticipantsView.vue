@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Figma: `09 / Organizador · Participantes` (node 22:336), empty state 22:487. The API has only
 // name, team and weight class, so the Aptos/Pendentes tabs, the combat category and
-// "responsável" are not built. "Categoria" shows the weight class label ("Peso leve").
+// "responsável" are not built. "Categoria" shows the API weight class as is ("beetleweight").
 import { computed, ref, watch } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import InputField from '@/components/ui/InputField.vue'
@@ -9,7 +9,6 @@ import { ApiError } from '@/api/client'
 import { deleteRobot, getChampionship, getRobots } from '@/mocks'
 import { useAuthStore } from '@/stores/auth'
 import type { Robot } from '@/types'
-import { weightClassLabel } from '@/utils/robot'
 import EmptyState from './components/EmptyState.vue'
 import LoadStatePanel from './components/LoadStatePanel.vue'
 import OrganizerBreadcrumb from './components/OrganizerBreadcrumb.vue'
@@ -171,7 +170,7 @@ async function remove(robot: Robot) {
                 {{ robot.team }}
               </td>
               <td role="cell" class="participants__cell--weight participants__weight text-mono-s">
-                {{ weightClassLabel(robot.weightClass) }}
+                {{ robot.weightClass }}
               </td>
               <td role="cell" class="participants__cell--actions">
                 <div class="participants__actions">

@@ -8,8 +8,7 @@ import { apiRequest } from './client'
 export interface ApiRobot {
   id: string
   name: string
-  /** A `WeightClass`; rows saved before weight classes were fixed may hold other text */
-  weightClass: string
+  weightClass: WeightClass
   team: string
   championshipId: string
   createdAt: string

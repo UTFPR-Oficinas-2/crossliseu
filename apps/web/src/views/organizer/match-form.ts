@@ -4,7 +4,6 @@ import { ApiError } from '@/api/client'
 import type { SelectOption } from '@/components/ui/select-field'
 import type { MatchInput } from '@/mocks'
 import type { MatchSummary, Robot } from '@/types'
-import { weightClassLabel } from '@/utils/robot'
 
 export interface MatchFormValues {
   robotAId: string
@@ -46,9 +45,9 @@ const otherSlot = (slot: MatchFormField): MatchFormField =>
   slot === 'robotAId' ? 'robotBId' : 'robotAId'
 const findRobot = (robots: Robot[], id: string) => robots.find((r) => r.id === id)
 
-/** "Equipe Órbita · Peso leve" */
+/** "Equipe Órbita · beetleweight" */
 export const robotSummary = (robot: Robot) =>
-  `${robot.team} · ${weightClassLabel(robot.weightClass)}`
+  `${robot.team} · ${robot.weightClass}`
 
 /** Hint under a picker: the picked robot's team and weight class */
 export function robotHint(robots: Robot[], robotId: string): string | undefined {
@@ -71,7 +70,7 @@ export function robotOptions(
     slot === 'robotBId' ? findRobot(robots, values.robotAId)?.weightClass : undefined
   const listed = weightClass ? robots.filter((r) => r.weightClass === weightClass) : robots
   return {
-    groupLabel: weightClass ? `Participantes · ${weightClassLabel(weightClass)}` : 'Participantes',
+    groupLabel: weightClass ? `Participantes · ${weightClass}` : 'Participantes',
     options: listed.map((robot) => {
       const taken = robot.id === values[other]
       return {
@@ -116,7 +115,7 @@ export function validateMatchForm(robots: Robot[], values: MatchFormValues): Mat
   return errors
 }
 
-/** "Prévia na lista": "Marte × Cobalto" and "Equipe Órbita × Equipe Órbita · Peso leve" */
+/** "Prévia na lista": "Marte × Cobalto" and "Equipe Órbita × Equipe Órbita · beetleweight" */
 export function matchPreview(
   robots: Robot[],
   values: MatchFormValues,
@@ -128,7 +127,7 @@ export function matchPreview(
   return {
     robotA: robotA?.name ?? 'Robô 1',
     robotB: robotB?.name ?? 'Robô 2',
-    teams: weightClass ? `${teams} · ${weightClassLabel(weightClass)}` : teams,
+    teams: weightClass ? `${teams} · ${weightClass}` : teams,
   }
 }
 

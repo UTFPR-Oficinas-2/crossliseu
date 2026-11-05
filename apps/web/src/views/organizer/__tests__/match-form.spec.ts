@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/api/client'
-import type { Robot } from '@/types'
+import type { Robot, WeightClass } from '@/types'
 import {
   MATCH_MESSAGES,
   describeSaveError,
@@ -11,7 +11,7 @@ import {
   validateMatchForm,
 } from '../match-form'
 
-const robot = (id: string, name: string, team: string, weightClass: string): Robot => ({
+const robot = (id: string, name: string, team: string, weightClass: WeightClass): Robot => ({
   id,
   championshipId: 'c1',
   name,
@@ -22,10 +22,10 @@ const robot = (id: string, name: string, team: string, weightClass: string): Rob
 })
 
 const robots = [
-  robot('tita', 'Titã', 'Equipe Volt', 'lightweight'),
-  robot('marte', 'Marte', 'Equipe Órbita', 'lightweight'),
-  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'lightweight'),
-  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'heavyweight'),
+  robot('tita', 'Titã', 'Equipe Volt', 'beetleweight'),
+  robot('marte', 'Marte', 'Equipe Órbita', 'beetleweight'),
+  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'beetleweight'),
+  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'antweight'),
 ]
 
 describe('robotOptions', () => {
@@ -40,7 +40,7 @@ describe('robotOptions', () => {
     expect(options.map((o) => o.value)).toEqual(['tita', 'marte', 'cobalto', 'bigorna'])
     expect(options[0]).toMatchObject({
       label: 'Titã',
-      meta: 'Equipe Volt · Peso leve',
+      meta: 'Equipe Volt · beetleweight',
       disabled: false,
     })
     expect(options[1]).toMatchObject({
@@ -56,7 +56,7 @@ describe('robotOptions', () => {
       'robotBId',
     )
 
-    expect(groupLabel).toBe('Participantes · Peso leve')
+    expect(groupLabel).toBe('Participantes · beetleweight')
     expect(options.map((o) => o.value)).toEqual(['tita', 'marte', 'cobalto'])
     expect(options[1]).toMatchObject({
       disabled: true,
@@ -101,7 +101,7 @@ describe('pickRobot', () => {
 
 describe('robotHint', () => {
   it('shows the team and weight class of the picked robot', () => {
-    expect(robotHint(robots, 'marte')).toBe('Equipe Órbita · Peso leve')
+    expect(robotHint(robots, 'marte')).toBe('Equipe Órbita · beetleweight')
     expect(robotHint(robots, '')).toBeUndefined()
   })
 })
@@ -133,7 +133,7 @@ describe('matchPreview', () => {
     expect(matchPreview(robots, { robotAId: 'marte', robotBId: 'cobalto' })).toEqual({
       robotA: 'Marte',
       robotB: 'Cobalto',
-      teams: 'Equipe Órbita × Equipe Órbita · Peso leve',
+      teams: 'Equipe Órbita × Equipe Órbita · beetleweight',
     })
   })
 

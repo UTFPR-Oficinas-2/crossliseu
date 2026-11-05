@@ -331,7 +331,7 @@ export interface MatchInput {
 }
 
 // Same checks and codes as `MatchesService.resolveRobots` in apps/api; returns the shared class
-function resolveDemoRobots(robots: Robot[], championshipId: string, input: MatchInput): string {
+function resolveDemoRobots(robots: Robot[], championshipId: string, input: MatchInput): WeightClass {
   if (input.robotAId === input.robotBId) throw demoError(400, 'match_robots_must_differ')
   const robotA = robots.find((r) => r.id === input.robotAId)
   const robotB = robots.find((r) => r.id === input.robotBId)

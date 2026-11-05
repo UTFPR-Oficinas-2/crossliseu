@@ -23,10 +23,10 @@ async function newChampionship() {
   return id
 }
 
-const tita: RobotInput = { name: 'Titã', team: 'Equipe Volt', weightClass: 'lightweight' }
-const marte: RobotInput = { name: 'Marte', team: 'Equipe Órbita', weightClass: 'lightweight' }
-const aco: RobotInput = { name: 'Aço', team: 'Equipe Aço', weightClass: 'lightweight' }
-const bigorna: RobotInput = { name: 'Bigorna', team: 'Equipe Bigorna', weightClass: 'heavyweight' }
+const tita: RobotInput = { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' }
+const marte: RobotInput = { name: 'Marte', team: 'Equipe Órbita', weightClass: 'beetleweight' }
+const aco: RobotInput = { name: 'Aço', team: 'Equipe Aço', weightClass: 'beetleweight' }
+const bigorna: RobotInput = { name: 'Bigorna', team: 'Equipe Bigorna', weightClass: 'antweight' }
 
 const rejection = (status: number, code: string) => ({ status, details: [code] })
 
@@ -44,14 +44,14 @@ describe('demo robot writes', () => {
     const id = await newChampionship()
     await createRobot(
       id,
-      { name: '  Titã ', team: 'Equipe   Volt', weightClass: 'lightweight' },
+      { name: '  Titã ', team: 'Equipe   Volt', weightClass: 'beetleweight' },
       't',
     )
     await createRobot(id, marte, 't')
 
     expect((await getRobots(id)).map((r) => [r.name, r.team, r.weightClass])).toEqual([
-      ['Titã', 'Equipe Volt', 'lightweight'],
-      ['Marte', 'Equipe Órbita', 'lightweight'],
+      ['Titã', 'Equipe Volt', 'beetleweight'],
+      ['Marte', 'Equipe Órbita', 'beetleweight'],
     ])
   })
 
@@ -91,7 +91,7 @@ describe('demo robot writes', () => {
 
     await expect(deleteRobot(a.id, 't')).rejects.toMatchObject(rejection(409, 'robot_has_matches'))
     await expect(
-      updateRobot(a.id, { ...tita, weightClass: 'heavyweight' }, 't'),
+      updateRobot(a.id, { ...tita, weightClass: 'antweight' }, 't'),
     ).rejects.toMatchObject(rejection(409, 'robot_has_matches'))
     await expect(updateRobot(a.id, { ...tita, team: 'Equipe Nova' }, 't')).resolves.toMatchObject({
       team: 'Equipe Nova',
@@ -118,7 +118,7 @@ describe('demo match writes', () => {
       championshipId: id,
       robotAId: a.id,
       robotBId: b.id,
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
       state: 'waiting',
     })
     expect(await getMatchSummaries(id)).toEqual([created])
@@ -148,7 +148,7 @@ describe('demo match writes', () => {
 
     await expect(
       updateMatch(created.id, { robotAId: a.id, robotBId: c.id }, 't'),
-    ).resolves.toMatchObject({ robotBId: c.id, weightClass: 'lightweight' })
+    ).resolves.toMatchObject({ robotBId: c.id, weightClass: 'beetleweight' })
     await deleteMatch(created.id, 't')
 
     expect(await getMatchSummaries(id)).toEqual([])

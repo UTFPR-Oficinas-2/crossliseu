@@ -13,7 +13,7 @@ const robot = (name: string, team: string): Robot => ({
   championshipId: 'c1',
   name,
   team,
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   createdAt: '',
   modifiedAt: '',
 })

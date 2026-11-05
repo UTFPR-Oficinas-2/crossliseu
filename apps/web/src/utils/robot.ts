@@ -8,19 +8,16 @@ export function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-/** Same values and order as `WEIGHT_CLASSES` in apps/api */
-export const WEIGHT_CLASSES: readonly WeightClass[] = ['lightweight', 'heavyweight']
-
-export const WEIGHT_CLASS_LABELS: Record<WeightClass, string> = {
-  lightweight: 'Peso leve',
-  heavyweight: 'Peso pesado',
-}
+/** Same values and order as `WEIGHT_CLASSES` in apps/api. Shown as is, never translated. */
+export const WEIGHT_CLASSES: readonly WeightClass[] = [
+  'fairyweight',
+  'antweight',
+  'beetleweight',
+  'hobbyweight',
+  'featherweight',
+  'lightweight',
+]
 
 export function isWeightClass(value: string): value is WeightClass {
   return (WEIGHT_CLASSES as readonly string[]).includes(value)
-}
-
-/** "Peso leve" / "Peso pesado". Text saved before weight classes were fixed shows as stored. */
-export function weightClassLabel(value: string): string {
-  return isWeightClass(value) ? WEIGHT_CLASS_LABELS[value] : value
 }

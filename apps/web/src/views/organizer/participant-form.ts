@@ -5,7 +5,7 @@ import { ApiError } from '@/api/client'
 import type { SelectOption } from '@/components/ui/select-field'
 import type { RobotInput } from '@/mocks'
 import type { Robot, WeightClass } from '@/types'
-import { WEIGHT_CLASSES, WEIGHT_CLASS_LABELS, isWeightClass, normalizeText } from '@/utils/robot'
+import { WEIGHT_CLASSES, isWeightClass, normalizeText } from '@/utils/robot'
 
 export interface ParticipantFormValues {
   name: string
@@ -40,15 +40,14 @@ export const emptyParticipantValues = (): ParticipantFormValues => ({
 /** "Categoria de peso" picker options */
 export const WEIGHT_CLASS_OPTIONS: SelectOption[] = WEIGHT_CLASSES.map((value) => ({
   value,
-  label: WEIGHT_CLASS_LABELS[value],
+  label: value,
 }))
 
-/** A weight class saved before the two classes existed is left blank, so the organizer picks one */
 export function participantValuesFrom(robot: Robot): ParticipantFormValues {
   return {
     name: robot.name,
     team: robot.team,
-    weightClass: isWeightClass(robot.weightClass) ? robot.weightClass : '',
+    weightClass: robot.weightClass,
   }
 }
 
@@ -83,10 +82,7 @@ export function participantPreview(values: ParticipantFormValues): {
   return {
     robot: name || 'Nome do robô',
     team: team || 'Equipe',
-    // "Peso leve" / "Peso pesado", in place of Figma's "Peso 3 kg"
-    details: isWeightClass(values.weightClass)
-      ? WEIGHT_CLASS_LABELS[values.weightClass]
-      : undefined,
+    details: isWeightClass(values.weightClass) ? values.weightClass : undefined,
   }
 }
 

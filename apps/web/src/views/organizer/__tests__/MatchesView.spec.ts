@@ -21,7 +21,7 @@ const robot = (id: string, name: string): Robot => ({
   championshipId: 'c1',
   name,
   team: 'Equipe',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
 })
 const match = (
   id: string,
@@ -32,7 +32,7 @@ const match = (
   ...base,
   id,
   championshipId: 'c1',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   robotAId,
   robotBId,
   state,

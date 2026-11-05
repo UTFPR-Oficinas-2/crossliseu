@@ -32,7 +32,7 @@ const apiRobot: ApiRobot = {
   championshipId: 'c1',
   name: 'Titã',
   team: 'Equipe Volt',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   createdAt,
   modifiedAt,
   deletedAt: null,
@@ -41,7 +41,7 @@ const apiRobot: ApiRobot = {
 const apiMatch: ApiMatch = {
   id: 'm1',
   championshipId: 'c1',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   status: 'paused',
   robotAId: 'r1',
   robotBId: 'r2',
@@ -68,7 +68,7 @@ describe('@/mocks with the API configured', () => {
         championshipId: 'c1',
         name: 'Titã',
         team: 'Equipe Volt',
-        weightClass: 'lightweight',
+        weightClass: 'beetleweight',
         createdAt,
         modifiedAt,
       },
@@ -83,7 +83,7 @@ describe('@/mocks with the API configured', () => {
       {
         id: 'm1',
         championshipId: 'c1',
-        weightClass: 'lightweight',
+        weightClass: 'beetleweight',
         robotAId: 'r1',
         robotBId: 'r2',
         state: 'paused',
@@ -99,13 +99,13 @@ describe('@/mocks with the API configured', () => {
 
     await createRobot(
       'c1',
-      { name: 'Titã', team: 'Equipe Volt', weightClass: 'lightweight' },
+      { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' },
       'tok',
     )
     await createMatch('c1', { robotAId: 'r1', robotBId: 'r2' }, 'tok')
 
     expect(postRobot).toHaveBeenCalledWith(
-      { name: 'Titã', team: 'Equipe Volt', weightClass: 'lightweight', championshipId: 'c1' },
+      { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight', championshipId: 'c1' },
       'tok',
     )
     expect(postMatch).toHaveBeenCalledWith(

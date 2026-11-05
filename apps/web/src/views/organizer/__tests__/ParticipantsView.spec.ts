@@ -6,7 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { Championship, Robot } from '@/types'
+import type { Championship, Robot, WeightClass } from '@/types'
 import ParticipantsView from '../ParticipantsView.vue'
 
 vi.mock('@/mocks', () => ({
@@ -19,7 +19,7 @@ import { deleteRobot, getChampionship, getRobots } from '@/mocks'
 const stub = { render: () => null }
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
 const championship: Championship = { ...base, id: 'c1', name: 'Copa 2026', startDate: '2026-12-09' }
-const robot = (id: string, name: string, team: string, weightClass = 'lightweight'): Robot => ({
+const robot = (id: string, name: string, team: string, weightClass: WeightClass = 'beetleweight'): Robot => ({
   ...base,
   id,
   championshipId: 'c1',
@@ -30,7 +30,7 @@ const robot = (id: string, name: string, team: string, weightClass = 'lightweigh
 const fixture = () => [
   robot('r1', 'Titã', 'Equipe Volt'),
   robot('r2', 'Aço', 'Equipe Aço'),
-  robot('r3', 'Marte', 'Equipe Volt', 'heavyweight'),
+  robot('r3', 'Marte', 'Equipe Volt', 'antweight'),
 ]
 
 let token = ''
@@ -93,7 +93,7 @@ describe('ParticipantsView', () => {
     expect(rowNames(wrapper)).toEqual(['Titã', 'Aço', 'Marte'])
     const marte = wrapper.findAll('tbody tr')[2]!
     expect(marte.text()).toContain('Equipe Volt')
-    expect(marte.text()).toContain('Peso pesado')
+    expect(marte.text()).toContain('antweight')
     expect(wrapper.text()).toContain('3 robôs inscritos · 2 equipes')
     expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
       'Meus campeonatos',
@@ -117,7 +117,7 @@ describe('ParticipantsView', () => {
     expect(rows.map((tr) => tr.get('[role="rowheader"]').text())).toEqual(['Titã', 'Aço', 'Marte'])
     const cells = rows[0]!.findAll('[role="cell"]')
     expect(cells).toHaveLength(3)
-    expect(cells.slice(0, 2).map((td) => td.text())).toEqual(['Equipe Volt', 'Peso leve'])
+    expect(cells.slice(0, 2).map((td) => td.text())).toEqual(['Equipe Volt', 'beetleweight'])
     expect(cells[2]!.findAll('a, button').map((el) => el.attributes('aria-label'))).toEqual([
       'Editar Titã',
       'Remover Titã',
