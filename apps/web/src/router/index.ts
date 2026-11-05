@@ -47,10 +47,12 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
             props: { mode: 'create' },
           },
           {
+            // There is no overview page: managing a championship opens its participants
             path: ':championshipId',
-            name: 'championship-overview',
-            component: () => import('../views/organizer/OverviewView.vue'),
-            props: true,
+            redirect: (to) => ({
+              name: 'championship-participants',
+              params: { championshipId: to.params.championshipId },
+            }),
           },
           {
             path: ':championshipId/participants',

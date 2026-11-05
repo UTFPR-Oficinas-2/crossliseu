@@ -7,7 +7,6 @@ import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import FightRow from '@/components/ui/FightRow.vue'
 import InputField from '@/components/ui/InputField.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
-import OverviewMetric from '@/components/ui/OverviewMetric.vue'
 import PublicNav from '@/components/ui/PublicNav.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import type { SelectOption } from '@/components/ui/select-field'
@@ -274,15 +273,6 @@ const signOuts = ref(0)
     </section>
 
     <section class="preview__section">
-      <h2 class="text-heading-m">Metric / Overview</h2>
-      <div class="preview__metrics">
-        <OverviewMetric :value="16" label="Robôs inscritos" />
-        <OverviewMetric :value="1234" label="Número com milhar (pt-BR)" />
-        <OverviewMetric value="3/8" label="Valor em texto" />
-      </div>
-    </section>
-
-    <section class="preview__section">
       <h2 class="text-heading-m">Row / Fight</h2>
       <div class="preview__fights">
         <FightRow v-for="fight in fights" :key="fight.fightNumber" v-bind="fight">
@@ -416,12 +406,6 @@ const signOuts = ref(0)
 .preview__tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-4);
-}
-
-.preview__metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--space-4);
 }
 

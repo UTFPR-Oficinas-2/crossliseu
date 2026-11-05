@@ -104,7 +104,7 @@
   --text-heading-xl-line-height: 1.1;
   --text-heading-xl-tracking: 0;
 
-  /* Metric / Overview value; Figma uses raw text here, not a published text style */
+  /* Numeric / L (big numerals) */
   --text-numeric-l-family: var(--font-heading);
   --text-numeric-l-weight: 700;
   --text-numeric-l-size: 36px;

@@ -51,7 +51,11 @@ async function mountView(path = '/manage') {
     routes: [
       { path: '/manage', name: 'my-championships', component: MyChampionshipsView },
       { path: '/manage/new', name: 'championship-create', component: stub },
-      { path: '/manage/:championshipId', name: 'championship-overview', component: stub },
+      {
+        path: '/manage/:championshipId/participants',
+        name: 'championship-participants',
+        component: stub,
+      },
       { path: '/championships/:championshipId', name: 'championship', component: stub },
     ],
   })
@@ -92,7 +96,7 @@ describe('MyChampionshipsView', () => {
     expect(manage[0]!.classes()).toContain('app-button--primary')
     expect(manage[1]!.classes()).toContain('app-button--secondary')
     expect(manage[2]!.classes()).toContain('app-button--secondary')
-    expect(manage[0]!.attributes('href')).toBe('/manage/c1')
+    expect(manage[0]!.attributes('href')).toBe('/manage/c1/participants')
 
     const pub = rows[0]!.findAll('a').find((a) => a.text() === 'Ver pública')!
     expect(pub.classes()).toContain('app-button--ghost')

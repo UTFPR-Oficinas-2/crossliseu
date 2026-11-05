@@ -110,7 +110,7 @@ async function onSubmit() {
       if (isUnmounted) return
       // Not dirty any more: skip the leave confirmation
       baseline.value = { ...values }
-      await router.push({ name: 'championship-overview', params: { championshipId: created.id } })
+      await router.push({ name: 'championship-participants', params: { championshipId: created.id } })
     } else {
       const updated = await updateChampionship(championshipId!, input, token)
       if (isUnmounted) return
@@ -133,7 +133,7 @@ async function onSubmit() {
 const cancelTarget = computed(() =>
   mode === 'create'
     ? { name: 'my-championships' }
-    : { name: 'championship-overview', params: { championshipId } },
+    : { name: 'championship-participants', params: { championshipId } },
 )
 
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'

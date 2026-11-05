@@ -142,7 +142,7 @@ const subtitle = computed(() => {
               <AppButton
                 :variant="c.status === 'ongoing' ? 'primary' : 'secondary'"
                 class="my-championships__action"
-                :to="{ name: 'championship-overview', params: { championshipId: c.id } }"
+                :to="{ name: 'championship-participants', params: { championshipId: c.id } }"
                 :aria-label="`Gerenciar ${c.name}`"
               >
                 Gerenciar

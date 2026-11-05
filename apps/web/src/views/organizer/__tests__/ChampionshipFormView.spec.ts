@@ -47,7 +47,11 @@ async function mountView(path: string, attach = false) {
         component: ChampionshipFormView,
         props: { mode: 'create' },
       },
-      { path: '/manage/:championshipId', name: 'championship-overview', component: stub },
+      {
+        path: '/manage/:championshipId/participants',
+        name: 'championship-participants',
+        component: stub,
+      },
       {
         path: '/manage/:championshipId/settings',
         name: 'championship-settings',
@@ -138,7 +142,7 @@ describe('ChampionshipFormView', () => {
     expect(wrapper.text()).not.toContain(FORM_MESSAGES.nameRequired)
   })
 
-  it('create: saves the trimmed input and opens the overview without confirming', async () => {
+  it('create: saves the trimmed input and opens the participants without confirming', async () => {
     vi.mocked(createChampionship).mockResolvedValue(row({ id: 'new-id' }))
     const { wrapper, router } = await mountView('/manage/new')
 
@@ -149,7 +153,7 @@ describe('ChampionshipFormView', () => {
       { name: 'Copa', startDate: '2026-12-09', endDate: '2026-12-10' },
       token,
     )
-    expect(router.currentRoute.value.name).toBe('championship-overview')
+    expect(router.currentRoute.value.name).toBe('championship-participants')
     expect(router.currentRoute.value.params.championshipId).toBe('new-id')
     expect(confirmSpy).not.toHaveBeenCalled()
   })
@@ -329,15 +333,15 @@ describe('ChampionshipFormView', () => {
     expect(router.currentRoute.value.fullPath).toBe('/manage')
   })
 
-  it('does not ask when nothing changed, and cancel goes to the overview in edit mode', async () => {
+  it('does not ask when nothing changed, and cancel goes to the participants in edit mode', async () => {
     vi.mocked(getChampionship).mockResolvedValue(row())
     const { wrapper, router } = await mountView('/manage/c1/settings')
 
-    expect(cancelLink(wrapper).attributes('href')).toBe('/manage/c1')
+    expect(cancelLink(wrapper).attributes('href')).toBe('/manage/c1/participants')
     await cancelLink(wrapper).trigger('click')
     await flushPromises()
 
     expect(confirmSpy).not.toHaveBeenCalled()
-    expect(router.currentRoute.value.fullPath).toBe('/manage/c1')
+    expect(router.currentRoute.value.fullPath).toBe('/manage/c1/participants')
   })
 })
