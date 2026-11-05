@@ -23,6 +23,8 @@ erDiagram
   users ||--o{ championships : creates
   users ||--o{ matches : creates
   users ||--o{ robots : creates
+  matches ||--o{ match_score_events : "scored in"
+  robots  ||--o{ match_score_events : "scored for"
 
   users {
     uuid id PK
@@ -72,9 +74,9 @@ erDiagram
     timestamptz deleted_at "nullable, soft delete"
   }
   match_score_events {
-    uuid id "PK"
-    uuid match_id "FK"
-    uuid robot_id "FK"
+    uuid id PK
+    uuid match_id FK
+    uuid robot_id FK
     int judge_id "(1 | 2 | 3)"
     int action "+1 | -1"
   }
