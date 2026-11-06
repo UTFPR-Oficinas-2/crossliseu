@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
+
+import { TOKEN_STORAGE_KEY } from '@/stores/auth'
+import { liveToken } from '@/stores/__tests__/token-helpers'
 
 import type { Championship } from '@/types'
 import MyChampionshipsView from '../MyChampionshipsView.vue'
 
-vi.mock('@/data', () => ({ getManagedChampionships: vi.fn<() => Promise<Championship[]>>() }))
+vi.mock('@/data', () => ({
+  getManagedChampionships: vi.fn<(token: string) => Promise<Championship[]>>(),
+}))
 import { getManagedChampionships } from '@/data'
 
 const stub = { render: () => null }
@@ -46,6 +52,7 @@ const fixture: Championship[] = [
 ]
 
 async function mountView(path = '/manage') {
+  setActivePinia(createPinia())
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -71,10 +78,19 @@ const tab = (wrapper: Wrapper, label: string) =>
   wrapper.findAll('[role="tab"]').find((t) => t.text() === label)!
 const rowNames = (wrapper: Wrapper) => wrapper.findAll('li h2').map((h) => h.text())
 
+const token = liveToken()
+
 describe('MyChampionshipsView', () => {
   beforeEach(() => {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token)
     vi.mocked(getManagedChampionships).mockReset()
     vi.mocked(getManagedChampionships).mockResolvedValue(fixture)
+  })
+
+  it('loads only the championships of the signed-in account', async () => {
+    await mountView()
+
+    expect(getManagedChampionships).toHaveBeenCalledWith(token)
   })
 
   it('renders a row per championship and a pluralised subtitle', async () => {

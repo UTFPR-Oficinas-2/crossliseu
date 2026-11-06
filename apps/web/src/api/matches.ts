@@ -48,6 +48,11 @@ export function listMatches(championshipId: string): Promise<ApiMatch[]> {
   return apiRequest(`/matches?${new URLSearchParams({ championshipId })}`)
 }
 
+/** GET /matches/:id (public). 404 `match_not_found`, 400 for a non-uuid id. */
+export function getMatchById(id: string): Promise<ApiMatch> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}`)
+}
+
 /**
  * POST /matches (JWT). 400 `match_robots_must_differ`, `robot_not_in_championship` or
  * `match_weight_class_mismatch`; 404 `robot_not_found` or `championship_not_found`.

@@ -7,6 +7,7 @@ import type * as robotsApi from '@/api/robots'
 vi.mock('@/api/championships', () => ({
   listChampionships: vi.fn<typeof championshipsApi.listChampionships>(),
   getChampionship: vi.fn<typeof championshipsApi.getChampionship>(),
+  listMyChampionships: vi.fn<typeof championshipsApi.listMyChampionships>(),
   createChampionship: vi.fn<typeof championshipsApi.createChampionship>(),
   updateChampionship: vi.fn<typeof championshipsApi.updateChampionship>(),
 }))
@@ -18,13 +19,18 @@ vi.mock('@/api/robots', () => ({
 }))
 vi.mock('@/api/matches', () => ({
   listMatches: vi.fn<typeof matchesApi.listMatches>(),
+  getMatchById: vi.fn<typeof matchesApi.getMatchById>(),
   createMatch: vi.fn<typeof matchesApi.createMatch>(),
   updateMatch: vi.fn<typeof matchesApi.updateMatch>(),
   deleteMatch: vi.fn<typeof matchesApi.deleteMatch>(),
 }))
 
-import { getChampionship as fetchChampionship } from '@/api/championships'
-import { createMatch as postMatch, listMatches, type ApiMatch } from '@/api/matches'
+import {
+  getChampionship as fetchChampionship,
+  listMyChampionships,
+  type ApiChampionship,
+} from '@/api/championships'
+import { createMatch as postMatch, getMatchById, listMatches, type ApiMatch } from '@/api/matches'
 import { createRobot as postRobot, listRobots, type ApiRobot } from '@/api/robots'
 import {
   createMatch,
@@ -32,13 +38,30 @@ import {
   getArenas,
   getChampionship,
   getMatch,
+  getManagedChampionships,
   getMatchSummaries,
+  matchChampionshipId,
+  ownsChampionship,
   getRefereeAccess,
   getRobots,
 } from '@/data'
 
 const createdAt = '2026-10-01T00:00:00.000Z'
 const modifiedAt = '2026-10-02T00:00:00.000Z'
+
+const apiChampionship: ApiChampionship = {
+  id: 'c1',
+  name: 'Copa',
+  startDate: '2026-10-04',
+  endDate: '2026-10-06',
+  status: 'ongoing',
+  robotCount: 2,
+  fightsTotal: 1,
+  fightsDone: 0,
+  createdAt,
+  modifiedAt,
+  deletedAt: null,
+}
 
 const apiRobot: ApiRobot = {
   id: 'r1',
@@ -72,6 +95,8 @@ const apiMatch: ApiMatch = {
 describe('@/data', () => {
   beforeEach(() => {
     vi.mocked(listRobots).mockReset()
+    vi.mocked(listMyChampionships).mockReset()
+    vi.mocked(getMatchById).mockReset()
     vi.mocked(listMatches).mockReset()
     vi.mocked(postRobot).mockReset()
     vi.mocked(postMatch).mockReset()
@@ -150,6 +175,37 @@ describe('@/data', () => {
     expect(await getChampionship('missing')).toBeNull()
     expect(await getChampionship('not-a-uuid')).toBeNull()
     await expect(getChampionship('c1')).rejects.toMatchObject({ status: 500 })
+  })
+
+  it('lists the managed championships from the account-scoped endpoint with the token', async () => {
+    vi.mocked(listMyChampionships).mockResolvedValueOnce([
+      { ...apiChampionship, id: 'c1' },
+      { ...apiChampionship, id: 'c2' },
+    ])
+
+    const list = await getManagedChampionships('t')
+
+    expect(listMyChampionships).toHaveBeenCalledWith('t')
+    expect(list.map((c) => c.id)).toEqual(['c1', 'c2'])
+  })
+
+  it('owns a championship only when it is in the account list', async () => {
+    vi.mocked(listMyChampionships).mockResolvedValue([{ ...apiChampionship, id: 'c1' }])
+
+    expect(await ownsChampionship('c1', 't')).toBe(true)
+    expect(await ownsChampionship('other', 't')).toBe(false)
+  })
+
+  it('resolves a match to its championship id, or null for unknown or malformed ids', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(apiMatch)
+    vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(404, 'match_not_found'))
+    vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(400, 'bad uuid'))
+    vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(500, 'boom'))
+
+    expect(await matchChampionshipId('m1')).toBe('c1')
+    expect(await matchChampionshipId('missing')).toBeNull()
+    expect(await matchChampionshipId('not-a-uuid')).toBeNull()
+    await expect(matchChampionshipId('m1')).rejects.toMatchObject({ status: 500 })
   })
 
   it('rejects data the API does not provide yet instead of serving demo data', async () => {

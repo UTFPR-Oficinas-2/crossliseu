@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
+import { matchChampionshipId, ownsChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 
 declare module 'vue-router' {
@@ -8,6 +9,9 @@ declare module 'vue-router' {
     requiresAuth?: boolean
     /** OrganizerLayout highlights this sidebar route (by name) on sub-pages such as forms */
     sidebar?: string
+    /** The route's id param names a championship (`championshipId`) or a match (`matchId`) the
+     * signed-in account must own; otherwise the visit goes to `not-found`. UX only. */
+    ownership?: 'championship' | 'match'
   }
 }
 
@@ -53,12 +57,14 @@ const appRoutes: RouteRecordRaw[] = [
       {
         path: ':championshipId/participants',
         name: 'championship-participants',
+        meta: { ownership: 'championship' },
         component: () => import('../views/organizer/ParticipantsView.vue'),
         props: true,
       },
       {
         path: ':championshipId/matches',
         name: 'championship-matches',
+        meta: { ownership: 'championship' },
         component: () => import('../views/organizer/MatchesView.vue'),
         props: true,
       },
@@ -67,7 +73,7 @@ const appRoutes: RouteRecordRaw[] = [
         name: 'participant-create',
         component: () => import('../views/organizer/ParticipantFormView.vue'),
         props: (route) => ({ mode: 'create', championshipId: route.params.championshipId }),
-        meta: { sidebar: 'championship-participants' },
+        meta: { sidebar: 'championship-participants', ownership: 'championship' },
       },
       {
         path: ':championshipId/participants/:robotId/edit',
@@ -78,14 +84,14 @@ const appRoutes: RouteRecordRaw[] = [
           championshipId: route.params.championshipId,
           robotId: route.params.robotId,
         }),
-        meta: { sidebar: 'championship-participants' },
+        meta: { sidebar: 'championship-participants', ownership: 'championship' },
       },
       {
         path: ':championshipId/matches/new',
         name: 'match-create',
         component: () => import('../views/organizer/MatchFormView.vue'),
         props: (route) => ({ mode: 'create', championshipId: route.params.championshipId }),
-        meta: { sidebar: 'championship-matches' },
+        meta: { sidebar: 'championship-matches', ownership: 'championship' },
       },
       {
         path: ':championshipId/matches/:matchId/edit',
@@ -96,11 +102,12 @@ const appRoutes: RouteRecordRaw[] = [
           championshipId: route.params.championshipId,
           matchId: route.params.matchId,
         }),
-        meta: { sidebar: 'championship-matches' },
+        meta: { sidebar: 'championship-matches', ownership: 'championship' },
       },
       {
         path: ':championshipId/settings',
         name: 'championship-settings',
+        meta: { ownership: 'championship' },
         component: () => import('../views/organizer/ChampionshipFormView.vue'),
         props: (route) => ({ mode: 'edit', championshipId: route.params.championshipId }),
       },
@@ -115,6 +122,7 @@ const appRoutes: RouteRecordRaw[] = [
         // One view with three states: preparation, running, closing
         path: ':matchId',
         name: 'match-operation',
+        meta: { ownership: 'match' },
         component: () => import('../views/operator/MatchOperationView.vue'),
         props: true,
       },
@@ -185,11 +193,26 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (to.name === 'sign-in' && auth.isAuthenticated) return { name: 'home' }
   if (to.matched.some((record) => record.meta.requiresAuth) && !auth.isAuthenticated) {
     return { name: 'sign-in', query: { redirect: to.fullPath } }
+  }
+
+  const ownership = to.meta.ownership
+  if (ownership && auth.token) {
+    try {
+      const championshipId =
+        ownership === 'match'
+          ? await matchChampionshipId(String(to.params.matchId))
+          : String(to.params.championshipId)
+      const owned = championshipId !== null && (await ownsChampionship(championshipId, auth.token))
+      if (!owned) return { name: 'not-found', params: { pathMatch: to.path.slice(1).split('/') } }
+    } catch (error) {
+      // The API refuses writes to other accounts' championships anyway: don't lock out on a hiccup
+      console.error('Ownership check failed', error)
+    }
   }
 })
 

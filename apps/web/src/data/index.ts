@@ -6,6 +6,7 @@ import {
   createChampionship as postChampionship,
   getChampionship as fetchChampionship,
   listChampionships,
+  listMyChampionships,
   updateChampionship as patchChampionship,
   type ApiChampionship,
 } from '@/api/championships'
@@ -13,6 +14,7 @@ import { login } from '@/api/auth'
 import {
   createMatch as postMatch,
   deleteMatch as removeMatch,
+  getMatchById,
   listMatches,
   updateMatch as patchMatch,
   type ApiMatch,
@@ -76,12 +78,24 @@ export async function getChampionship(id: string): Promise<Championship | null> 
   }
 }
 
-/**
- * Championships the signed-in organizer can manage. The API has no roles yet, so this is every
- * championship.
- */
-export async function getManagedChampionships(): Promise<Championship[]> {
-  return (await listChampionships()).map(toChampionship)
+/** GET /championships/mine (JWT): the championships the signed-in account owns */
+export async function getManagedChampionships(token: string): Promise<Championship[]> {
+  return (await listMyChampionships(token)).map(toChampionship)
+}
+
+/** Whether the signed-in account owns the championship. Unknown or malformed ids are not owned. */
+export async function ownsChampionship(championshipId: string, token: string): Promise<boolean> {
+  return (await listMyChampionships(token)).some((c) => c.id === championshipId)
+}
+
+/** Championship of a match (GET /matches/:id). Unknown or malformed ids resolve to `null`. */
+export async function matchChampionshipId(matchId: string): Promise<string | null> {
+  try {
+    return (await getMatchById(matchId)).championshipId
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return null
+    throw error
+  }
 }
 
 /** POST /championships (JWT) */
