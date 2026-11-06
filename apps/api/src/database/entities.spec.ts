@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import type { EntityTarget, ObjectLiteral } from 'typeorm';
+import { Arena } from '../modules/arenas/entities/arena.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
 import { Match } from '../modules/matches/entities/match.entity.js';
 import { MatchPause } from '../modules/matches/entities/match-pause.entity.js';
@@ -12,6 +13,7 @@ async function buildDataSource(): Promise<DataSource> {
     const dataSource = new DataSource({
         type: 'postgres',
         entities: [
+            Arena,
             Championship,
             Match,
             MatchPause,
@@ -75,6 +77,7 @@ describe('entity metadata', () => {
 
     it('match references its championship, creator, both robots and the winner', async () => {
         expect(await foreignKeys(Match)).toEqual([
+            'arena_id → arenas',
             'championship_id → championships',
             'created_by_user_id → users',
             'robot_a_id → robots',
@@ -85,6 +88,7 @@ describe('entity metadata', () => {
 
     it('match has the diagram columns', async () => {
         expect(await columnNames(Match)).toEqual([
+            'arena_id',
             'championship_id',
             'created_at',
             'created_by_user_id',
@@ -105,12 +109,51 @@ describe('entity metadata', () => {
 
     it('only the outcome, timing and audit columns of a match are nullable', async () => {
         expect(await nullableColumns(Match)).toEqual([
+            'arena_id',
             'deleted_at',
             'end_reason',
             'finished_at',
             'started_at',
             'winner_robot_id',
         ]);
+    });
+
+    it('arena references its current match', async () => {
+        expect(await foreignKeys(Arena)).toEqual([
+            'current_match_id → matches',
+        ]);
+    });
+
+    it('arena has the device and current match columns', async () => {
+        expect(await columnNames(Arena)).toEqual([
+            'created_at',
+            'current_match_id',
+            'deleted_at',
+            'device_id',
+            'id',
+            'modified_at',
+            'name',
+            'token_hash',
+        ]);
+    });
+
+    it('only the current match and deleted_at of an arena are nullable', async () => {
+        expect(await nullableColumns(Arena)).toEqual([
+            'current_match_id',
+            'deleted_at',
+        ]);
+    });
+
+    it.each([
+        'UQ_arenas_name',
+        'UQ_arenas_device_id',
+        'UQ_arenas_current_match_id',
+    ])('arena declares %s', async (name) => {
+        const dataSource = await buildDataSource();
+
+        expect(
+            dataSource.getMetadata(Arena).uniques.map((unique) => unique.name),
+        ).toContain(name);
     });
 
     it('score event references its match and robot', async () => {
