@@ -64,7 +64,7 @@ docker compose exec api npm run seed:admin
 | API | <http://localhost:3000> |
 | Swagger | <http://localhost:3000/docs> |
 
-Use `POSTGRES_HOST=postgres` in `.env`. In this mode the web app has no `VITE_API_URL`, so it shows demo data; see the [web guide](apps/web/README.md#configuration) to connect it to the API.
+Use `POSTGRES_HOST=postgres` in `.env`. Compose sets `VITE_API_URL=/api` for the web container, so the web app talks to the API through the Vite proxy; see the [web guide](apps/web/README.md#configuration). The prototype screens listed there still use mock data.
 
 ### Option B: run the apps on your machine
 

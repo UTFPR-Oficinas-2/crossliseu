@@ -28,6 +28,8 @@ services:
 
     environment:
       - NODE_ENV=development
+      # Without this the dev server shows demo data instead of calling the API
+      - VITE_API_URL=/api
       # Vite dev proxy target for VITE_API_URL=/api (see apps/web/vite.config.ts)
       - API_PROXY_TARGET=http://api:3000
 
