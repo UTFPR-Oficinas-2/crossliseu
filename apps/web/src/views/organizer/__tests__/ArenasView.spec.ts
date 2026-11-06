@@ -69,6 +69,7 @@ const button = (w: Wrapper, label: string, index = 0) =>
 const rows = (w: Wrapper) => w.findAll('li')
 
 async function createArenaNamed(w: Wrapper, name: string) {
+  if (!w.find('form').exists()) await button(w, 'Nova arena').trigger('click')
   await w.find('input').setValue(name)
   await w.find('form').trigger('submit')
   await flushPromises()
@@ -128,8 +129,8 @@ describe('ArenasView', () => {
     expect(rows(w)).toHaveLength(3)
     expect(w.find('pre').text()).toBe(buildArenaConfig('Arena 3', credentials).trim())
     expect(w.text()).toContain('Copie agora')
-    expect(w.text()).toContain('não será mostrado novamente')
-    expect(w.text()).toContain('a caixa antiga parar de conectar')
+    expect(w.text()).toContain('não aparece de novo')
+    expect(w.text()).toContain('a caixa antiga deixa de conectar')
   })
 
   it('validates the name on the client', async () => {
@@ -251,6 +252,23 @@ describe('ArenasView', () => {
     await button(w, 'Cancelar').trigger('click')
     expect(rows(w)[0]!.text()).toContain('Arena 1')
     expect(rows(w)[0]!.text()).not.toContain('Arena 2 ')
+  })
+
+  it('opens the form from "Nova arena" and closes it with Cancelar', async () => {
+    const w = await mountView()
+    expect(w.find('form').exists()).toBe(false)
+
+    await button(w, 'Nova arena').trigger('click')
+    expect(w.find('form').text()).toContain('Aparece para o operador e na caixa da arena.')
+    await button(w, 'Cancelar').trigger('click')
+    expect(w.find('form').exists()).toBe(false)
+  })
+
+  it('dismisses the panel with Pronto', async () => {
+    const w = await mountView()
+    await createArenaNamed(w, 'Arena 3')
+    await button(w, 'Pronto').trigger('click')
+    expect(w.find('pre').exists()).toBe(false)
   })
 
   it('clears the panel when another arena is created, and keeps nothing in storage', async () => {

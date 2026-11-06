@@ -6,6 +6,8 @@ import { ARENA_CONFIG_FILENAME } from '@/utils/arena-config'
 
 const { arenaName, config } = defineProps<{ arenaName: string; config: string }>()
 
+defineEmits<{ done: [] }>()
+
 const copied = ref(false)
 const copyFailed = ref(false)
 
@@ -33,16 +35,17 @@ async function copy() {
 <template>
   <section class="credentials" aria-labelledby="credentials-title">
     <h2 id="credentials-title" class="credentials__title text-heading-m">
-      Configuração da arena {{ arenaName }}
+      Token da {{ arenaName }}
     </h2>
-    <p class="credentials__warning text-body-m" role="status">
-      Copie agora: este arquivo não será mostrado novamente. Gerar um novo token faz a caixa antiga
-      parar de conectar.
+    <p class="credentials__warning text-body-s" role="status">
+      Copie agora e grave no firmware da caixa. Este arquivo não aparece de novo; se perder, gere um
+      novo token (a caixa antiga deixa de conectar).
     </p>
-    <pre class="credentials__code text-mono-s">{{ config }}</pre>
+    <pre class="credentials__code text-mono-m">{{ config }}</pre>
     <div class="credentials__actions">
       <AppButton @click="download">Baixar {{ ARENA_CONFIG_FILENAME }}</AppButton>
       <AppButton variant="secondary" @click="copy">Copiar</AppButton>
+      <AppButton variant="ghost" @click="$emit('done')">Pronto</AppButton>
       <span v-if="copied" class="credentials__feedback text-body-s" aria-live="polite">
         Copiado.
       </span>
@@ -57,7 +60,7 @@ async function copy() {
 .credentials {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-14px);
   padding: var(--space-6);
   border: 1px solid var(--color-orange);
   border-radius: var(--radius-sm);
@@ -71,7 +74,7 @@ async function copy() {
 }
 
 .credentials__warning {
-  color: var(--color-text);
+  color: var(--color-muted);
 }
 
 .credentials__code {
@@ -81,7 +84,7 @@ async function copy() {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg);
-  color: var(--color-text);
+  color: var(--color-orange);
   user-select: all;
 }
 

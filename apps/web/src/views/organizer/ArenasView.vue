@@ -41,9 +41,22 @@ const busy = ref(false)
 const rowError = ref<{ id: string; message: string } | null>(null)
 
 // Create
+const creating = ref(false)
 const newName = ref('')
 const newNameError = ref('')
 const createError = ref('')
+
+function openCreate() {
+  panel.value = null
+  newName.value = ''
+  newNameError.value = ''
+  createError.value = ''
+  creating.value = true
+}
+
+function closeCreate() {
+  creating.value = false
+}
 
 async function create() {
   panel.value = null
@@ -56,7 +69,7 @@ async function create() {
     const created = await addArena(name, auth.token ?? '')
     arenas.value = [...arenas.value, created.arena]
     showCredentials(created.arena.name, created.credentials)
-    newName.value = ''
+    creating.value = false
   } catch (e) {
     const { kind, message } = describeArenaError(e)
     if (kind === 'name') newNameError.value = message
@@ -150,12 +163,22 @@ const rows = computed(() =>
 
 <template>
   <div class="arenas">
-    <header class="arenas__titles">
-      <h1 class="arenas__title text-display-page">Arenas</h1>
-      <p class="arenas__muted text-body-m">
-        Cada arena tem uma caixa (ESP32) com identificador e token próprios. As arenas valem para
-        todos os campeonatos. Só você vê as suas arenas.
-      </p>
+    <header class="arenas__header">
+      <div class="arenas__titles">
+        <h1 class="arenas__title text-display-page">Arenas</h1>
+        <p class="arenas__muted text-body-m">
+          Cada arena tem uma caixa (ESP32) com identificador e token próprios. As arenas valem para
+          todos os campeonatos. Só você vê as suas arenas.
+        </p>
+      </div>
+      <AppButton
+        v-if="loadState === 'ready'"
+        class="arenas__new"
+        :disabled="creating"
+        @click="openCreate"
+      >
+        Nova arena
+      </AppButton>
     </header>
 
     <LoadStatePanel
@@ -169,22 +192,29 @@ const rows = computed(() =>
     />
 
     <template v-else>
-      <form class="arenas__create" novalidate @submit.prevent="create">
-        <InputField
-          v-model="newName"
-          class="arenas__create-field"
-          label="Nova arena"
-          placeholder="Ex.: Arena principal"
-          autocomplete="off"
-          :error="newNameError"
-        />
-        <AppButton type="submit" class="arenas__create-button" :disabled="busy">
-          Adicionar arena
-        </AppButton>
+      <form v-if="creating" class="arenas__form" novalidate @submit.prevent="create">
+        <h2 class="arenas__form-title text-heading-m">Nova arena</h2>
+        <div class="arenas__form-row">
+          <InputField
+            v-model="newName"
+            class="arenas__form-field"
+            label="Nome da arena *"
+            hint="Aparece para o operador e na caixa da arena."
+            autocomplete="off"
+            :error="newNameError"
+          />
+          <AppButton variant="ghost" @click="closeCreate">Cancelar</AppButton>
+          <AppButton type="submit" :disabled="busy">Criar arena</AppButton>
+        </div>
+        <p v-if="createError" class="arenas__error text-body-s" role="alert">{{ createError }}</p>
       </form>
-      <p v-if="createError" class="arenas__error text-body-s" role="alert">{{ createError }}</p>
 
-      <ArenaCredentialsPanel v-if="panel" :arena-name="panel.arenaName" :config="panel.config" />
+      <ArenaCredentialsPanel
+        v-if="panel"
+        :arena-name="panel.arenaName"
+        :config="panel.config"
+        @done="panel = null"
+      />
 
       <p v-if="arenas.length === 0" class="arenas__muted text-body-m">
         Nenhuma arena ainda. Adicione uma para gerar o config.h da sua caixa.
@@ -200,7 +230,7 @@ const rows = computed(() =>
             >
               <InputField
                 v-model="editName"
-                class="arenas__create-field"
+                class="arenas__form-field"
                 label="Novo nome"
                 hide-label
                 autocomplete="off"
@@ -257,10 +287,20 @@ const rows = computed(() =>
   gap: var(--space-28px);
 }
 
+.arenas__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
 .arenas__titles {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .arenas__title {
@@ -272,20 +312,35 @@ const rows = computed(() =>
   color: var(--color-muted);
 }
 
-.arenas__create,
+.arenas__new {
+  min-height: var(--size-control-lg);
+}
+
+.arenas__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--color-orange);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+}
+
+.arenas__form-title {
+  color: var(--color-text);
+  text-transform: uppercase;
+}
+
+.arenas__form-row,
 .arenas__rename {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--space-4);
 }
 
-.arenas__create-field {
+.arenas__form-field {
   flex: 1 1 16rem;
-}
-
-.arenas__create-button {
-  min-height: var(--size-control-lg);
 }
 
 .arenas__list {
