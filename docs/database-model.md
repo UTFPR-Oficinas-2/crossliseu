@@ -14,6 +14,9 @@ match is deleted. `matches.arena_id` is the history of where a match was played,
 written when the match starts. `arenas.name` and `arenas.device_id` are unique;
 `token_hash` is the bcrypt hash of the device token (`npm run seed:arena`).
 
+`championships.created_by_user_id` is the owning account. Robots and matches
+belong to that account through their championship.
+
 The migrations in `apps/api/src/database/migrations/` stay the source of truth
 for what is deployed. Update this diagram when a new migration changes the
 schema.
