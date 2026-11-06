@@ -38,7 +38,7 @@ Each physical arena box is flashed with its `deviceId` and `token`. Both come fr
 The server handles a new socket in this order:
 
 1. **Wait for `hello`.** If no `hello` arrives within 5 s of opening the socket, close with `4002`. Any other message before `welcome` is answered with `error` (`not_authenticated`) and ignored; the 5 s limit keeps running.
-2. **Check credentials.** If `deviceId` / `token` are wrong, or a field is missing or has the wrong type, close with `4001`.
+2. **Check credentials.** If `deviceId` / `token` are wrong, the arena is unknown or has been deleted (only live arenas are accepted), or a field is missing or has the wrong type, close with `4001`.
 3. **Check the version.** If `protocol` is not supported, close with `4004`.
 4. **Replace any older connection.** If another socket is already logged in with the same `deviceId`, close that old one with `4003`. This happens only here, after the new socket proved its credentials, so a socket that merely knows a `deviceId` cannot knock a box offline.
 5. **Accept.** Reply `welcome`, then immediately a `state`.
@@ -73,7 +73,7 @@ Sent once, as the first message on every new connection.
 | `protocol` | integer | Protocol version the firmware speaks; currently `1` |
 
 ```json
-{ "event": "hello", "data": { "deviceId": "arena-01", "token": "k3V9...q7", "protocol": 1 } }
+{ "event": "hello", "data": { "deviceId": "arena-da-garagem-7f3a", "token": "k3V9...q7", "protocol": 1 } }
 ```
 
 #### `surrender`
@@ -244,7 +244,7 @@ WebSocket close codes 4000–4999 are reserved for applications; these are ours.
 
 | Code | Sent by server when | Box should |
 | --- | --- | --- |
-| `4001` | `deviceId` / `token` is wrong, or `hello` is malformed | Show "not connected" (bad config) and retry every 60 s |
+| `4001` | `deviceId` / `token` is wrong, the arena is unknown or deleted, or `hello` is malformed | Show "not connected" (bad config) and retry every 60 s |
 | `4002` | No `hello` within 5 s of opening | Retry with normal backoff |
 | `4003` | A newer connection with the same `deviceId` logged in and replaced this one | **Stop retrying** until rebooted, so two boxes do not keep replacing each other |
 | `4004` | `protocol` version is not supported | Show "not connected" (update firmware) and retry every 60 s |

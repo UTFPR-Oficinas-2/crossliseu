@@ -17,7 +17,8 @@ function download() {
   link.href = url
   link.download = ARENA_CONFIG_FILENAME
   link.click()
-  URL.revokeObjectURL(url)
+  // Safari can cancel the download if the URL is revoked right away
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 async function copy() {

@@ -31,9 +31,13 @@ async function load() {
 onMounted(load)
 
 // Local only, gone on unmount; cleared by every other action
-const panel = ref<{ arenaName: string; config: string } | null>(null)
-function showCredentials(arenaName: string, credentials: DeviceCredentials) {
-  panel.value = { arenaName, config: buildArenaConfig(arenaName, credentials) }
+const panel = ref<{ arenaId: string; arenaName: string; config: string } | null>(null)
+function showCredentials(arena: ManagedArena, credentials: DeviceCredentials) {
+  panel.value = {
+    arenaId: arena.id,
+    arenaName: arena.name,
+    config: buildArenaConfig(arena.name, credentials),
+  }
 }
 
 const busy = ref(false)
@@ -47,7 +51,6 @@ const newNameError = ref('')
 const createError = ref('')
 
 function openCreate() {
-  panel.value = null
   newName.value = ''
   newNameError.value = ''
   createError.value = ''
@@ -59,7 +62,6 @@ function closeCreate() {
 }
 
 async function create() {
-  panel.value = null
   createError.value = ''
   const { name, error } = validateArenaName(newName.value)
   newNameError.value = error ?? ''
@@ -68,7 +70,7 @@ async function create() {
   try {
     const created = await addArena(name, auth.token ?? '')
     arenas.value = [...arenas.value, created.arena]
-    showCredentials(created.arena.name, created.credentials)
+    showCredentials(created.arena, created.credentials)
     creating.value = false
   } catch (e) {
     const { kind, message } = describeArenaError(e)
@@ -85,7 +87,6 @@ const editName = ref('')
 const editError = ref('')
 
 function startRename(arena: ManagedArena) {
-  panel.value = null
   rowError.value = null
   editingId.value = arena.id
   editName.value = arena.name
@@ -97,6 +98,7 @@ function cancelRename() {
 }
 
 async function saveRename(arena: ManagedArena) {
+  rowError.value = null
   const { name, error } = validateArenaName(editName.value)
   editError.value = error ?? ''
   if (error || busy.value) return
@@ -104,6 +106,8 @@ async function saveRename(arena: ManagedArena) {
   try {
     const updated = await renameArena(arena.id, name, auth.token ?? '')
     arenas.value = arenas.value.map((a) => (a.id === arena.id ? updated : a))
+    // The config.h names the old arena name
+    if (panel.value?.arenaId === arena.id) panel.value = null
     editingId.value = null
   } catch (e) {
     const { kind, message } = describeArenaError(e)
@@ -115,7 +119,6 @@ async function saveRename(arena: ManagedArena) {
 }
 
 async function rotate(arena: ManagedArena) {
-  panel.value = null
   rowError.value = null
   if (
     !window.confirm(
@@ -127,7 +130,7 @@ async function rotate(arena: ManagedArena) {
   busy.value = true
   try {
     const credentials = await newArenaToken(arena.id, auth.token ?? '')
-    showCredentials(arena.name, credentials)
+    showCredentials(arena, credentials)
   } catch (e) {
     rowError.value = { id: arena.id, message: describeArenaError(e).message }
   } finally {
@@ -136,7 +139,6 @@ async function rotate(arena: ManagedArena) {
 }
 
 async function remove(arena: ManagedArena) {
-  panel.value = null
   rowError.value = null
   if (
     !window.confirm(
@@ -149,6 +151,7 @@ async function remove(arena: ManagedArena) {
   try {
     await removeArena(arena.id, auth.token ?? '')
     arenas.value = arenas.value.filter((a) => a.id !== arena.id)
+    if (panel.value?.arenaId === arena.id) panel.value = null
   } catch (e) {
     rowError.value = { id: arena.id, message: describeArenaError(e).message }
   } finally {

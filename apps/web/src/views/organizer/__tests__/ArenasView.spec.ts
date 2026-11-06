@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -58,7 +58,13 @@ async function mountView() {
     ],
   })
   await router.push('/manage/arenas')
-  const wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+  const wrapper = mount(
+    { template: '<RouterView />' },
+    {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    },
+  )
   await flushPromises()
   return wrapper
 }
@@ -74,6 +80,8 @@ async function createArenaNamed(w: Wrapper, name: string) {
   await w.find('form').trigger('submit')
   await flushPromises()
 }
+
+enableAutoUnmount(afterEach)
 
 describe('ArenasView', () => {
   beforeEach(() => {
@@ -163,17 +171,23 @@ describe('ArenasView', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     const w = await mountView()
     await createArenaNamed(w, 'Arena 3')
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
 
     await button(w, 'Baixar config.h').trigger('click')
     const blob = (createObjectURL.mock.calls as unknown as [Blob][])[0]![0]
     expect(blob).toBeInstanceOf(Blob)
     expect(await blob.text()).toBe(buildArenaConfig('Arena 3', credentials))
     expect(click).toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:x')
     const anchor = click.mock.contexts[0] as HTMLAnchorElement
     expect(anchor.download).toBe('config.h')
 
     await button(w, 'Copiar').trigger('click')
     expect(writeText).toHaveBeenCalledWith(buildArenaConfig('Arena 3', credentials))
+    vi.useRealTimers()
+    w.unmount()
   })
 
   it('asks before a new token; declining does nothing, accepting shows the panel', async () => {
@@ -271,28 +285,115 @@ describe('ArenasView', () => {
     expect(w.find('pre').exists()).toBe(false)
   })
 
-  it('clears the panel when another arena is created, and keeps nothing in storage', async () => {
+  it('keeps the panel through a declined rotate or remove confirm and when the form opens', async () => {
+    vi.mocked(newArenaToken).mockResolvedValue(rotated)
+    const confirm = vi.mocked(window.confirm)
+    const w = await mountView()
+    await createArenaNamed(w, 'Arena 3')
+    const config = buildArenaConfig('Arena 3', credentials).trim()
+
+    confirm.mockReturnValueOnce(false)
+    await button(w, 'Gerar novo token').trigger('click')
+    expect(w.find('pre').text()).toBe(config)
+
+    confirm.mockReturnValueOnce(false)
+    await button(w, 'Remover').trigger('click')
+    expect(w.find('pre').text()).toBe(config)
+
+    await button(w, 'Nova arena').trigger('click')
+    expect(w.find('form').exists()).toBe(true)
+    expect(w.find('pre').text()).toBe(config)
+
+    await button(w, 'Renomear').trigger('click')
+    expect(w.find('pre').text()).toBe(config)
+    w.unmount()
+  })
+
+  it('replaces the panel when a second arena is created, even after a failed attempt', async () => {
     const w = await mountView()
     await createArenaNamed(w, 'Arena 3')
     expect(w.find('pre').text()).toContain('plain-secret-token')
 
     vi.mocked(addArena).mockRejectedValueOnce(new ApiError(0, 'offline'))
     await createArenaNamed(w, 'Arena 4')
-    expect(w.find('pre').exists()).toBe(false)
+    expect(w.find('pre').text()).toContain('plain-secret-token')
 
+    const second: DeviceCredentials = {
+      ...credentials,
+      deviceId: 'arena-5-aa11',
+      token: 'second-tok',
+    }
+    vi.mocked(addArena).mockResolvedValueOnce({
+      arena: { id: 'a5', name: 'Arena 5', deviceId: 'arena-5-aa11', currentMatch: null },
+      credentials: second,
+    })
+    await createArenaNamed(w, 'Arena 5')
+    expect(w.find('pre').text()).toBe(buildArenaConfig('Arena 5', second).trim())
+    expect(w.find('pre').text()).not.toContain('plain-secret-token')
+    w.unmount()
+  })
+
+  it('keeps the token only in the component: nothing in storage, gone after unmount', async () => {
+    const w = await mountView()
     await createArenaNamed(w, 'Arena 3')
+
+    expect(document.body.innerHTML).toContain('plain-secret-token')
     expect(JSON.stringify({ ...localStorage })).not.toContain('plain-secret-token')
     expect(JSON.stringify({ ...sessionStorage })).not.toContain('plain-secret-token')
     w.unmount()
     expect(document.body.innerHTML).not.toContain('plain-secret-token')
   })
 
-  it('clears the panel on remove and rename of another arena', async () => {
+  it('clears the panel when its own arena is removed, not when another is', async () => {
     vi.mocked(removeArena).mockResolvedValue()
     const w = await mountView()
     await createArenaNamed(w, 'Arena 3')
+
+    await button(w, 'Remover', 1).trigger('click')
+    await flushPromises()
+    expect(w.find('pre').exists()).toBe(true)
+
     await button(w, 'Remover', 1).trigger('click')
     await flushPromises()
     expect(w.find('pre').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('clears the panel when its own arena is renamed, not when another is', async () => {
+    vi.mocked(renameArena).mockImplementation((id, name) =>
+      Promise.resolve({ id, name, deviceId: 'x', currentMatch: null }),
+    )
+    const w = await mountView()
+    await createArenaNamed(w, 'Arena 3')
+
+    await button(w, 'Renomear').trigger('click')
+    await rows(w)[0]!.find('input').setValue('Outra')
+    await rows(w)[0]!.find('form').trigger('submit')
+    await flushPromises()
+    expect(w.find('pre').exists()).toBe(true)
+
+    await button(w, 'Renomear', 2).trigger('click')
+    await rows(w)[2]!.find('input').setValue('Terceira')
+    await rows(w)[2]!.find('form').trigger('submit')
+    await flushPromises()
+    expect(w.find('pre').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('drops an old row error after a successful rename', async () => {
+    vi.mocked(removeArena).mockRejectedValueOnce(
+      new ApiError(409, 'Conflict', ['arena_match_live']),
+    )
+    vi.mocked(renameArena).mockResolvedValue({ ...arenas[0]!, name: 'Principal' })
+    const w = await mountView()
+    await button(w, 'Remover').trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('Esta arena está com uma luta em andamento')
+
+    await button(w, 'Renomear').trigger('click')
+    await rows(w)[0]!.find('form').trigger('submit')
+    await flushPromises()
+    expect(w.text()).not.toContain('Esta arena está com uma luta em andamento')
+    w.unmount()
   })
 })
