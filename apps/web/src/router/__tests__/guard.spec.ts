@@ -79,6 +79,28 @@ describe('ownership guard', () => {
     expect(ownsChampionship).toHaveBeenCalledWith('mine', token)
   })
 
+  it('does not recheck ownership while the managed championship is unchanged', async () => {
+    signIn()
+    await router.push('/manage/mine/participants')
+    expect(ownsChampionship).toHaveBeenCalledTimes(1)
+
+    await router.push({ path: '/manage/mine/participants', query: { filter: 'x' } })
+    await router.push('/manage/mine/matches')
+
+    expect(router.currentRoute.value.name).toBe('championship-matches')
+    expect(ownsChampionship).toHaveBeenCalledTimes(1)
+  })
+
+  it('rechecks ownership when moving to another championship', async () => {
+    signIn()
+    await router.push('/manage/mine/participants')
+
+    await router.push('/manage/other/participants')
+
+    expect(ownsChampionship).toHaveBeenCalledTimes(2)
+    expect(router.currentRoute.value.name).toBe('not-found')
+  })
+
   it('follows the bare championship redirect for an owned championship', async () => {
     signIn()
 

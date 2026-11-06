@@ -193,7 +193,7 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   const auth = useAuthStore()
   if (to.name === 'sign-in' && auth.isAuthenticated) return { name: 'home' }
   if (to.matched.some((record) => record.meta.requiresAuth) && !auth.isAuthenticated) {
@@ -201,7 +201,12 @@ router.beforeEach(async (to) => {
   }
 
   const ownership = to.meta.ownership
-  if (ownership && auth.token) {
+  // Query-only navigations (filter tabs) and tab switches keep the same managed id: already checked
+  const sameId =
+    ownership === 'match'
+      ? to.params.matchId === from.params.matchId
+      : to.params.championshipId === from.params.championshipId
+  if (ownership && auth.token && !sameId) {
     try {
       const championshipId =
         ownership === 'match'
