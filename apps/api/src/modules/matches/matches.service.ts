@@ -26,8 +26,11 @@ export class MatchesService {
         const { championshipId, robotAId, robotBId, scheduledAt } =
             createMatchDto;
 
-        // Throws championship_not_found when it does not exist
-        await this.championshipsService.findOne(championshipId);
+        // Throws championship_not_found when it does not exist or is not the caller's
+        await this.championshipsService.findOwned(
+            championshipId,
+            createdByUserId,
+        );
 
         this.assertRobotsDiffer(robotAId, robotBId);
 
@@ -70,8 +73,9 @@ export class MatchesService {
         return match;
     }
 
-    async update(id: string, updateMatchDto: UpdateMatchDto) {
+    async update(id: string, updateMatchDto: UpdateMatchDto, userId: string) {
         const match = await this.findOne(id);
+        await this.assertOwned(match, userId);
         this.assertEditable(match);
 
         const robotAId = updateMatchDto.robotAId ?? match.robotAId;
@@ -102,8 +106,9 @@ export class MatchesService {
         return this.findOne(id);
     }
 
-    async remove(id: string) {
+    async remove(id: string, userId: string) {
         const match = await this.findOne(id);
+        await this.assertOwned(match, userId);
         this.assertEditable(match);
 
         const removed = await this.matchesRepository.softDeleteIf(id, {
@@ -125,6 +130,19 @@ export class MatchesService {
         // Still scheduled, yet the write missed: report the conflict rather than pretend it saved
         this.logger.error('match_not_editable', { id, state: match.state });
         throw new ConflictException('match_not_editable');
+    }
+
+    /** A match in someone else's championship answers exactly like an unknown one */
+    private async assertOwned(match: Match, userId: string) {
+        if (
+            !(await this.championshipsService.isOwnedBy(
+                match.championshipId,
+                userId,
+            ))
+        ) {
+            this.logger.warn('match_not_found', { id: match.id });
+            throw new NotFoundException('match_not_found');
+        }
     }
 
     /** Only matches that have not started (`scheduled`) can be edited or deleted */

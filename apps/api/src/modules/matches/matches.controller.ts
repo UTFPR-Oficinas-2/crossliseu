@@ -52,13 +52,17 @@ export class MatchesController {
     update(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateMatchDto: UpdateMatchDto,
+        @CurrentUserId() userId: string,
     ) {
-        return this.matchesService.update(id, updateMatchDto);
+        return this.matchesService.update(id, updateMatchDto, userId);
     }
 
     @Delete(':id')
     @HttpCode(HttpStatus.NO_CONTENT)
-    remove(@Param('id', ParseUUIDPipe) id: string) {
-        return this.matchesService.remove(id);
+    remove(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.matchesService.remove(id, userId);
     }
 }
