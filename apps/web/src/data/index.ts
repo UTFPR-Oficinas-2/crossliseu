@@ -10,6 +10,14 @@ import {
   updateChampionship as patchChampionship,
   type ApiChampionship,
 } from '@/api/championships'
+import {
+  createArena,
+  deleteArena,
+  listArenas,
+  renameArena as patchArena,
+  rotateArenaToken,
+  type ApiArena,
+} from '@/api/arenas'
 import { login } from '@/api/auth'
 import {
   createMatch as postMatch,
@@ -29,6 +37,8 @@ import {
 import type {
   Arena,
   Championship,
+  DeviceCredentials,
+  ManagedArena,
   Match,
   MatchSummary,
   RefereeAccess,
@@ -212,7 +222,48 @@ export async function deleteMatch(id: string, token: string): Promise<void> {
 // error instead of inventing endpoints; replace each with a request once the API provides it.
 const notImplemented = () => new ApiError(501, 'not_implemented', ['not_implemented'])
 
-/** Arenas are global, one ESP32 box each. No API yet. */
+function toManagedArena(api: ApiArena): ManagedArena {
+  return {
+    id: api.id,
+    name: api.name,
+    deviceId: api.deviceId,
+    currentMatch: api.currentMatch && {
+      robotAName: api.currentMatch.robotAName,
+      robotBName: api.currentMatch.robotBName,
+    },
+  }
+}
+
+/** GET /arenas (JWT). The account's own arenas. */
+export async function getMyArenas(token: string): Promise<ManagedArena[]> {
+  return (await listArenas(token)).map(toManagedArena)
+}
+
+/** POST /arenas (JWT). The credentials (with the plain token) come only in this response. */
+export async function addArena(
+  name: string,
+  token: string,
+): Promise<{ arena: ManagedArena; credentials: DeviceCredentials }> {
+  const { arena, credentials } = await createArena(name, token)
+  return { arena: toManagedArena(arena), credentials }
+}
+
+/** PATCH /arenas/:id (JWT). The device id does not change. */
+export async function renameArena(id: string, name: string, token: string): Promise<ManagedArena> {
+  return toManagedArena(await patchArena(id, name, token))
+}
+
+/** POST /arenas/:id/token (JWT). The old token stops working; refused while a match is live. */
+export async function newArenaToken(id: string, token: string): Promise<DeviceCredentials> {
+  return rotateArenaToken(id, token)
+}
+
+/** DELETE /arenas/:id (JWT). Refused while a match is live. */
+export async function removeArena(id: string, token: string): Promise<void> {
+  return deleteArena(id, token)
+}
+
+/** Arenas belong to an account, one ESP32 box each. No operator API yet (see getMyArenas for the owner's list). */
 export const getArenas: (championshipId: string) => Promise<Arena[]> = async () => {
   throw notImplemented()
 }
