@@ -6,6 +6,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import { Arena } from '../src/modules/arenas/entities/arena.entity.js';
 import { Championship } from '../src/modules/championships/entities/championship.entity.js';
 import { Match } from '../src/modules/matches/entities/match.entity.js';
 import { Robot } from '../src/modules/robots/entities/robot.entity.js';
@@ -29,7 +30,7 @@ export function dataSourceOf(app: INestApplication): DataSource {
 
 export async function resetDatabase(ds: DataSource): Promise<void> {
     await ds.query(
-        'TRUNCATE "users", "matches", "robots", "championships" CASCADE',
+        'TRUNCATE "users", "arenas", "matches", "robots", "championships" CASCADE',
     );
 }
 
@@ -120,6 +121,13 @@ export async function seedMatch(
                 new Date('2026-11-04T13:00:00Z'),
             ),
         );
+}
+
+/** An arena with a dummy token hash (the device token isn't used by these tests) */
+export async function seedArena(ds: DataSource, name: string): Promise<Arena> {
+    return ds
+        .getRepository(Arena)
+        .save(new Arena(name, `${name}-device`, 'not-a-real-hash'));
 }
 
 /** A promise the test resolves by hand, to hold a transaction open */
