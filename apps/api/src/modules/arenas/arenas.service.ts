@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
     ArenasRepository,
+    type LockedArenaResult,
     type SetCurrentMatchResult,
 } from './arenas.repository.js';
 import { generateDeviceToken, hashDeviceToken } from './device-token.js';
@@ -94,6 +95,43 @@ export class ArenasService {
         return this.toResponse(arena);
     }
 
+    /** Issues a new device token, invalidating the old one; refused during a live match */
+    async rotateToken(id: string, userId: string): Promise<DeviceCredentials> {
+        const token = generateDeviceToken();
+        const tokenHash = await hashDeviceToken(token);
+
+        const result = await this.arenasRepository.rotateToken(
+            id,
+            userId,
+            tokenHash,
+        );
+        if (result !== 'done') {
+            this.logger.warn(result, { arenaId: id });
+            throw lockedException(result);
+        }
+
+        const arena = await this.arenasRepository.findOwned(id, userId);
+        if (!arena) {
+            // Deleted right after the write
+            this.logger.warn('arena_not_found', { arenaId: id });
+            throw new NotFoundException('arena_not_found');
+        }
+        return {
+            deviceId: arena.deviceId,
+            token,
+            serverUrl: arenaServerUrl(),
+        };
+    }
+
+    /** Deletes the arena; refused during a live match */
+    async remove(id: string, userId: string): Promise<void> {
+        const result = await this.arenasRepository.remove(id, userId);
+        if (result !== 'done') {
+            this.logger.warn(result, { arenaId: id });
+            throw lockedException(result);
+        }
+    }
+
     /**
      * Selects (or swaps to) the scheduled match the arena will run next. Selecting the
      * arena's current match again changes nothing.
@@ -163,4 +201,12 @@ function toException(
         case 'arena_match_started':
             return new ConflictException(result);
     }
+}
+
+function lockedException(
+    result: Exclude<LockedArenaResult, 'done'>,
+): NotFoundException | ConflictException {
+    return result === 'arena_not_found'
+        ? new NotFoundException(result)
+        : new ConflictException(result);
 }

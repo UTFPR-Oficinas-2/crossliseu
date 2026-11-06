@@ -1,7 +1,9 @@
 import {
     Body,
     Controller,
+    Delete,
     Get,
+    HttpCode,
     Param,
     ParseUUIDPipe,
     Patch,
@@ -42,6 +44,24 @@ export class ArenasController {
         @CurrentUserId() userId: string,
     ): Promise<ArenaResponse> {
         return this.arenasService.rename(id, dto, userId);
+    }
+
+    @Post(':id/token')
+    @HttpCode(200)
+    rotateToken(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ): Promise<DeviceCredentials> {
+        return this.arenasService.rotateToken(id, userId);
+    }
+
+    @Delete(':id')
+    @HttpCode(204)
+    remove(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ): Promise<void> {
+        return this.arenasService.remove(id, userId);
     }
 
     @Put(':id/current-match')

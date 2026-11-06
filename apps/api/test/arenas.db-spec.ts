@@ -470,4 +470,174 @@ describe('arenas (db)', () => {
                 .expect(401);
         });
     });
+
+    describe('new token and delete', () => {
+        const routes = [
+            [
+                'POST /arenas/:id/token',
+                (id: string, headers = auth()) =>
+                    http().post(`/arenas/${id}/token`).set(headers),
+                200,
+            ],
+            [
+                'DELETE /arenas/:id',
+                (id: string, headers = auth()) =>
+                    http().delete(`/arenas/${id}`).set(headers),
+                204,
+            ],
+        ] as const;
+
+        async function rowOf(arenaId: string) {
+            return ds.getRepository(Arena).findOneByOrFail({ id: arenaId });
+        }
+
+        async function rawRowOf(arenaId: string) {
+            const [row] = await ds.query(
+                `SELECT "token_hash", "current_match_id", "deleted_at" FROM "arenas" WHERE "id" = $1`,
+                [arenaId],
+            );
+            return row as {
+                token_hash: string;
+                current_match_id: string | null;
+                deleted_at: Date | null;
+            };
+        }
+
+        describe.each(routes)('%s', (_name, call, okStatus) => {
+            it.each(['ongoing', 'paused'] as const)(
+                'answers 409 arena_match_live and changes nothing while the match is %s',
+                async (state) => {
+                    await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                    await setState(ids.m1, state);
+                    const before = await rawRowOf(ids.arena1);
+
+                    const response = await call(ids.arena1).expect(409);
+
+                    expect(response.body.message).toBe('arena_match_live');
+                    expect(await rawRowOf(ids.arena1)).toEqual(before);
+                    expect(before.deleted_at).toBeNull();
+                },
+            );
+
+            it.each(['scheduled', 'finished', null] as const)(
+                `answers ${okStatus} when the current match is %s`,
+                async (state) => {
+                    if (state) {
+                        await arenas.setCurrentMatch(
+                            ids.arena1,
+                            ids.m1,
+                            ownerA,
+                        );
+                        await setState(ids.m1, state);
+                    }
+
+                    await call(ids.arena1).expect(okStatus);
+                },
+            );
+
+            it('answers 404 arena_not_found, not 409, for another account on a live match', async () => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, 'ongoing');
+                const before = await rawRowOf(ids.arena1);
+
+                const response = await call(ids.arena1, authB()).expect(404);
+
+                expect(response.body.message).toBe('arena_not_found');
+                expect(await rawRowOf(ids.arena1)).toEqual(before);
+            });
+
+            it('answers 404 arena_not_found for a deleted arena', async () => {
+                await ds.query(
+                    `UPDATE "arenas" SET "deleted_at" = now() WHERE "id" = $1`,
+                    [ids.arena1],
+                );
+
+                const response = await call(ids.arena1).expect(404);
+
+                expect(response.body.message).toBe('arena_not_found');
+            });
+        });
+
+        it('replaces the token: the old one stops matching and the new one matches', async () => {
+            const oldToken = 'old-token';
+            await ds.query(
+                `UPDATE "arenas" SET "token_hash" = $1 WHERE "id" = $2`,
+                [await bcrypt.hash(oldToken, 4), ids.arena1],
+            );
+
+            const response = await http()
+                .post(`/arenas/${ids.arena1}/token`)
+                .set(auth())
+                .expect(200);
+
+            const { deviceId, token: newToken } = response.body;
+            expect(deviceId).toBe((await rowOf(ids.arena1)).deviceId);
+            expect(response.body).toHaveProperty('serverUrl');
+            const { tokenHash } = await rowOf(ids.arena1);
+            expect(await bcrypt.compare(oldToken, tokenHash)).toBe(false);
+            expect(await bcrypt.compare(newToken, tokenHash)).toBe(true);
+        });
+
+        it('deletes: clears the pointer, sets deleted_at, keeps the match history', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await ds.query(
+                `UPDATE "matches" SET "arena_id" = $1 WHERE "id" = $2`,
+                [ids.arena1, ids.m1],
+            );
+
+            await http()
+                .delete(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .expect(204);
+
+            const row = await rawRowOf(ids.arena1);
+            expect(row.current_match_id).toBeNull();
+            expect(row.deleted_at).not.toBeNull();
+            const [match] = await ds.query(
+                `SELECT "arena_id" FROM "matches" WHERE "id" = $1`,
+                [ids.m1],
+            );
+            expect(match.arena_id).toBe(ids.arena1);
+        });
+
+        it('hides a deleted arena from the list, frees its name and answers 404 on every route', async () => {
+            await http()
+                .delete(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .expect(204);
+
+            const list = await http().get('/arenas').set(auth()).expect(200);
+            expect(list.body.map((a: { id: string }) => a.id)).toEqual([
+                ids.arena2,
+            ]);
+            await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .send({ name: 'X' })
+                .expect(404);
+            await http()
+                .put(`/arenas/${ids.arena1}/current-match`)
+                .set(auth())
+                .send({ matchId: ids.m1 })
+                .expect(404);
+            await http()
+                .post(`/arenas/${ids.arena1}/token`)
+                .set(auth())
+                .expect(404);
+            await http()
+                .delete(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .expect(404);
+            await http()
+                .post('/arenas')
+                .set(auth())
+                .send({ name: 'Arena 1' })
+                .expect(201);
+        });
+
+        it('rejects both routes without a token with 401', async () => {
+            await http().post(`/arenas/${ids.arena1}/token`).expect(401);
+            await http().delete(`/arenas/${ids.arena1}`).expect(401);
+        });
+    });
 });

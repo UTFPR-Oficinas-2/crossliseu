@@ -27,6 +27,9 @@ const CURRENT_MATCH_RELATIONS = {
 /** Outcome of creating an arena; anything but 'done' saved nothing */
 export type CreateArenaResult = 'done' | 'arena_name_taken' | 'device_id_taken';
 
+/** Outcome of a write that needs the arena's current match not to be live */
+export type LockedArenaResult = 'done' | 'arena_not_found' | 'arena_match_live';
+
 export type RenameArenaResult = 'done' | 'arena_not_found' | 'arena_name_taken';
 
 const UNIQUE_VIOLATION = '23505';
@@ -127,6 +130,38 @@ export class ArenasRepository {
         }
     }
 
+    /** Replaces the device token hash, unless the arena's current match is live */
+    rotateToken(
+        id: string,
+        ownerUserId: string,
+        tokenHash: string,
+    ): Promise<LockedArenaResult> {
+        return this.repository.manager.transaction(async (manager) => {
+            const arena = await this.withLiveCheck(manager, id, ownerUserId);
+            if (!(arena instanceof Arena)) {
+                return arena;
+            }
+            await manager.update(Arena, { id }, { tokenHash });
+            return 'done';
+        });
+    }
+
+    /**
+     * Soft-deletes the arena and frees its current match, unless that match is live. The
+     * matches keep their arena_id as history.
+     */
+    remove(id: string, ownerUserId: string): Promise<LockedArenaResult> {
+        return this.repository.manager.transaction(async (manager) => {
+            const arena = await this.withLiveCheck(manager, id, ownerUserId);
+            if (!(arena instanceof Arena)) {
+                return arena;
+            }
+            await manager.update(Arena, { id }, { currentMatchId: null });
+            await manager.softDelete(Arena, { id });
+            return 'done';
+        });
+    }
+
     /** False when the arena does not exist */
     async clearCurrentMatch(arenaId: string): Promise<boolean> {
         const result = await this.repository.update(
@@ -190,6 +225,31 @@ export class ArenasRepository {
             { currentMatchId: matchId },
         );
         return 'done';
+    }
+
+    /**
+     * Locks the owner's arena, then its current match (same order as setCurrentMatch), so the
+     * match can't go live while the caller writes. Returns the arena, or the refusal.
+     */
+    private async withLiveCheck(
+        manager: EntityManager,
+        id: string,
+        ownerUserId: string,
+    ): Promise<Arena | Exclude<LockedArenaResult, 'done'>> {
+        const arena = await manager.findOne(Arena, {
+            where: { id, ownerUserId },
+            lock: { mode: 'pessimistic_write' },
+        });
+        if (!arena) {
+            return 'arena_not_found';
+        }
+        if (arena.currentMatchId) {
+            const match = await this.lockMatch(manager, arena.currentMatchId);
+            if (match?.state === 'ongoing' || match?.state === 'paused') {
+                return 'arena_match_live';
+            }
+        }
+        return arena;
     }
 
     private lockMatch(

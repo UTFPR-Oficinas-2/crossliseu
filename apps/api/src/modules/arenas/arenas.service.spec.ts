@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import type {
     ArenasRepository,
     CreateArenaResult,
+    LockedArenaResult,
     RenameArenaResult,
     SetCurrentMatchResult,
 } from './arenas.repository.js';
@@ -41,10 +42,12 @@ function setup(
         setResult = 'done',
         createResults = ['done'],
         renameResult = 'done',
+        lockedResult = 'done',
     }: {
         setResult?: SetCurrentMatchResult;
         createResults?: CreateArenaResult[];
         renameResult?: RenameArenaResult;
+        lockedResult?: LockedArenaResult;
     } = {},
 ) {
     const arenasRepository = {
@@ -76,6 +79,13 @@ function setup(
             }
             return Promise.resolve(renameResult);
         }),
+        rotateToken: vi.fn(
+            (_id: string, _ownerUserId: string, _tokenHash: string) =>
+                Promise.resolve(lockedResult),
+        ),
+        remove: vi.fn((_id: string, _ownerUserId: string) =>
+            Promise.resolve(lockedResult),
+        ),
         findByOwner: vi.fn((_ownerUserId: string) => Promise.resolve(arenas)),
         findOwned: vi.fn((id: string, _ownerUserId: string) =>
             Promise.resolve(arenas.find((entity) => entity.id === id) ?? null),
@@ -328,5 +338,71 @@ describe('ArenasService.rename', () => {
 
         await expect(call).rejects.toThrow(exception);
         await expect(call).rejects.toThrow(renameResult);
+    });
+});
+
+describe('ArenasService.rotateToken', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('returns fresh credentials for the same device id and stores only the hash', async () => {
+        vi.stubEnv('ARENA_SERVER_URL', 'wss://example.test/arena');
+        const { service, arenasRepository } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+
+        const credentials = await service.rotateToken(ARENA_1_ID, 'user-a');
+
+        expect(credentials.deviceId).toBe('Arena 1-device');
+        expect(credentials.token).toMatch(/^[0-9a-f]{64}$/);
+        expect(credentials.serverUrl).toBe('wss://example.test/arena');
+        const [id, owner, hash] = arenasRepository.rotateToken.mock.calls[0]!;
+        expect([id, owner]).toEqual([ARENA_1_ID, 'user-a']);
+        expect(hash).not.toBe(credentials.token);
+        expect(await bcrypt.compare(credentials.token, hash)).toBe(true);
+    });
+
+    it.each([
+        ['arena_not_found', NotFoundException],
+        ['arena_match_live', ConflictException],
+    ] as const)('turns %s into %o', async (lockedResult, exception) => {
+        const { service } = setup([arena(ARENA_1_ID, 'Arena 1', null)], {
+            lockedResult,
+        });
+
+        const call = service.rotateToken(ARENA_1_ID, 'user-a');
+
+        await expect(call).rejects.toThrow(exception);
+        await expect(call).rejects.toThrow(lockedResult);
+    });
+});
+
+describe('ArenasService.remove', () => {
+    it('removes the arena of the account', async () => {
+        const { service, arenasRepository } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+
+        await service.remove(ARENA_1_ID, 'user-a');
+
+        expect(arenasRepository.remove).toHaveBeenCalledWith(
+            ARENA_1_ID,
+            'user-a',
+        );
+    });
+
+    it.each([
+        ['arena_not_found', NotFoundException],
+        ['arena_match_live', ConflictException],
+    ] as const)('turns %s into %o', async (lockedResult, exception) => {
+        const { service } = setup([arena(ARENA_1_ID, 'Arena 1', null)], {
+            lockedResult,
+        });
+
+        const call = service.remove(ARENA_1_ID, 'user-a');
+
+        await expect(call).rejects.toThrow(exception);
+        await expect(call).rejects.toThrow(lockedResult);
     });
 });
