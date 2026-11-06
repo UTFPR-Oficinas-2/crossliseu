@@ -39,6 +39,19 @@ export class ChampionshipsRepository {
         return this.repository.findOneBy({ id });
     }
 
+    /** The live championships created by this user */
+    findByOwner(ownerUserId: string): Promise<Championship[]> {
+        return this.repository.findBy({ createdByUserId: ownerUserId });
+    }
+
+    /** The live championship with this id, only when this user created it */
+    findOneOwned(
+        id: string,
+        ownerUserId: string,
+    ): Promise<Championship | null> {
+        return this.repository.findOneBy({ id, createdByUserId: ownerUserId });
+    }
+
     /** Robots, matches and finished matches per championship id (soft-deleted rows excluded) */
     async countRobotsAndMatches(
         ids: string[],

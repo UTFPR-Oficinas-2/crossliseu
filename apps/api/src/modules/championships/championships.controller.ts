@@ -37,6 +37,11 @@ export class ChampionshipsController {
         return this.championshipsService.findAll();
     }
 
+    @Get('mine')
+    findMine(@CurrentUserId() userId: string) {
+        return this.championshipsService.findMine(userId);
+    }
+
     @Public()
     @Get(':id')
     findOne(@Param('id', ParseUUIDPipe) id: string) {
@@ -47,13 +52,21 @@ export class ChampionshipsController {
     update(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateChampionshipDto: UpdateChampionshipDto,
+        @CurrentUserId() userId: string,
     ) {
-        return this.championshipsService.update(id, updateChampionshipDto);
+        return this.championshipsService.update(
+            id,
+            updateChampionshipDto,
+            userId,
+        );
     }
 
     @Delete(':id')
     @HttpCode(HttpStatus.NO_CONTENT)
-    remove(@Param('id', ParseUUIDPipe) id: string) {
-        return this.championshipsService.remove(id);
+    remove(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.championshipsService.remove(id, userId);
     }
 }
