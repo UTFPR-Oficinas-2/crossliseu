@@ -1,25 +1,6 @@
 // Championship display helpers shared by the organizer pages.
 import type { Championship, ChampionshipStatus } from '@/types'
 
-/** Calendar day (UTC) of an ISO date or timestamp, as `YYYY-MM-DD` */
-const utcDay = (value: string | Date) =>
-  (typeof value === 'string' ? new Date(value) : value).toISOString().slice(0, 10)
-
-/**
- * Mirrors `Championship.setInitialStatus` in apps/api (UTC calendar days, both ends inclusive).
- * API rows carry their own `status`, so this only serves display helpers and tests.
- */
-export function championshipStatusFromDates(
-  startDate: string,
-  endDate: string,
-  now: Date = new Date(),
-): ChampionshipStatus {
-  const today = utcDay(now)
-  if (utcDay(endDate) < today) return 'closed'
-  if (utcDay(startDate) > today) return 'scheduled'
-  return 'ongoing'
-}
-
 /** Figma 06: EM ANDAMENTO orange, PROGRAMADO blue, ENCERRADO muted */
 export const championshipStatusPill: Record<
   ChampionshipStatus,

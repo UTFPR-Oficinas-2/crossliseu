@@ -1,31 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  championshipMeta,
-  championshipStatusFromDates,
-  championshipStatusPill,
-  formatDateRange,
-} from '../championship'
-
-const now = new Date('2026-10-05T15:00:00.000Z')
-
-describe('championshipStatusFromDates', () => {
-  it('is scheduled when it starts after today', () => {
-    expect(championshipStatusFromDates('2026-10-06', '2026-10-07', now)).toBe('scheduled')
-  })
-  it('is ongoing from the start day through the end day, inclusive', () => {
-    expect(championshipStatusFromDates('2026-10-05', '2026-10-05', now)).toBe('ongoing')
-    expect(championshipStatusFromDates('2026-10-01', '2026-10-05', now)).toBe('ongoing')
-    expect(championshipStatusFromDates('2026-10-05', '2026-10-09', now)).toBe('ongoing')
-  })
-  it('is closed once the end day has passed', () => {
-    expect(championshipStatusFromDates('2026-10-01', '2026-10-04', now)).toBe('closed')
-  })
-  it('accepts the API ISO timestamps', () => {
-    expect(
-      championshipStatusFromDates('2026-10-05T00:00:00.000Z', '2026-10-06T00:00:00.000Z', now),
-    ).toBe('ongoing')
-  })
-})
+import { championshipMeta, championshipStatusPill, formatDateRange } from '../championship'
 
 describe('championshipStatusPill', () => {
   it('maps each status to the Figma 06 label and tone', () => {

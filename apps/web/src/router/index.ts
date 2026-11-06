@@ -21,11 +21,11 @@ export function safeRedirect(value: unknown): string {
 // locally is what ships. Screens whose backend does not exist yet show an error state.
 const appRoutes: RouteRecordRaw[] = [
   // Component preview page
-  // {
-  //   path: '/dev/components',
-  //   name: 'dev-components',
-  //   component: () => import('../views/dev/ComponentsPreviewView.vue'),
-  // },
+  {
+    path: '/dev/components',
+    name: 'dev-components',
+    component: () => import('../views/dev/ComponentsPreviewView.vue'),
+  },
   {
     path: '/manage',
     component: () => import('../layouts/OrganizerLayout.vue'),

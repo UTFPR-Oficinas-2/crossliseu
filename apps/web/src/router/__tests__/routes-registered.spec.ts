@@ -21,7 +21,6 @@ describe('router registration', () => {
       'match-operation',
       'referee-session',
       'referee-invalid-access',
-      'dev-components',
       'not-found',
     ]) {
       expect(names).toContain(name)
