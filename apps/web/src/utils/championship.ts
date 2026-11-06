@@ -1,4 +1,4 @@
-// Championship display helpers shared by the organizer pages and the demo data layer.
+// Championship display helpers shared by the organizer pages.
 import type { Championship, ChampionshipStatus } from '@/types'
 
 /** Calendar day (UTC) of an ISO date or timestamp, as `YYYY-MM-DD` */
@@ -7,7 +7,7 @@ const utcDay = (value: string | Date) =>
 
 /**
  * Mirrors `Championship.setInitialStatus` in apps/api (UTC calendar days, both ends inclusive).
- * API rows carry their own `status`; this is only for championships written in demo mode.
+ * API rows carry their own `status`, so this only serves display helpers and tests.
  */
 export function championshipStatusFromDates(
   startDate: string,

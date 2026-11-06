@@ -1,6 +1,6 @@
-// Robot rules shared by the participant screens, the match form and the demo data layer. Mirrors
-// apps/api/src/modules/robots (`dto/normalize.ts`, `weight-class.ts`), so the form preview and
-// demo mode store exactly what the API would.
+// Robot rules shared by the participant screens and the match form. Mirrors
+// apps/api/src/modules/robots (`dto/normalize.ts`, `weight-class.ts`), so form validation
+// matches what the API accepts.
 import type { WeightClass } from '@/types'
 
 /** Trims and collapses whitespace runs: "  Equipe   Volt " → "Equipe Volt" */

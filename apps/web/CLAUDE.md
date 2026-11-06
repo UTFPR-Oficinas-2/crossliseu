@@ -78,7 +78,7 @@ Use these classes instead of setting font-family/size/weight in components.
 
 - `src/components/ui/` holds one design-system component per Figma component.
 - Blocks used only inside one section live in `src/views/<section>/components/`.
-- `src/mocks/` is typed demo data, used in dev when `VITE_API_URL` is unset.
+- `src/data/` is the data access layer: it calls `src/api/` and maps payloads to `src/types`. There is no demo data.
 
 ### Figma component → Vue file
 
@@ -110,10 +110,10 @@ slots. Each component's Figma description repeats its Vue file and props.
 - Interface text is **Portuguese (pt-BR)** exactly as in Figma. Code identifiers, file names,
   comments and commits are in English.
 - Format dates and numbers with `Intl` using `pt-BR`.
-- Sign-in, championships, participants and match scheduling use the API through `src/api/`;
-  every other page still uses typed data from `src/mocks/`. Don't call the API or invent
-  endpoints unless asked. Keep data loading in one place per view so it can be swapped for the
-  API later.
+- Every page gets its data from the API through `src/data/` (which uses `src/api/`). No mocks, no
+  demo data, no build-mode gates: what runs locally is what ships. Where `apps/api` has no
+  endpoint yet (arenas, operator match data, referee access) the `src/data/` function rejects with
+  `not_implemented`; don't invent endpoints unless asked. Keep data loading in one place per view.
 - Don't add dependencies other than the `@fontsource` packages without asking.
 
 ## Accessibility and layout

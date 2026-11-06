@@ -2,7 +2,7 @@
 // `ChampionshipsService.assertValidDateRange` in apps/api, so the API never rejects what the
 // form accepts.
 import { ApiError } from '@/api/client'
-import type { ChampionshipInput } from '@/mocks'
+import type { ChampionshipInput } from '@/data'
 import type { Championship } from '@/types'
 
 export interface ChampionshipFormValues {

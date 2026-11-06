@@ -19,7 +19,8 @@ Crossliseu lets the public follow championships and fights, organizers manage th
 | --- | --- |
 | Homepage, sign-in (JWT) | Available |
 | Championships and matches API, Swagger docs | Available |
-| Organizer, operator, referee and fight screens | Prototype (dev build only, mock data) |
+| Organizer screens (championships, participants, matches) | Available, backed by the API |
+| Operator, referee and match detail screens | Built to the Figma specs, but the API has no arenas, operator or referee endpoints yet, so they show errors |
 | Computer-vision worker, ESP32 firmware | Planned / experimental |
 
 ## Tech stack
@@ -64,7 +65,7 @@ docker compose exec api npm run seed:admin
 | API | <http://localhost:3000> |
 | Swagger | <http://localhost:3000/docs> |
 
-Use `POSTGRES_HOST=postgres` in `.env`. Compose sets `VITE_API_URL=/api` for the web container, so the web app talks to the API through the Vite proxy; see the [web guide](apps/web/README.md#configuration). The prototype screens listed there still use mock data.
+Use `POSTGRES_HOST=postgres` in `.env`. Compose sets `VITE_API_URL=/api` for the web container, so the web app talks to the API through the Vite proxy; see the [web guide](apps/web/README.md#configuration).
 
 ### Option B: run the apps on your machine
 
@@ -103,7 +104,7 @@ Defined in `.env` at the repository root (copy from `.env.example`).
 | `POSTGRES_HOST` | Yes | API | `postgres` inside Docker Compose, `localhost` on your machine |
 | `SECRET` | Yes | API | JWT signing key, for example `openssl rand -hex 32` |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | For seeding | `npm run seed:admin` | Credentials of the first admin; there is no sign-up |
-| `VITE_API_URL` | No | Web (build time) | Without it the dev server uses demo data and production builds fail |
+| `VITE_API_URL` | Yes | Web (build time) | API base URL, `/api` in dev. The web app has no demo data: the dev server and production builds fail without it |
 
 ## Common commands
 
@@ -116,7 +117,7 @@ Defined in `.env` at the repository root (copy from `.env.example`).
 
 ## Deployment
 
-A push to `main` runs CI, publishes the images to GHCR and deploys to the VPS over SSH (`compose.prod.yml` in `/opt/crossliseu`). Migrations run before the new containers start. The workflow needs these repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` and, optionally, `VPS_PORT`. The VPS also needs its own `.env` in `/opt/crossliseu`. NGINX configuration lives in [`deploy/nginx`](deploy/nginx).
+Work is merged into `dev` (CI runs on every pull request into `dev` or `main`); `dev` is merged into `main` only when stable. A push to `main` runs CI, publishes the images to GHCR and deploys to the VPS over SSH (`compose.prod.yml` in `/opt/crossliseu`). Migrations run before the new containers start. The workflow needs these repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` and, optionally, `VPS_PORT`. The VPS also needs its own `.env` in `/opt/crossliseu`. NGINX configuration lives in [`deploy/nginx`](deploy/nginx).
 
 ## Documentation
 

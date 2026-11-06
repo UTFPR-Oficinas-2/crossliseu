@@ -6,7 +6,7 @@ import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import InputField from '@/components/ui/InputField.vue'
-import { ApiError, isApiEnabled } from '@/api/client'
+import { ApiError } from '@/api/client'
 import { safeRedirect } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -100,7 +100,6 @@ async function onSubmit() {
 
     <footer class="sign-in__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
-      <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
     </footer>
   </div>
 </template>

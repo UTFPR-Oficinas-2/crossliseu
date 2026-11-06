@@ -6,18 +6,18 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { ChampionshipInput } from '@/mocks'
+import type { ChampionshipInput } from '@/data'
 import type { Championship } from '@/types'
 import ChampionshipFormView from '../ChampionshipFormView.vue'
 import { FORM_MESSAGES } from '../championship-form'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   createChampionship: vi.fn<(input: ChampionshipInput, token: string) => Promise<Championship>>(),
   updateChampionship:
     vi.fn<(id: string, input: ChampionshipInput, token: string) => Promise<Championship>>(),
 }))
-import { createChampionship, getChampionship, updateChampionship } from '@/mocks'
+import { createChampionship, getChampionship, updateChampionship } from '@/data'
 
 const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'

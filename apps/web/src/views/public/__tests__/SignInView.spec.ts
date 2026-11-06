@@ -7,8 +7,8 @@ import { ApiError } from '@/api/client'
 import { liveToken } from '@/stores/__tests__/token-helpers'
 import SignInView from '../SignInView.vue'
 
-vi.mock('@/mocks', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
-import { signIn } from '@/mocks'
+vi.mock('@/data', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
+import { signIn } from '@/data'
 
 const stub = { render: () => null }
 

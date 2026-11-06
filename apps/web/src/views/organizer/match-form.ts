@@ -3,7 +3,7 @@
 // in apps/api.
 import { ApiError } from '@/api/client'
 import type { SelectOption } from '@/components/ui/select-field'
-import type { MatchInput } from '@/mocks'
+import type { MatchInput } from '@/data'
 import type { MatchSummary, Robot, WeightClass } from '@/types'
 
 export interface MatchFormValues {

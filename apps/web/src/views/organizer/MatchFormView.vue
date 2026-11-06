@@ -18,7 +18,7 @@ import {
   getMatchSummaries,
   getRobots,
   updateMatch,
-} from '@/mocks'
+} from '@/data'
 import { useAuthStore } from '@/stores/auth'
 import type { MatchSummary, Robot, WeightClass } from '@/types'
 import { matchStatePill } from '@/utils/match'

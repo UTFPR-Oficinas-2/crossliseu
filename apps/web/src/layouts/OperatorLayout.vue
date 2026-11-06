@@ -5,7 +5,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
-import { getArenas, getChampionship, getMatch, getRobots } from '@/mocks'
+import { getArenas, getChampionship, getMatch, getRobots } from '@/data'
 import type { Arena, Championship, Match, MatchState, Robot } from '@/types'
 
 type StepId = 'preparation' | 'running' | 'closing'
@@ -32,21 +32,31 @@ const championship = ref<Championship | null>(null)
 const arena = ref<Arena | null>(null)
 const robots = ref<Robot[]>([])
 
-// Data loading lives here so it can be swapped for the API later.
+// Data loading lives here. The API has no operator match or arena data yet, so a failed load
+// leaves the layout empty (every step reads as upcoming) instead of throwing into the router.
 let loadId = 0
 async function load(matchId: string) {
   const current = ++loadId
-  const loadedMatch = await getMatch(matchId)
-  const [loadedChampionship, arenas, loadedRobots]: [Championship | null, Arena[], Robot[]] =
-    loadedMatch
-      ? await Promise.all([
-          getChampionship(loadedMatch.championshipId),
-          getArenas(loadedMatch.championshipId),
-          getRobots(loadedMatch.championshipId),
-        ])
-      : [null, [], []]
+  let loaded: [Match | null, Championship | null, Arena[], Robot[]]
+  try {
+    const loadedMatch = await getMatch(matchId)
+    loaded = loadedMatch
+      ? [
+          loadedMatch,
+          ...(await Promise.all([
+            getChampionship(loadedMatch.championshipId),
+            getArenas(loadedMatch.championshipId),
+            getRobots(loadedMatch.championshipId),
+          ])),
+        ]
+      : [null, null, [], []]
+  } catch (error) {
+    console.error('Could not load the match', error)
+    loaded = [null, null, [], []]
+  }
   // Ignore a stale response if the route changed while loading
   if (current !== loadId) return
+  const [loadedMatch, loadedChampionship, arenas, loadedRobots] = loaded
   match.value = loadedMatch
   championship.value = loadedChampionship
   arena.value = arenas.find((a) => a.id === loadedMatch?.arenaId) ?? null

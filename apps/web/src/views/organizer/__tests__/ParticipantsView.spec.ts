@@ -9,12 +9,12 @@ import { liveToken } from '@/stores/__tests__/token-helpers'
 import type { Championship, Robot, WeightClass } from '@/types'
 import ParticipantsView from '../ParticipantsView.vue'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
   deleteRobot: vi.fn<(id: string, token: string) => Promise<void>>(),
 }))
-import { deleteRobot, getChampionship, getRobots } from '@/mocks'
+import { deleteRobot, getChampionship, getRobots } from '@/data'
 
 const stub = { render: () => null }
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }

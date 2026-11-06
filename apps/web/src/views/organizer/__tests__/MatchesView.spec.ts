@@ -5,12 +5,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Championship, MatchState, MatchSummary, Robot } from '@/types'
 import MatchesView from '../MatchesView.vue'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getMatchSummaries: vi.fn<(championshipId: string) => Promise<MatchSummary[]>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
 }))
-import { getChampionship, getMatchSummaries, getRobots } from '@/mocks'
+import { getChampionship, getMatchSummaries, getRobots } from '@/data'
 
 const stub = { render: () => null }
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }

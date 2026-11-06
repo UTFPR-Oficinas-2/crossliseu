@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/api/client'
+import type * as championshipsApi from '@/api/championships'
 import type * as matchesApi from '@/api/matches'
 import type * as robotsApi from '@/api/robots'
 
-// Pretend VITE_API_URL is set so `@/mocks` takes its API branches
-vi.mock('@/api/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/api/client')>()),
-  isApiEnabled: true,
+vi.mock('@/api/championships', () => ({
+  listChampionships: vi.fn<typeof championshipsApi.listChampionships>(),
+  getChampionship: vi.fn<typeof championshipsApi.getChampionship>(),
+  createChampionship: vi.fn<typeof championshipsApi.createChampionship>(),
+  updateChampionship: vi.fn<typeof championshipsApi.updateChampionship>(),
 }))
 vi.mock('@/api/robots', () => ({
   listRobots: vi.fn<typeof robotsApi.listRobots>(),
@@ -20,9 +23,19 @@ vi.mock('@/api/matches', () => ({
   deleteMatch: vi.fn<typeof matchesApi.deleteMatch>(),
 }))
 
+import { getChampionship as fetchChampionship } from '@/api/championships'
 import { createMatch as postMatch, listMatches, type ApiMatch } from '@/api/matches'
 import { createRobot as postRobot, listRobots, type ApiRobot } from '@/api/robots'
-import { createMatch, createRobot, getMatchSummaries, getRobots } from '@/mocks'
+import {
+  createMatch,
+  createRobot,
+  getArenas,
+  getChampionship,
+  getMatch,
+  getMatchSummaries,
+  getRefereeAccess,
+  getRobots,
+} from '@/data'
 
 const createdAt = '2026-10-01T00:00:00.000Z'
 const modifiedAt = '2026-10-02T00:00:00.000Z'
@@ -56,7 +69,7 @@ const apiMatch: ApiMatch = {
   deletedAt: null,
 }
 
-describe('@/mocks with the API configured', () => {
+describe('@/data', () => {
   beforeEach(() => {
     vi.mocked(listRobots).mockReset()
     vi.mocked(listMatches).mockReset()
@@ -127,5 +140,21 @@ describe('@/mocks with the API configured', () => {
       },
       'tok',
     )
+  })
+
+  it('resolves unknown or malformed championship ids to null and rethrows other errors', async () => {
+    vi.mocked(fetchChampionship).mockRejectedValueOnce(new ApiError(404, 'not found'))
+    vi.mocked(fetchChampionship).mockRejectedValueOnce(new ApiError(400, 'bad uuid'))
+    vi.mocked(fetchChampionship).mockRejectedValueOnce(new ApiError(500, 'boom'))
+
+    expect(await getChampionship('missing')).toBeNull()
+    expect(await getChampionship('not-a-uuid')).toBeNull()
+    await expect(getChampionship('c1')).rejects.toMatchObject({ status: 500 })
+  })
+
+  it('rejects data the API does not provide yet instead of serving demo data', async () => {
+    await expect(getArenas('c1')).rejects.toMatchObject({ status: 501, message: 'not_implemented' })
+    await expect(getMatch('m1')).rejects.toMatchObject({ status: 501 })
+    await expect(getRefereeAccess('token')).rejects.toMatchObject({ status: 501 })
   })
 })

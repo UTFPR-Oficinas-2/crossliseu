@@ -5,8 +5,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Championship } from '@/types'
 import MyChampionshipsView from '../MyChampionshipsView.vue'
 
-vi.mock('@/mocks', () => ({ getManagedChampionships: vi.fn<() => Promise<Championship[]>>() }))
-import { getManagedChampionships } from '@/mocks'
+vi.mock('@/data', () => ({ getManagedChampionships: vi.fn<() => Promise<Championship[]>>() }))
+import { getManagedChampionships } from '@/data'
 
 const stub = { render: () => null }
 

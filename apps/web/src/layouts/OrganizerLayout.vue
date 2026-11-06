@@ -6,7 +6,7 @@ import { useRoute, useRouter, type RouteRecordName } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppNav from '@/components/ui/AppNav.vue'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
-import { getChampionship } from '@/mocks'
+import { getChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()

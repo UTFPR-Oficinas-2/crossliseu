@@ -6,8 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
-import { isApiEnabled } from '@/api/client'
-import { getManagedChampionships } from '@/mocks'
+import { getManagedChampionships } from '@/data'
 import type { Championship } from '@/types'
 import { championshipMeta, championshipStatusPill } from '@/utils/championship'
 
@@ -157,7 +156,6 @@ const subtitle = computed(() => {
 
     <footer class="my-championships__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
-      <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
     </footer>
   </div>
 </template>

@@ -1,11 +1,6 @@
-<script setup lang="ts">
-import { isApiEnabled } from '@/api/client'
-</script>
-
 <template>
   <footer class="organizer-footer text-mono-s">
     <p>CROSSLISEU · UTFPR</p>
-    <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
   </footer>
 </template>
 

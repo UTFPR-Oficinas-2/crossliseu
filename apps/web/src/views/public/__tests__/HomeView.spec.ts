@@ -5,8 +5,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Championship } from '@/types'
 import HomeView from '../HomeView.vue'
 
-vi.mock('@/mocks', () => ({ getChampionships: vi.fn<() => Promise<Championship[]>>() }))
-import { getChampionships } from '@/mocks'
+vi.mock('@/data', () => ({ getChampionships: vi.fn<() => Promise<Championship[]>>() }))
+import { getChampionships } from '@/data'
 
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
 const championship = (id: string, status: Championship['status']): Championship => ({

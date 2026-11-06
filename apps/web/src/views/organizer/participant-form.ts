@@ -3,7 +3,7 @@
 // form accepts except for conflicts it alone can see.
 import { ApiError } from '@/api/client'
 import type { SelectOption } from '@/components/ui/select-field'
-import type { RobotInput } from '@/mocks'
+import type { RobotInput } from '@/data'
 import type { Robot, WeightClass } from '@/types'
 import { WEIGHT_CLASSES, isWeightClass, normalizeText } from '@/utils/robot'
 

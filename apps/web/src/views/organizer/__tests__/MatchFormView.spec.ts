@@ -6,12 +6,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { MatchInput } from '@/mocks'
+import type { MatchInput } from '@/data'
 import type { Championship, MatchState, MatchSummary, Robot, WeightClass } from '@/types'
 import MatchFormView from '../MatchFormView.vue'
 import { MATCH_MESSAGES, toScheduledAtIso } from '../match-form'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
   getMatchSummaries: vi.fn<(championshipId: string) => Promise<MatchSummary[]>>(),
@@ -27,7 +27,7 @@ import {
   getMatchSummaries,
   getRobots,
   updateMatch,
-} from '@/mocks'
+} from '@/data'
 
 const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'

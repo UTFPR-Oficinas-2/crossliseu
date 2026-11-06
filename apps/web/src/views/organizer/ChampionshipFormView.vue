@@ -7,8 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import InputField from '@/components/ui/InputField.vue'
-import { isApiEnabled } from '@/api/client'
-import { createChampionship, getChampionship, updateChampionship } from '@/mocks'
+import { createChampionship, getChampionship, updateChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 import {
   describeSaveError,
@@ -295,7 +294,6 @@ const nextSteps = [
 
     <footer class="championship-form__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
-      <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
     </footer>
   </div>
 </template>

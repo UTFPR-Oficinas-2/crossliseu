@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import OrganizerLayout from '../OrganizerLayout.vue'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<() => Promise<null>>().mockResolvedValue(null),
 }))
 

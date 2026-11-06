@@ -6,8 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import ChampionshipCard from '@/components/ui/ChampionshipCard.vue'
 import TabItem from '@/components/ui/TabItem.vue'
-import { isApiEnabled } from '@/api/client'
-import { getChampionships } from '@/mocks'
+import { getChampionships } from '@/data'
 import type { Championship, ChampionshipStatus } from '@/types'
 
 type Filter = ChampionshipStatus | 'all'
@@ -161,7 +160,6 @@ const hiddenNote = computed(() => {
 
     <footer class="home__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
-      <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
     </footer>
   </div>
 </template>

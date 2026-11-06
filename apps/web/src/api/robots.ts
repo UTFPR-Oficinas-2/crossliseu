@@ -1,5 +1,5 @@
 // `RobotsController` in apps/api (`@Controller('robots')`). Shapes mirror the API response;
-// mapping to `@/types` happens in `@/mocks`. The API trims names and teams, so a response can
+// mapping to `@/types` happens in `@/data`. The API trims names and teams, so a response can
 // differ from what was sent.
 import type { WeightClass } from '@/types'
 import { apiRequest } from './client'

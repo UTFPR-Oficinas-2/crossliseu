@@ -1,5 +1,5 @@
 // `ChampionshipsController` in apps/api (`@Controller('championships')`, no global prefix).
-// Shapes mirror the API response; mapping to `@/types` happens in `@/mocks`.
+// Shapes mirror the API response; mapping to `@/types` happens in `@/data`.
 import { apiRequest } from './client'
 
 /** `ChampionshipStatus` in apps/api, set from the dates on create */
