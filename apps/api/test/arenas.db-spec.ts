@@ -192,6 +192,23 @@ describe('arenas (db)', () => {
         expect(count).toBe('1');
     });
 
+    it('clears the arena pointer when its current match is deleted', async () => {
+        await arenas.setCurrentMatch(ids.arena1, ids.m1);
+
+        await http().delete(`/matches/${ids.m1}`).set(auth()).expect(204);
+
+        expect(await currentMatchOf(ids.arena1)).toBeNull();
+    });
+
+    it('keeps the arena pointer when the delete is refused', async () => {
+        await arenas.setCurrentMatch(ids.arena1, ids.m1);
+        await setState(ids.m1, 'ongoing');
+
+        await http().delete(`/matches/${ids.m1}`).set(auth()).expect(409);
+
+        expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+    });
+
     it('rejects GET /arenas and PUT without a token with 401', async () => {
         await http().get('/arenas').expect(401);
         await http()

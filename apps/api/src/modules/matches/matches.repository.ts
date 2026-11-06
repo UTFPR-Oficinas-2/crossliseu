@@ -4,6 +4,7 @@ import { Match } from './entities/match.entity.js';
 import { EntityManager, In, IsNull, Repository } from 'typeorm';
 import type { FindOptionsWhere } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
+import { Arena } from '../arenas/entities/arena.entity.js';
 import { Championship } from '../championships/entities/championship.entity.js';
 import { Robot } from '../robots/entities/robot.entity.js';
 
@@ -13,9 +14,12 @@ export type BuildFromRobots<T> = (
     robotB: Robot | null,
 ) => T | Promise<T>;
 
+/** Thrown inside softDeleteIf's transaction to roll back the arena pointer clear */
+const NOTHING_DELETED = Symbol('nothing_deleted');
+
 /**
  * Lock order shared by every write that spans these tables, so two of them can't deadlock:
- * championship, then robots (by id), then the match.
+ * championship, then robots (by id), then the match. Arenas come before the match too.
  */
 @Injectable()
 export class MatchesRepository {
@@ -87,17 +91,48 @@ export class MatchesRepository {
         });
     }
 
-    /** Soft-deletes only while the live match still matches `expected`. False when nothing matched. */
+    /**
+     * Soft-deletes only while the live match still matches `expected`, and clears the pointer of
+     * any arena whose current match it was, in one transaction. False when nothing matched (the
+     * arenas are left as they were).
+     *
+     * Every arena row is locked first (arena before match, like ArenasRepository): an arena
+     * selection holds its arena's lock until it commits, so none can point an arena at this
+     * match between the pointer clear and the delete.
+     */
     async softDeleteIf(
         id: string,
         expected: FindOptionsWhere<Match>,
     ): Promise<boolean> {
-        const result = await this.repository.softDelete({
-            ...expected,
-            id,
-            deletedAt: IsNull(),
-        });
-        return result.affected === 1;
+        try {
+            await this.repository.manager.transaction(async (manager) => {
+                // Read through the manager so this module doesn't depend on ArenasModule
+                await manager.find(Arena, {
+                    select: { id: true },
+                    order: { id: 'ASC' },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                await manager.update(
+                    Arena,
+                    { currentMatchId: id },
+                    { currentMatchId: null },
+                );
+                const result = await manager.softDelete(Match, {
+                    ...expected,
+                    id,
+                    deletedAt: IsNull(),
+                });
+                if (result.affected !== 1) {
+                    throw NOTHING_DELETED;
+                }
+            });
+            return true;
+        } catch (error) {
+            if (error === NOTHING_DELETED) {
+                return false;
+            }
+            throw error;
+        }
     }
 
     private async lockChampionship(
