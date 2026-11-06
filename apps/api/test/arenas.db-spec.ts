@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import type { DataSource } from 'typeorm';
 import { ArenasRepository } from '../src/modules/arenas/arenas.repository.js';
@@ -331,4 +332,142 @@ describe('arenas (db)', () => {
             expect(await currentMatchOf(ids.arena1)).toBeNull();
         },
     );
+
+    describe('create and rename', () => {
+        const create = (name: string, headers = auth()) =>
+            http().post('/arenas').set(headers).send({ name });
+
+        async function rowOf(arenaId: string) {
+            return ds.getRepository(Arena).findOneByOrFail({ id: arenaId });
+        }
+
+        it('creates an arena and returns its credentials once', async () => {
+            const response = await create('Arena da garagem').expect(201);
+
+            const { arena, credentials } = response.body;
+            expect(arena.deviceId).toBe(credentials.deviceId);
+            expect(credentials.deviceId).toMatch(
+                /^arena-da-garagem-[0-9a-f]{4}$/,
+            );
+            expect(credentials.token).toMatch(/^[0-9a-f]{64}$/);
+            expect(credentials).toHaveProperty('serverUrl');
+            expect(arena).toMatchObject({
+                name: 'Arena da garagem',
+                online: false,
+                currentMatchId: null,
+                currentMatch: null,
+            });
+            const row = await rowOf(arena.id);
+            expect(row.ownerUserId).toBe(ownerA);
+            expect(await bcrypt.compare(credentials.token, row.tokenHash)).toBe(
+                true,
+            );
+            expect(JSON.stringify(arena)).not.toContain('tokenHash');
+        });
+
+        it('rejects a name differing only in case with arena_name_taken', async () => {
+            await create('Minha Arena').expect(201);
+
+            const response = await create('minha arena').expect(409);
+
+            expect(response.body.message).toBe('arena_name_taken');
+        });
+
+        it("accepts the name of another account's arena", async () => {
+            await create('Arena B').expect(201);
+        });
+
+        it('accepts the name of a soft-deleted arena of the same account', async () => {
+            const { body } = await create('Arena velha').expect(201);
+            await ds.query(
+                `UPDATE "arenas" SET "deleted_at" = now() WHERE "id" = $1`,
+                [body.arena.id],
+            );
+
+            await create('Arena velha').expect(201);
+        });
+
+        it('renames and keeps the device id', async () => {
+            const before = await rowOf(ids.arena1);
+
+            const response = await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .send({ name: '  Ringue   novo ' })
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                id: ids.arena1,
+                name: 'Ringue novo',
+                deviceId: before.deviceId,
+            });
+            const after = await rowOf(ids.arena1);
+            expect(after.name).toBe('Ringue novo');
+            expect(after.deviceId).toBe(before.deviceId);
+        });
+
+        it('accepts renaming an arena to a case change of its own name', async () => {
+            const response = await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .send({ name: 'ARENA 1' })
+                .expect(200);
+
+            expect(response.body.name).toBe('ARENA 1');
+        });
+
+        it('rejects renaming to the name of another live arena with arena_name_taken', async () => {
+            const response = await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .send({ name: 'arena 2' })
+                .expect(409);
+
+            expect(response.body.message).toBe('arena_name_taken');
+            expect((await rowOf(ids.arena1)).name).toBe('Arena 1');
+        });
+
+        it("answers 404 arena_not_found for another account's arena and changes nothing", async () => {
+            const response = await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(authB())
+                .send({ name: 'Roubada' })
+                .expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+            expect((await rowOf(ids.arena1)).name).toBe('Arena 1');
+        });
+
+        it('answers 404 arena_not_found for a soft-deleted arena', async () => {
+            await ds.query(
+                `UPDATE "arenas" SET "deleted_at" = now() WHERE "id" = $1`,
+                [ids.arena1],
+            );
+
+            const response = await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .send({ name: 'Nova' })
+                .expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+        });
+
+        it('rejects a 41-character name with 400', async () => {
+            await create('a'.repeat(41)).expect(400);
+            await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .set(auth())
+                .send({ name: 'a'.repeat(41) })
+                .expect(400);
+        });
+
+        it('rejects POST and PATCH without a token with 401', async () => {
+            await http().post('/arenas').send({ name: 'X' }).expect(401);
+            await http()
+                .patch(`/arenas/${ids.arena1}`)
+                .send({ name: 'X' })
+                .expect(401);
+        });
+    });
 });

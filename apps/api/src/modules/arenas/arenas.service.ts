@@ -8,9 +8,16 @@ import {
     ArenasRepository,
     type SetCurrentMatchResult,
 } from './arenas.repository.js';
+import { generateDeviceToken, hashDeviceToken } from './device-token.js';
+import { generateDeviceId } from './device-id.js';
+import { arenaServerUrl } from './server-url.js';
+import { ArenaNameDto } from './dto/arena-name.dto.js';
 import { ArenaResponse } from './dto/arena-response.dto.js';
+import type { DeviceCredentials } from './dto/device-credentials.dto.js';
 import { SetCurrentMatchDto } from './dto/set-current-match.dto.js';
-import type { Arena } from './entities/arena.entity.js';
+import { Arena } from './entities/arena.entity.js';
+
+const MAX_DEVICE_ID_ATTEMPTS = 5;
 
 @Injectable()
 export class ArenasService {
@@ -21,6 +28,70 @@ export class ArenasService {
     async findAll(userId: string): Promise<ArenaResponse[]> {
         const arenas = await this.arenasRepository.findByOwner(userId);
         return arenas.map((arena) => this.toResponse(arena));
+    }
+
+    /**
+     * Creates an arena for the account. The device token is returned here and nowhere else:
+     * only its hash is stored.
+     */
+    async create(
+        dto: ArenaNameDto,
+        userId: string,
+    ): Promise<{ arena: ArenaResponse; credentials: DeviceCredentials }> {
+        const token = generateDeviceToken();
+        const tokenHash = await hashDeviceToken(token);
+
+        for (let attempt = 1; attempt <= MAX_DEVICE_ID_ATTEMPTS; attempt++) {
+            const arena = new Arena(
+                dto.name,
+                generateDeviceId(dto.name),
+                tokenHash,
+                userId,
+            );
+            const result = await this.arenasRepository.create(arena);
+            if (result === 'done') {
+                return {
+                    arena: this.toResponse(arena),
+                    credentials: {
+                        deviceId: arena.deviceId,
+                        token,
+                        serverUrl: arenaServerUrl(),
+                    },
+                };
+            }
+            if (result === 'arena_name_taken') {
+                this.logger.warn(result, { name: dto.name });
+                throw new ConflictException(result);
+            }
+            // device_id_taken: the random suffix collided, draw another one
+            this.logger.warn(result, { attempt });
+        }
+        throw new Error(
+            `No free device id after ${MAX_DEVICE_ID_ATTEMPTS} attempts`,
+        );
+    }
+
+    /** Renames the arena; its device id stays the same */
+    async rename(
+        id: string,
+        dto: ArenaNameDto,
+        userId: string,
+    ): Promise<ArenaResponse> {
+        const result = await this.arenasRepository.rename(id, userId, dto.name);
+        if (result !== 'done') {
+            this.logger.warn(result, { arenaId: id });
+            throw result === 'arena_not_found'
+                ? new NotFoundException(result)
+                : new ConflictException(result);
+        }
+
+        const arena = await this.arenasRepository.findOwned(id, userId);
+        if (!arena) {
+            // Deleted right after the write
+            this.logger.warn('arena_not_found', { arenaId: id });
+            throw new NotFoundException('arena_not_found');
+        }
+        return this.toResponse(arena);
     }
 
     /**

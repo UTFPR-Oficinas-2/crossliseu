@@ -24,8 +24,15 @@ const CURRENT_MATCH_RELATIONS = {
     currentMatch: { robotA: true, robotB: true },
 };
 
+/** Outcome of creating an arena; anything but 'done' saved nothing */
+export type CreateArenaResult = 'done' | 'arena_name_taken' | 'device_id_taken';
+
+export type RenameArenaResult = 'done' | 'arena_not_found' | 'arena_name_taken';
+
 const UNIQUE_VIOLATION = '23505';
 const CURRENT_MATCH_UNIQUE = 'UQ_arenas_current_match_id';
+const OWNER_NAME_UNIQUE = 'UQ_arenas_owner_user_id_lower_name';
+const DEVICE_ID_UNIQUE = 'UQ_arenas_device_id';
 
 /**
  * Lock order shared by every write that spans arenas and matches, so two of them can't
@@ -55,6 +62,43 @@ export class ArenasRepository {
         });
     }
 
+    /** Saves the arena (id and timestamps are filled in on success) */
+    async create(arena: Arena): Promise<CreateArenaResult> {
+        try {
+            await this.repository.save(arena);
+            return 'done';
+        } catch (error) {
+            switch (uniqueViolationOf(error)) {
+                case OWNER_NAME_UNIQUE:
+                    return 'arena_name_taken';
+                case DEVICE_ID_UNIQUE:
+                    return 'device_id_taken';
+                default:
+                    throw error;
+            }
+        }
+    }
+
+    /** Renames a live arena of the account; the device id never changes */
+    async rename(
+        id: string,
+        ownerUserId: string,
+        name: string,
+    ): Promise<RenameArenaResult> {
+        try {
+            const result = await this.repository.update(
+                { id, ownerUserId, deletedAt: IsNull() },
+                { name },
+            );
+            return result.affected === 1 ? 'done' : 'arena_not_found';
+        } catch (error) {
+            if (uniqueViolationOf(error) === OWNER_NAME_UNIQUE) {
+                return 'arena_name_taken';
+            }
+            throw error;
+        }
+    }
+
     /**
      * Points the arena at the match, in one transaction holding the arena's row lock and then
      * the match's, so two operators selecting the same match (or swapping the same arena)
@@ -76,7 +120,7 @@ export class ArenasRepository {
             );
         } catch (error) {
             // Backstop: the locks should make this unreachable, the constraint makes it safe
-            if (isCurrentMatchUniqueViolation(error)) {
+            if (uniqueViolationOf(error) === CURRENT_MATCH_UNIQUE) {
                 return 'match_already_current';
             }
             throw error;
@@ -159,16 +203,16 @@ export class ArenasRepository {
     }
 }
 
-function isCurrentMatchUniqueViolation(error: unknown): boolean {
+/** The violated constraint (or unique index) name, or undefined if it is not a unique violation */
+function uniqueViolationOf(error: unknown): string | undefined {
     if (!(error instanceof QueryFailedError)) {
-        return false;
+        return undefined;
     }
     const driverError = error.driverError as {
         code?: string;
         constraint?: string;
     };
-    return (
-        driverError.code === UNIQUE_VIOLATION &&
-        driverError.constraint === CURRENT_MATCH_UNIQUE
-    );
+    return driverError.code === UNIQUE_VIOLATION
+        ? driverError.constraint
+        : undefined;
 }
