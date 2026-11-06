@@ -7,8 +7,8 @@ import { ApiError } from '@/api/client'
 import { liveToken } from '@/stores/__tests__/token-helpers'
 import SignInView from '../SignInView.vue'
 
-vi.mock('@/mocks', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
-import { signIn } from '@/mocks'
+vi.mock('@/data', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
+import { signIn } from '@/data'
 
 const stub = { render: () => null }
 
@@ -45,6 +45,14 @@ describe('SignInView', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.mocked(signIn).mockReset()
+  })
+
+  it('says who signs in here and how referees get in', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('.sign-in__subtitle').text()).toBe(
+      'Acesso para organizadores e operadores. Árbitros entram pelo link que recebem do operador.',
+    )
   })
 
   it('renders an empty form and no alert before submitting', async () => {

@@ -60,4 +60,11 @@ const activeNavItem = computed(() =>
   min-width: 0;
   padding: var(--space-page-y) var(--space-page-x);
 }
+
+/* Figma PUB-01 celular: 56px top and bottom, 16px sides */
+@media (max-width: 767px) {
+  .public-layout__content {
+    padding: var(--space-page-y) var(--space-page-x-mobile);
+  }
+}
 </style>

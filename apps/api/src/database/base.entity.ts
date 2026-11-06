@@ -13,7 +13,12 @@ export abstract class BaseEntity {
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt: Date;
 
-    @UpdateDateColumn({ name: 'modified_at', type: 'timestamptz' })
+    // Set to now() on insert and by TypeORM on every save(), update() and softDelete()
+    @UpdateDateColumn({
+        name: 'modified_at',
+        type: 'timestamptz',
+        nullable: false,
+    })
     modifiedAt: Date;
 
     @DeleteDateColumn({

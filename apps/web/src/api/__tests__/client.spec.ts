@@ -50,3 +50,33 @@ describe('apiRequest 401 handling', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 })
+
+describe('apiRequest error details', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('collects class-validator messages into details', async () => {
+    respond(400, { statusCode: 400, message: ['name should not be empty'], error: 'Bad Request' })
+
+    const error = await apiRequest('/championships').catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({ status: 400, details: ['name should not be empty'] })
+  })
+
+  it('wraps a service error code as the message and a single detail', async () => {
+    respond(400, { message: 'championship_end_before_start' })
+
+    await expect(apiRequest('/championships')).rejects.toMatchObject({
+      message: 'championship_end_before_start',
+      details: ['championship_end_before_start'],
+    })
+  })
+
+  it('has empty details on a network failure', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new TypeError('offline')))
+
+    await expect(apiRequest('/championships')).rejects.toMatchObject({ status: 0, details: [] })
+  })
+})

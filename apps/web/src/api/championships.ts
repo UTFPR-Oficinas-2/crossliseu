@@ -1,12 +1,21 @@
 // `ChampionshipsController` in apps/api (`@Controller('championships')`, no global prefix).
-// Shapes mirror the API response; mapping to `@/types` happens in `@/mocks`.
+// Shapes mirror the API response; mapping to `@/types` happens in `@/data`.
 import { apiRequest } from './client'
 
-/** `Championship` entity as serialized by apps/api. Dates are ISO strings. */
+/** `ChampionshipStatus` in apps/api, set from the dates on create */
+export type ApiChampionshipStatus = 'ongoing' | 'scheduled' | 'closed'
+
+/** `Championship` entity plus counts as serialized by apps/api. Dates are ISO strings. */
 export interface ApiChampionship {
   id: string
   name: string
-  scheduledDate: string | null
+  startDate: string
+  endDate: string
+  status: ApiChampionshipStatus
+  robotCount: number
+  fightsTotal: number
+  /** Matches in the `finished` state */
+  fightsDone: number
   createdAt: string
   modifiedAt: string
   deletedAt: string | null
@@ -16,7 +25,9 @@ export interface ApiChampionship {
 export interface ApiCreateChampionship {
   name: string
   /** ISO date */
-  scheduledDate?: string
+  startDate: string
+  /** ISO date, not before `startDate` */
+  endDate: string
 }
 
 /** `UpdateChampionshipDto` (partial create) */

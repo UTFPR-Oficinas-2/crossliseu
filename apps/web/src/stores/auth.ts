@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { signIn as requestSignIn } from '@/mocks'
+import { signIn as requestSignIn } from '@/data'
 
 export const TOKEN_STORAGE_KEY = 'crossliseu.token'
 

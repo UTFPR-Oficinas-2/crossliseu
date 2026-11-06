@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
 
-type InputType = 'text' | 'email' | 'password' | 'search' | 'tel' | 'url' | 'number' | 'date'
+type InputType =
+  'text' | 'email' | 'password' | 'search' | 'tel' | 'url' | 'number' | 'date' | 'datetime-local'
 
 const {
   label,
@@ -13,6 +14,7 @@ const {
   required = false,
   name,
   autocomplete,
+  hideLabel = false,
 } = defineProps<{
   label: string
   placeholder?: string
@@ -23,6 +25,8 @@ const {
   required?: boolean
   name?: string
   autocomplete?: string
+  /** Keeps the label for screen readers only */
+  hideLabel?: boolean
 }>()
 
 const model = defineModel<string>({ default: '' })
@@ -43,7 +47,13 @@ const describedBy = computed(() => {
     class="input-field"
     :class="{ 'input-field--error': error, 'input-field--disabled': disabled }"
   >
-    <label class="input-field__label text-label-s" :for="id">{{ label }}</label>
+    <label
+      class="input-field__label text-label-s"
+      :class="{ 'visually-hidden': hideLabel }"
+      :for="id"
+    >
+      {{ label }}
+    </label>
     <input
       :id="id"
       v-model="model"
@@ -88,7 +98,6 @@ const describedBy = computed(() => {
 }
 
 .input-field__control::placeholder {
-  /* TODO design: Figma has no placeholder color; using muted */
   color: var(--color-muted);
   opacity: 1;
 }
@@ -98,7 +107,6 @@ const describedBy = computed(() => {
 }
 
 .input-field__control:focus-visible {
-  /* TODO design: Figma has no focus state; using orange (primary) */
   border-color: var(--color-orange);
   outline: var(--focus-ring-width) solid var(--color-orange);
   outline-offset: var(--focus-ring-offset);
@@ -109,7 +117,6 @@ const describedBy = computed(() => {
 }
 
 .input-field--error .input-field__control {
-  /* TODO design: Figma has no error variant; using red */
   border-color: var(--color-red);
 }
 
@@ -122,7 +129,6 @@ const describedBy = computed(() => {
 }
 
 .input-field--disabled .input-field__control {
-  /* TODO design: Figma has no disabled variant; using panel + muted */
   background: var(--color-panel);
   color: var(--color-muted);
   cursor: not-allowed;

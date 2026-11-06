@@ -36,6 +36,12 @@ describe('PublicLayout', () => {
     localStorage.clear()
   })
 
+  it('renders the page in the padded content area', async () => {
+    const { wrapper } = await mountLayout()
+
+    expect(wrapper.find('main.public-layout__content').exists()).toBe(true)
+  })
+
   it('shows the public nav with "Entrar" when signed out', async () => {
     const { wrapper } = await mountLayout()
 

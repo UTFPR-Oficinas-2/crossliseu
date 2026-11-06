@@ -6,6 +6,7 @@ import { MatchesModule } from './modules/matches/matches.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { ChampionshipsModule } from './modules/championships/championships.module.js';
+import { RobotsModule } from './modules/robots/robots.module.js';
 
 @Module({
     imports: [
@@ -14,6 +15,7 @@ import { ChampionshipsModule } from './modules/championships/championships.modul
         AuthModule,
         UsersModule,
         ChampionshipsModule,
+        RobotsModule,
     ],
     controllers: [],
     providers: [],

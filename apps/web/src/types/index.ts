@@ -1,14 +1,14 @@
-// DRAFT: domain types inferred from the Figma screens. The backend is not finished, so these are
-// not an API contract and will change. They follow the apps/api conventions where they exist
-// (uuid string ids, camelCase, createdAt/modifiedAt, Match.weightClass). Dates are ISO strings.
+// Domain types. Where apps/api has the entity (championships, robots, matches) these mirror it:
+// state names, weight classes, end reasons, uuid string ids, camelCase, createdAt/modifiedAt.
+// Fields marked "demo data only" have no API source yet. Dates are ISO strings.
 
 // Status unions. Each one is a separate concern and must never be merged with another.
 
 /** Championship lifecycle: Programado / Em andamento / Encerrado */
-export type ChampionshipStatus = 'scheduled' | 'running' | 'finished'
+export type ChampionshipStatus = 'scheduled' | 'ongoing' | 'closed'
 
-/** Fight state, separate from recording/upload/analysis */
-export type MatchState = 'waiting' | 'running' | 'paused' | 'finished'
+/** Fight state as the API names it, separate from recording/upload/analysis */
+export type MatchState = 'scheduled' | 'ongoing' | 'paused' | 'finished'
 
 /** Recording, upload and analysis state: pendente / processando / concluído / falhou */
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
@@ -25,26 +25,20 @@ export type Side = 'A' | 'B'
 /** Every match has exactly three referee seats */
 export type RefereeSeat = 1 | 2 | 3
 
-/** How a fight ended: desistência / pontos / nocaute */
-export type MatchEndReason = 'surrender' | 'points' | 'knockout'
+/** How a fight ended (apps/api `MatchEndReason`): time ran out, the operator stopped it, or a side surrendered */
+export type MatchEndReason = 'time_out' | 'manual' | 'surrender'
 
-/**
- * apps/api (`GET /championships`) only returns id, name, scheduledDate (→ `startDate`) and
- * timestamps. Optional fields are not sent by the API yet: hide their UI when they are missing.
- */
+/** Robot weight class, as the API names it (never translated). A match pairs robots of one class. */
+export type WeightClass =
+  'fairyweight' | 'antweight' | 'beetleweight' | 'hobbyweight' | 'featherweight' | 'lightweight'
+
+/** Optional fields are missing from some demo data: hide their UI when they are missing. */
 export interface Championship {
   id: string
   name: string
-  /** Free label shown on the card: "EDIÇÃO 01", "ETAPA 03", "INTERNO" */
-  edition?: string
-  description?: string
-  /** "UTFPR, Curitiba" */
-  location?: string
   startDate: string | null
   endDate?: string | null
   status?: ChampionshipStatus
-  /** "inscrições abertas" */
-  registrationOpen?: boolean
   /** Card summary: "16 robôs · 6 de 15 lutas" */
   robotCount?: number
   fightsDone?: number
@@ -66,13 +60,13 @@ export interface Robot {
   championshipId: string
   name: string
   team: string
-  /** Person responsible for the robot (Responsável) */
-  owner: string
-  /** "3 kg" */
-  weightClass: string
-  /** "Arrasto", "Girante", "Cunha" */
-  category: string
-  status: RobotStatus
+  /** Demo data only: the API has no owner (Responsável), and the UI no longer shows it */
+  owner?: string
+  weightClass: WeightClass
+  /** Demo data only: combat category ("Arrasto", "Girante", "Cunha"), not shown */
+  category?: string
+  /** Demo data only: weigh-in status, not shown */
+  status?: RobotStatus
   createdAt: string
   modifiedAt: string
 }
@@ -92,22 +86,13 @@ export interface MatchReferee {
   ready: boolean
 }
 
-/** One referee's own values for one match. There is no official total: the formula is undecided. */
-export interface RefereeScore {
-  matchId: string
-  seat: RefereeSeat
-  refereeId: string
+/** A finished fight. Scores are totals (the three referees summed); partials are never shown. */
+export interface MatchResult {
+  endReason: MatchEndReason
+  /** `null` on a draw (EMPATE) */
+  winnerRobotId: string | null
   scoreA: number
   scoreB: number
-  submittedAt: string
-}
-
-export interface MatchResult {
-  winnerSide: Side
-  reason: MatchEndReason
-  durationSeconds: number
-  /** Operator confirmed the result (Resultado confirmado / Aguardando confirmação) */
-  confirmed: boolean
 }
 
 /** Heatmap generated from the recording, one per robot */
@@ -117,18 +102,28 @@ export interface RobotHeatmap {
   detectedPositions: number | null
 }
 
-export interface Match {
+/** What the organizer screens need from a match (Figma 10 and 10b) */
+export interface MatchSummary {
   id: string
   championshipId: string
+  /** Shared by both robots; see `Robot.weightClass` */
+  weightClass: WeightClass
+  robotAId: string
+  robotBId: string
+  state: MatchState
+  /** When the fight is planned to start (ISO) */
+  scheduledAt: string
+  createdAt: string
+  modifiedAt: string
+}
+
+/** A match with the operator, referee and public fields (still demo data only) */
+export interface Match extends MatchSummary {
   /** Fight number shown as "Luta 07" */
   number: number
   /** Manual position in the fight order; there is no automatic bracket */
   order: number
   arenaId: string
-  weightClass: string
-  robotAId: string
-  robotBId: string
-  state: MatchState
   roundDurationSeconds: number
   elapsedSeconds: number
   startedAt: string | null
@@ -143,8 +138,6 @@ export interface Match {
   uploadProgress: number | null
   analysisStatus: ProcessingStatus
   heatmaps: RobotHeatmap[]
-  createdAt: string
-  modifiedAt: string
 }
 
 /** What a referee link resolves to */

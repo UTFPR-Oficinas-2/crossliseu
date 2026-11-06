@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// Figma: `07 / Organizador · Visão geral` (node 2:15) — `Navigation / App` + `Organizer / Shell`
+// Figma: `Navigation / App` + `Organizer / Shell` (from the former overview frame, node 2:15)
 // (sidebar 21:305, main 21:333). Only the frame is built here; page content goes in <RouterView />.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, type RouteRecordName } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppNav from '@/components/ui/AppNav.vue'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
-import { getChampionship } from '@/mocks'
+import { getChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -14,8 +14,9 @@ const router = useRouter()
 const auth = useAuthStore()
 
 async function handleSignOut() {
-  auth.signOut()
-  await router.push({ name: 'home' })
+  // Sign out only once we actually left (a form may block navigation with a confirmation)
+  const failure = await router.push({ name: 'home' })
+  if (!failure) auth.signOut()
 }
 
 /** Present only on the per-championship routes; `/manage` and `/manage/new` have no sidebar */
@@ -31,19 +32,25 @@ watch(
   async (id) => {
     championshipName.value = null
     if (!id) return
-    const championship = await getChampionship(id)
-    // Ignore a stale response if the user navigated to another championship meanwhile
-    if (id === championshipId.value) championshipName.value = championship?.name ?? null
+    try {
+      const championship = await getChampionship(id)
+      // Ignore a stale response if the user navigated to another championship meanwhile
+      if (id === championshipId.value) championshipName.value = championship?.name ?? null
+    } catch (error) {
+      console.error('Failed to load championship name', error)
+    }
   },
   { immediate: true },
 )
 
 const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
-  { routeName: 'championship-overview', label: 'Visão geral' },
   { routeName: 'championship-participants', label: 'Participantes' },
   { routeName: 'championship-matches', label: 'Lutas' },
   { routeName: 'championship-settings', label: 'Configurações' },
 ]
+
+/** Form pages set `meta.sidebar` to the list they belong to */
+const activeSidebarItem = computed(() => route.meta.sidebar ?? route.name)
 </script>
 
 <template>
@@ -62,7 +69,7 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
             <li v-for="item in sidebarItems" :key="item.routeName">
               <SidebarItem
                 :to="{ name: item.routeName, params: { championshipId } }"
-                :active="route.name === item.routeName"
+                :active="activeSidebarItem === item.routeName"
               >
                 {{ item.label }}
               </SidebarItem>
@@ -78,9 +85,6 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
           >
             Ver página pública
           </AppButton>
-          <p class="organizer-layout__note text-body-s">
-            Somente organizadores autorizados podem alterar este campeonato.
-          </p>
         </div>
       </aside>
 
@@ -160,19 +164,15 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
   min-width: 0;
 }
 
-.organizer-layout__note {
-  color: var(--color-muted);
-}
-
 .organizer-layout__main {
   flex: 999 1 0;
   min-width: 50%;
   padding: var(--space-8) var(--space-8) var(--space-9);
 }
 
-/* Without a sidebar, content lines up with the nav's side padding */
+/* Without a sidebar, content lines up with the nav's side padding (Figma 06/08: 48 top, 56 bottom) */
 .organizer-layout__main--full {
   min-width: 0;
-  padding-inline: var(--space-page-x);
+  padding: var(--space-9) var(--space-page-x) var(--space-page-y);
 }
 </style>

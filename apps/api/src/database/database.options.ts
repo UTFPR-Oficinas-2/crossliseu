@@ -1,10 +1,12 @@
-import { DataSourceOptions } from 'typeorm';
-import { fileURLToPath } from 'node:url';
+import type { PostgresDataSourceOptions } from 'typeorm/driver/postgres/PostgresDataSourceOptions.js';
 import { Match } from '../modules/matches/entities/match.entity.js';
 import { User } from '../modules/users/entities/user.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
+import { Robot } from '../modules/robots/entities/robot.entity.js';
+import { MatchPause } from '../modules/matches/entities/match-pause.entity.js';
+import { MatchScoreEvent } from '../modules/matches/entities/match-score-event.entity.js';
 
-export function databaseOptions(): DataSourceOptions {
+export function databaseOptions(): PostgresDataSourceOptions {
     const db: string = String(process.env.POSTGRES_DB);
     const username: string = String(process.env.POSTGRES_USER);
     const port: number = Number(process.env.POSTGRES_PORT);
@@ -24,10 +26,16 @@ export function databaseOptions(): DataSourceOptions {
         username: username,
         password: password,
         database: db,
-        entities: [Match, User, Championship],
-        migrations: [
-            fileURLToPath(new URL('./migrations/*{.ts,.js}', import.meta.url)),
+        entities: [
+            Match,
+            User,
+            Championship,
+            Robot,
+            MatchPause,
+            MatchScoreEvent,
         ],
+        // Migrations are listed only by the CLI data source (data-source.ts): the app never runs
+        // them, and TypeORM would import every migration file on each connection otherwise
         synchronize: false,
         migrationsRun: false,
     };

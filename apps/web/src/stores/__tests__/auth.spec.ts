@@ -4,8 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { TOKEN_STORAGE_KEY, useAuthStore } from '../auth'
 import { liveToken, makeToken } from './token-helpers'
 
-vi.mock('@/mocks', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
-import { signIn as requestSignIn } from '@/mocks'
+vi.mock('@/data', () => ({ signIn: vi.fn<(u: string, p: string) => Promise<string>>() }))
+import { signIn as requestSignIn } from '@/data'
 
 const nowSeconds = () => Math.floor(Date.now() / 1000)
 
