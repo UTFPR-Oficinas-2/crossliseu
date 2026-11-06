@@ -200,6 +200,22 @@ describe('arenas (db)', () => {
         expect(await currentMatchOf(ids.arena1)).toBeNull();
     });
 
+    it('clears the arena pointer when the championship of its current match is deleted', async () => {
+        await arenas.setCurrentMatch(ids.arena1, ids.m1);
+        const [{ championship_id }]: { championship_id: string }[] =
+            await ds.query(
+                `SELECT "championship_id" FROM "matches" WHERE "id" = $1`,
+                [ids.m1],
+            );
+
+        await http()
+            .delete(`/championships/${championship_id}`)
+            .set(auth())
+            .expect(204);
+
+        expect(await currentMatchOf(ids.arena1)).toBeNull();
+    });
+
     it('keeps the arena pointer when the delete is refused', async () => {
         await arenas.setCurrentMatch(ids.arena1, ids.m1);
         await setState(ids.m1, 'ongoing');

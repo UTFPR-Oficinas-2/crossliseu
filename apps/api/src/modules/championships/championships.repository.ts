@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Championship } from './entities/championship.entity.js';
 import { In, Repository } from 'typeorm';
+import { Arena } from '../arenas/entities/arena.entity.js';
 import type { MatchState } from '../matches/entities/match.entity.js';
 import { Match } from '../matches/entities/match.entity.js';
 import { Robot } from '../robots/entities/robot.entity.js';
@@ -85,6 +86,8 @@ export class ChampionshipsRepository {
      * while a match is being fought. Locks the championship FOR UPDATE, then its matches, the
      * same order as the robot and match writes (which lock it FOR SHARE), so an insert into this
      * championship either commits first and is deleted here, or waits and finds it gone.
+     * Every arena is locked between the championship and the matches (arena before match, like
+     * ArenasRepository), and arenas pointing at a deleted match lose that pointer.
      */
     removeCascade(
         id: string,
@@ -98,6 +101,12 @@ export class ChampionshipsRepository {
                 return 'not_found';
             }
 
+            await manager.find(Arena, {
+                select: { id: true },
+                order: { id: 'ASC' },
+                lock: { mode: 'pessimistic_write' },
+            });
+
             const matches = await manager.find(Match, {
                 where: { championshipId: id },
                 lock: { mode: 'pessimistic_write' },
@@ -106,6 +115,13 @@ export class ChampionshipsRepository {
                 return 'has_live_match';
             }
 
+            if (matches.length > 0) {
+                await manager.update(
+                    Arena,
+                    { currentMatchId: In(matches.map((match) => match.id)) },
+                    { currentMatchId: null },
+                );
+            }
             await manager.softDelete(Match, { championshipId: id });
             await manager.softDelete(Robot, { championshipId: id });
             await manager.softDelete(Championship, { id });
