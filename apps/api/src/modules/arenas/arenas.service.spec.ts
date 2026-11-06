@@ -9,11 +9,12 @@ import type {
 
 const ARENA_1_ID = '11111111-1111-4111-8111-111111111111';
 const ARENA_2_ID = '22222222-2222-4222-8222-222222222222';
+const OWNER_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const MATCH_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_MATCH_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 function arena(id: string, name: string, currentMatchId: string | null) {
-    const entity = new Arena(name, `${name}-device`, 'bcrypt-hash');
+    const entity = new Arena(name, `${name}-device`, 'bcrypt-hash', OWNER_ID);
     entity.id = id;
     entity.currentMatchId = currentMatchId;
     return entity;

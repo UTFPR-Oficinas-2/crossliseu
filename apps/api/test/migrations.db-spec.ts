@@ -68,6 +68,7 @@ describe('migrations on a fresh database', () => {
             { column_name: 'id', is_nullable: 'NO' },
             { column_name: 'modified_at', is_nullable: 'NO' },
             { column_name: 'name', is_nullable: 'NO' },
+            { column_name: 'owner_user_id', is_nullable: 'NO' },
             { column_name: 'token_hash', is_nullable: 'NO' },
         ]);
 
@@ -78,8 +79,16 @@ describe('migrations on a fresh database', () => {
         expect(uniques.map((row) => row.conname)).toEqual([
             'UQ_arenas_current_match_id',
             'UQ_arenas_device_id',
-            'UQ_arenas_name',
         ]);
+
+        const [ownerNameIndex]: { indexdef: string }[] = await ds.query(
+            `SELECT indexdef FROM pg_indexes
+             WHERE indexname = 'UQ_arenas_owner_user_id_lower_name'`,
+        );
+        expect(ownerNameIndex?.indexdef).toContain('lower(');
+        expect(ownerNameIndex?.indexdef).toContain(
+            'WHERE (deleted_at IS NULL)',
+        );
     });
 
     it('links arenas and matches both ways with nullable FKs', async () => {
@@ -101,5 +110,66 @@ describe('migrations on a fresh database', () => {
              WHERE table_name = 'matches' AND column_name = 'arena_id'`,
         );
         expect(arenaId?.is_nullable).toBe('YES');
+    });
+
+    describe('ArenaOwners', () => {
+        async function insertUser(
+            username: string,
+            createdAt: string,
+            deletedAt: string | null,
+        ): Promise<string> {
+            const [row]: { id: string }[] = await ds.query(
+                `INSERT INTO "users" ("username", "email", "password", "created_at", "deleted_at")
+                 VALUES ($1, $2, 'pw', $3, $4) RETURNING "id"`,
+                [username, `${username}@example.com`, createdAt, deletedAt],
+            );
+            return row!.id;
+        }
+
+        async function insertArena(name: string): Promise<void> {
+            await ds.query(
+                `INSERT INTO "arenas" ("name", "device_id", "token_hash")
+                 VALUES ($1, $2, 'hash')`,
+                [name, `${name}-device`],
+            );
+        }
+
+        async function cleanUp(): Promise<void> {
+            // Empty first: the migration refuses arenas without a live user
+            await ds.query(`TRUNCATE "users", "arenas" CASCADE`);
+            await ds.runMigrations();
+        }
+
+        beforeEach(async () => {
+            await ds.runMigrations();
+            await ds.query(`TRUNCATE "users", "arenas" CASCADE`);
+            await ds.undoLastMigration();
+        });
+
+        afterEach(cleanUp);
+
+        it('gives existing arenas to the oldest live user', async () => {
+            await insertUser('ghost', '2026-01-01', '2026-02-01');
+            const adminId = await insertUser('admin', '2026-01-02', null);
+            await insertUser('newer', '2026-01-03', null);
+            await insertArena('Arena 1');
+            await insertArena('Arena 2');
+
+            await ds.runMigrations();
+
+            const owners: { owner_user_id: string }[] = await ds.query(
+                `SELECT "owner_user_id" FROM "arenas"`,
+            );
+            expect(owners).toEqual([
+                { owner_user_id: adminId },
+                { owner_user_id: adminId },
+            ]);
+        });
+
+        it('refuses to run when arenas exist but no live user can own them', async () => {
+            await insertArena('Arena 1');
+
+            await expect(ds.runMigrations()).rejects.toThrow('no live user');
+        });
     });
 });

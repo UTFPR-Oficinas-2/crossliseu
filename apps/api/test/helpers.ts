@@ -123,11 +123,22 @@ export async function seedMatch(
         );
 }
 
-/** An arena with a dummy token hash (the device token isn't used by these tests) */
-export async function seedArena(ds: DataSource, name: string): Promise<Arena> {
+/** An arena with a dummy token hash (the device token isn't used by these tests), owned by the oldest user unless given */
+export async function seedArena(
+    ds: DataSource,
+    name: string,
+    ownerUserId?: string,
+): Promise<Arena> {
     return ds
         .getRepository(Arena)
-        .save(new Arena(name, `${name}-device`, 'not-a-real-hash'));
+        .save(
+            new Arena(
+                name,
+                `${name}-device`,
+                'not-a-real-hash',
+                ownerUserId ?? (await seedCreatorId(ds)),
+            ),
+        );
 }
 
 /** A promise the test resolves by hand, to hold a transaction open */

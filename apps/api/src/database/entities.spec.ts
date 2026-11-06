@@ -118,9 +118,10 @@ describe('entity metadata', () => {
         ]);
     });
 
-    it('arena references its current match', async () => {
+    it('arena references its current match and owner', async () => {
         expect(await foreignKeys(Arena)).toEqual([
             'current_match_id → matches',
+            'owner_user_id → users',
         ]);
     });
 
@@ -133,6 +134,7 @@ describe('entity metadata', () => {
             'id',
             'modified_at',
             'name',
+            'owner_user_id',
             'token_hash',
         ]);
     });
@@ -144,16 +146,25 @@ describe('entity metadata', () => {
         ]);
     });
 
-    it.each([
-        'UQ_arenas_name',
-        'UQ_arenas_device_id',
-        'UQ_arenas_current_match_id',
-    ])('arena declares %s', async (name) => {
+    it.each(['UQ_arenas_device_id', 'UQ_arenas_current_match_id'])(
+        'arena declares %s',
+        async (name) => {
+            const dataSource = await buildDataSource();
+
+            expect(
+                dataSource
+                    .getMetadata(Arena)
+                    .uniques.map((unique) => unique.name),
+            ).toContain(name);
+        },
+    );
+
+    it('arena no longer has a globally unique name', async () => {
         const dataSource = await buildDataSource();
 
         expect(
             dataSource.getMetadata(Arena).uniques.map((unique) => unique.name),
-        ).toContain(name);
+        ).not.toContain('UQ_arenas_name');
     });
 
     it('score event references its match and robot', async () => {
@@ -196,6 +207,7 @@ describe('entity metadata', () => {
         [User, 'UQ_users_lower_username'],
         [User, 'UQ_users_lower_email'],
         [Robot, 'UQ_robots_championship_id_lower_name'],
+        [Arena, 'UQ_arenas_owner_user_id_lower_name'],
         [MatchPause, 'UQ_match_pauses_open'],
     ] as const)(
         'keeps the migration-managed index %#, %s, out of synchronization',
