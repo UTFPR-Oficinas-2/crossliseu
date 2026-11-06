@@ -8,6 +8,7 @@ import {
     Repository,
 } from 'typeorm';
 import { Arena } from './entities/arena.entity.js';
+import { Championship } from '../championships/entities/championship.entity.js';
 import { Match } from '../matches/entities/match.entity.js';
 
 /** Outcome of pointing an arena at a match; anything but 'done' left the arena unchanged */
@@ -18,6 +19,10 @@ export type SetCurrentMatchResult =
     | 'match_not_scheduled'
     | 'match_already_current'
     | 'arena_match_started';
+
+const CURRENT_MATCH_RELATIONS = {
+    currentMatch: { robotA: true, robotB: true },
+};
 
 const UNIQUE_VIOLATION = '23505';
 const CURRENT_MATCH_UNIQUE = 'UQ_arenas_current_match_id';
@@ -33,13 +38,21 @@ export class ArenasRepository {
         private readonly repository: Repository<Arena>,
     ) {}
 
-    findAll(): Promise<Arena[]> {
-        // Creation order keeps the operator's arena list stable
-        return this.repository.find({ order: { createdAt: 'ASC' } });
+    /** The account's live arenas, in creation order so the operator's list stays stable */
+    findByOwner(ownerUserId: string): Promise<Arena[]> {
+        return this.repository.find({
+            where: { ownerUserId },
+            relations: CURRENT_MATCH_RELATIONS,
+            order: { createdAt: 'ASC' },
+        });
     }
 
-    findOne(id: string): Promise<Arena | null> {
-        return this.repository.findOneBy({ id });
+    /** Null for an unknown, deleted or someone else's arena */
+    findOwned(id: string, ownerUserId: string): Promise<Arena | null> {
+        return this.repository.findOne({
+            where: { id, ownerUserId },
+            relations: CURRENT_MATCH_RELATIONS,
+        });
     }
 
     /**
@@ -50,10 +63,16 @@ export class ArenasRepository {
     async setCurrentMatch(
         arenaId: string,
         matchId: string,
+        ownerUserId: string,
     ): Promise<SetCurrentMatchResult> {
         try {
             return await this.repository.manager.transaction((manager) =>
-                this.setCurrentMatchLocked(manager, arenaId, matchId),
+                this.setCurrentMatchLocked(
+                    manager,
+                    arenaId,
+                    matchId,
+                    ownerUserId,
+                ),
             );
         } catch (error) {
             // Backstop: the locks should make this unreachable, the constraint makes it safe
@@ -77,9 +96,10 @@ export class ArenasRepository {
         manager: EntityManager,
         arenaId: string,
         matchId: string,
+        ownerUserId: string,
     ): Promise<SetCurrentMatchResult> {
         const arena = await manager.findOne(Arena, {
-            where: { id: arenaId },
+            where: { id: arenaId, ownerUserId },
             lock: { mode: 'pessimistic_write' },
         });
         if (!arena) {
@@ -89,6 +109,13 @@ export class ArenasRepository {
         // find() skips soft-deleted matches
         const match = await this.lockMatch(manager, matchId);
         if (!match) {
+            return 'match_not_found';
+        }
+        // Another organization's match looks like an unknown one, whatever its state
+        const ownsMatch = await manager.exists(Championship, {
+            where: { id: match.championshipId, createdByUserId: ownerUserId },
+        });
+        if (!ownsMatch) {
             return 'match_not_found';
         }
         if (match.state !== 'scheduled') {

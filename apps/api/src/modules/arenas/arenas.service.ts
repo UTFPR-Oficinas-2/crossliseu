@@ -18,8 +18,8 @@ export class ArenasService {
 
     constructor(private readonly arenasRepository: ArenasRepository) {}
 
-    async findAll(): Promise<ArenaResponse[]> {
-        const arenas = await this.arenasRepository.findAll();
+    async findAll(userId: string): Promise<ArenaResponse[]> {
+        const arenas = await this.arenasRepository.findByOwner(userId);
         return arenas.map((arena) => this.toResponse(arena));
     }
 
@@ -30,17 +30,19 @@ export class ArenasService {
     async setCurrentMatch(
         arenaId: string,
         dto: SetCurrentMatchDto,
+        userId: string,
     ): Promise<ArenaResponse> {
         const result = await this.arenasRepository.setCurrentMatch(
             arenaId,
             dto.matchId,
+            userId,
         );
         if (result !== 'done') {
             this.logger.warn(result, { arenaId, matchId: dto.matchId });
             throw toException(result);
         }
 
-        const arena = await this.arenasRepository.findOne(arenaId);
+        const arena = await this.arenasRepository.findOwned(arenaId, userId);
         if (!arena) {
             // Deleted right after the write
             this.logger.warn('arena_not_found', { arenaId });
@@ -58,12 +60,22 @@ export class ArenasService {
     }
 
     private toResponse(arena: Arena): ArenaResponse {
+        const match = arena.currentMatch;
         return {
             id: arena.id,
             name: arena.name,
+            deviceId: arena.deviceId,
             // Becomes real once arena devices connect (#19)
             online: false,
             currentMatchId: arena.currentMatchId,
+            currentMatch:
+                match?.robotA && match.robotB
+                    ? {
+                          id: match.id,
+                          robotAName: match.robotA.name,
+                          robotBName: match.robotB.name,
+                      }
+                    : null,
         };
     }
 }

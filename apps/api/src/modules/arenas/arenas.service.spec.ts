@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ArenasService } from './arenas.service.js';
 import { Arena } from './entities/arena.entity.js';
+import type { Match } from '../matches/entities/match.entity.js';
 import type {
     ArenasRepository,
     SetCurrentMatchResult,
@@ -13,10 +14,21 @@ const OWNER_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const MATCH_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_MATCH_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
+function matchStub(id: string): Match {
+    return {
+        id,
+        robotA: { name: 'Titã' },
+        robotB: { name: 'Marte' },
+    } as Match;
+}
+
 function arena(id: string, name: string, currentMatchId: string | null) {
     const entity = new Arena(name, `${name}-device`, 'bcrypt-hash', OWNER_ID);
     entity.id = id;
     entity.currentMatchId = currentMatchId;
+    if (currentMatchId) {
+        entity.currentMatch = matchStub(currentMatchId);
+    }
     return entity;
 }
 
@@ -26,13 +38,16 @@ function setup(
 ) {
     const arenasRepository = {
         // Applies the pointer change only on 'done', like the locked transaction
-        setCurrentMatch: vi.fn((arenaId: string, matchId: string) => {
-            const target = arenas.find((entity) => entity.id === arenaId);
-            if (setResult === 'done' && target) {
-                target.currentMatchId = matchId;
-            }
-            return Promise.resolve(setResult);
-        }),
+        setCurrentMatch: vi.fn(
+            (arenaId: string, matchId: string, _ownerUserId: string) => {
+                const target = arenas.find((entity) => entity.id === arenaId);
+                if (setResult === 'done' && target) {
+                    target.currentMatchId = matchId;
+                    target.currentMatch = matchStub(matchId);
+                }
+                return Promise.resolve(setResult);
+            },
+        ),
         clearCurrentMatch: vi.fn((arenaId: string) => {
             const target = arenas.find((entity) => entity.id === arenaId);
             if (target) {
@@ -40,8 +55,8 @@ function setup(
             }
             return Promise.resolve(target !== undefined);
         }),
-        findAll: vi.fn(() => Promise.resolve(arenas)),
-        findOne: vi.fn((id: string) =>
+        findByOwner: vi.fn((_ownerUserId: string) => Promise.resolve(arenas)),
+        findOwned: vi.fn((id: string, _ownerUserId: string) =>
             Promise.resolve(arenas.find((entity) => entity.id === id) ?? null),
         ),
     };
@@ -52,38 +67,49 @@ function setup(
 }
 
 describe('ArenasService.findAll', () => {
-    it('lists arenas as offline with their current match', async () => {
-        const { service } = setup([
+    it('lists the owner arenas as offline with their current match', async () => {
+        const { service, arenasRepository } = setup([
             arena(ARENA_1_ID, 'Arena 1', MATCH_ID),
             arena(ARENA_2_ID, 'Arena 2', null),
         ]);
 
-        expect(await service.findAll()).toEqual([
+        expect(await service.findAll('user-a')).toEqual([
             {
                 id: ARENA_1_ID,
                 name: 'Arena 1',
+                deviceId: 'Arena 1-device',
                 online: false,
                 currentMatchId: MATCH_ID,
+                currentMatch: {
+                    id: MATCH_ID,
+                    robotAName: 'Titã',
+                    robotBName: 'Marte',
+                },
             },
             {
                 id: ARENA_2_ID,
                 name: 'Arena 2',
+                deviceId: 'Arena 2-device',
                 online: false,
                 currentMatchId: null,
+                currentMatch: null,
             },
         ]);
+        expect(arenasRepository.findByOwner).toHaveBeenCalledWith('user-a');
     });
 
-    it('never exposes the device id or the token hash', async () => {
+    it('never exposes the token hash', async () => {
         const { service } = setup([arena(ARENA_1_ID, 'Arena 1', null)]);
 
-        const [result] = await service.findAll();
+        const [result] = await service.findAll('user-a');
 
         expect(Object.keys(result!)).toEqual([
             'id',
             'name',
+            'deviceId',
             'online',
             'currentMatchId',
+            'currentMatch',
         ]);
     });
 });
@@ -95,16 +121,27 @@ describe('ArenasService.setCurrentMatch', () => {
         ]);
 
         expect(
-            await service.setCurrentMatch(ARENA_1_ID, { matchId: MATCH_ID }),
+            await service.setCurrentMatch(
+                ARENA_1_ID,
+                { matchId: MATCH_ID },
+                'user-a',
+            ),
         ).toEqual({
             id: ARENA_1_ID,
             name: 'Arena 1',
+            deviceId: 'Arena 1-device',
             online: false,
             currentMatchId: MATCH_ID,
+            currentMatch: {
+                id: MATCH_ID,
+                robotAName: 'Titã',
+                robotBName: 'Marte',
+            },
         });
         expect(arenasRepository.setCurrentMatch).toHaveBeenCalledWith(
             ARENA_1_ID,
             MATCH_ID,
+            'user-a',
         );
     });
 
@@ -120,9 +157,11 @@ describe('ArenasService.setCurrentMatch', () => {
             const current = arena(ARENA_1_ID, 'Arena 1', OTHER_MATCH_ID);
             const { service } = setup([current], { setResult: result });
 
-            const call = service.setCurrentMatch(ARENA_1_ID, {
-                matchId: MATCH_ID,
-            });
+            const call = service.setCurrentMatch(
+                ARENA_1_ID,
+                { matchId: MATCH_ID },
+                'user-a',
+            );
 
             await expect(call).rejects.toThrow(exception);
             await expect(call).rejects.toThrow(result);
