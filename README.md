@@ -20,7 +20,8 @@ Crossliseu lets the public follow championships and fights, organizers manage th
 | Homepage, sign-in (JWT) | Available |
 | Championships and matches API, Swagger docs | Available |
 | Organizer screens (championships, participants, matches) | Available, backed by the API |
-| Operator, referee and match detail screens | Built to the Figma specs, but the API has no arenas, operator or referee endpoints yet, so they show errors |
+| Arenas (create, rename, new token, delete, `config.h` download) | Available at Meus campeonatos → Arenas, backed by the API |
+| Operator, referee and match detail screens | Built to the Figma specs, but the API has no operator or referee endpoints yet, so they show errors |
 | Computer-vision worker, ESP32 firmware | Planned / experimental |
 
 ## Tech stack
@@ -59,12 +60,6 @@ docker compose exec api npm run migration:run -- -d src/database/data-source.ts
 docker compose exec api npm run seed:admin
 ```
 
-To register an arena box and print its device token (shown once), see [Seeding an arena](apps/api/README.md#seeding-an-arena):
-
-```bash
-docker compose exec -e ARENA_NAME="Arena 1" -e ARENA_DEVICE_ID=arena-1 api npm run seed:arena
-```
-
 | Service | URL |
 | --- | --- |
 | Web | <http://localhost:5173> |
@@ -84,7 +79,6 @@ cd apps/api
 npm ci
 npm run migration:run -- -d src/database/data-source.ts
 npm run seed:admin
-ARENA_NAME="Arena 1" ARENA_DEVICE_ID=arena-1 npm run seed:arena   # optional, prints the device token once
 npm run start:dev           # http://localhost:3000
 ```
 
@@ -111,7 +105,7 @@ Defined in `.env` at the repository root (copy from `.env.example`).
 | `POSTGRES_HOST` | Yes | API | `postgres` inside Docker Compose, `localhost` on your machine |
 | `SECRET` | Yes | API | JWT signing key, for example `openssl rand -hex 32` |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | For seeding | `npm run seed:admin` | Credentials of the first admin; there is no sign-up |
-| `ARENA_NAME`, `ARENA_DEVICE_ID` | For seeding | `npm run seed:arena` | Arena name and the `deviceId` flashed on its box; usually passed on the command line, one arena per run |
+| `ARENA_SERVER_URL` | No | API | WebSocket address arena boxes connect to, e.g. `wss://crossliseu.example/arena`. Written into the `config.h` the Arenas page generates; empty leaves a placeholder |
 | `VITE_API_URL` | Yes | Web (build time) | API base URL, `/api` in dev. The web app has no demo data: the dev server and production builds fail without it |
 
 ## Common commands

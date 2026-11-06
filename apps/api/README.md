@@ -33,7 +33,6 @@ npm run start:dev          # http://localhost:3000
 | `npm run test:db` | Run the database and e2e tests in `test/` against `POSTGRES_TEST_DB` (dropped and recreated on each run; needs Postgres up) |
 | `npm run migration:generate` / `migration:run` / `migration:revert` | Manage migrations, see [Migrations](#migrations) |
 | `npm run seed:admin` | Create the admin user, see [Seeding the admin](#seeding-the-admin) |
-| `npm run seed:arena` | Create an arena or rotate its device token, see [Seeding an arena](#seeding-an-arena) |
 
 ## Configuration
 
@@ -43,6 +42,7 @@ Database and `SECRET` come from the root `.env`. The API also reads:
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port |
 | `NODE_ENV` | | `production` disables Swagger |
+| `ARENA_SERVER_URL` | | WebSocket address arena boxes connect to, e.g. `wss://crossliseu.example/arena`. Returned as `serverUrl` with new device credentials; `null` when unset |
 | `POSTGRES_TEST_DB` | | Database `npm run test:db` drops and recreates; must differ from `POSTGRES_DB` |
 
 ## Authentication
@@ -94,25 +94,17 @@ npm run seed:admin
 
 Inside Docker Compose use `docker compose exec api npm run seed:admin` instead.
 
-## Seeding an arena
-
-Each physical arena box needs a row in `arenas` and a device token. Pass the arena's name and the `deviceId` flashed on the box:
-
-```bash
-ARENA_NAME="Arena 1" ARENA_DEVICE_ID=arena-1 npm run seed:arena
-```
-
-It prints `Created arena "Arena 1"` and `Device token (shown once): <64 hex chars>`. Only a bcrypt hash is stored, so copy the token into the box's firmware config now; it can't be read back.
-
-Running it again with the same `ARENA_DEVICE_ID` updates the name and **rotates the token**: the old token stops working and a new one is printed. Use that when a token leaks or is lost.
-
-Inside Docker Compose use `docker compose exec -e ARENA_NAME="Arena 1" -e ARENA_DEVICE_ID=arena-1 api npm run seed:arena`.
-
 ## Arenas
+
+An arena is a physical box. It belongs to the account that created it; every route needs a token and is owner-scoped, so another account's arena, or a deleted one, answers 404 `arena_not_found`.
 
 | Route | Description |
 | --- | --- |
-| `GET /arenas` | List arenas as `{ id, name, online, currentMatchId }`. `online` is always `false` until arena devices connect |
-| `PUT /arenas/:id/current-match` | Body `{ "matchId": "<uuid>" }`. Select (or swap to) the scheduled match the arena runs next |
+| `GET /arenas` | The caller's arenas as `{ id, name, deviceId, online, currentMatchId, currentMatch }`. `currentMatch` is `{ id, robotAName, robotBName }` or `null`; `online` is always `false` until arena devices connect |
+| `POST /arenas` | Body `{ "name": "..." }` (1-40 characters). 201 `{ arena, credentials }`, where `credentials` is `{ deviceId, token, serverUrl }`. The token is shown only this once. 400 for an invalid name, 409 `arena_name_taken` |
+| `PATCH /arenas/:id` | Body `{ "name": "..." }`. Renames the arena; the `deviceId` never changes. 404, 409 `arena_name_taken` |
+| `POST /arenas/:id/token` | Generates a new token and returns the credentials; the old token stops working. 404, 409 `arena_match_live` |
+| `DELETE /arenas/:id` | 204. Soft-deletes the arena, clears its current match and frees the name. 404, 409 `arena_match_live` |
+| `PUT /arenas/:id/current-match` | Body `{ "matchId": "<uuid>" }`. Select (or swap to) the scheduled match the arena runs next. 404 `arena_not_found` / `match_not_found` (also for another account's match), 409 `match_not_scheduled`, `match_already_current` or `arena_match_started` |
 
-`PUT` answers 404 `arena_not_found` / `match_not_found`, or 409 with `match_not_scheduled`, `match_already_current` (current on another arena) or `arena_match_started` (the arena's current match already started). Selecting the arena's current match again succeeds and changes nothing. Deleting a match clears it from its arena.
+Names are unique per account among live arenas, ignoring case. The `deviceId` is generated from the name plus 4 hex characters. `arena_match_live` means the arena's current match is `ongoing` or `paused`. Only a bcrypt hash of the token is stored. Selecting the arena's current match again succeeds and changes nothing. Deleting a match clears it from its arena.

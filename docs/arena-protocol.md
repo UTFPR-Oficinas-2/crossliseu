@@ -31,7 +31,7 @@ Connecting happens in two layers. First the box's WebSocket library opens the so
 
 ### Identity
 
-Each physical arena box is flashed with its `deviceId` and `token`. Both come from `npm run seed:arena` (#33), which creates the box's row in the `arenas` table; that table is not tied to a championship, so a box is flashed once and works for every event. The table stores only a bcrypt hash of the token: the seed prints the plain token once, and re-running it for the same `deviceId` rotates the token (the old one stops working). The values live in a firmware config file that is **not committed**. Swapping the ESP32 inside a box means flashing the new chip with the same values.
+Each physical arena box is flashed with its `deviceId` and `token`. Both come from the Arenas page of the web app (#33), where an account creates the box's row in the `arenas` table; that table is not tied to a championship, so a box is flashed once and works for every event. An arena belongs to exactly one account. The table stores only a bcrypt hash of the token: the page shows the plain token once, and generating a new token for the arena invalidates the old one. Only live (not deleted) arenas are accepted at handshake; deleting an arena makes its token stop working. The values live in a firmware `config.h` that is **not committed**. Swapping the ESP32 inside a box means flashing the new chip with the same values.
 
 ### Handshake
 
