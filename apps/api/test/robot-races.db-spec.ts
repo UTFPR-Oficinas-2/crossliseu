@@ -67,7 +67,7 @@ describe('robot writes racing match writes', () => {
 
         const update = app
             .get(RobotsService)
-            .update(robotA, { weightClass: 'featherweight' });
+            .update(robotA, { weightClass: 'featherweight' }, creatorId);
         const updateResult = update.catch((e: unknown) => e);
 
         expect(await isPendingAfter(update, 200)).toBe(true);
@@ -83,7 +83,7 @@ describe('robot writes racing match writes', () => {
         const { created, release } = heldMatchCreate();
         await new Promise((r) => setTimeout(r, 100));
 
-        const remove = app.get(RobotsService).remove(robotB);
+        const remove = app.get(RobotsService).remove(robotB, creatorId);
         const removeResult = remove.catch((e: unknown) => e);
 
         expect(await isPendingAfter(remove, 200)).toBe(true);

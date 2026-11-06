@@ -70,7 +70,8 @@ function setup(
         ),
     };
     const championshipsService = {
-        findOne: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
+        findOwned: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
+        isOwnedBy: vi.fn().mockResolvedValue(true),
     };
     const service = new RobotsService(
         robotsRepository as unknown as RobotsRepository,
@@ -101,8 +102,9 @@ describe('RobotsService.create', () => {
 
         const created = await service.create(createDto, USER_ID);
 
-        expect(championshipsService.findOne).toHaveBeenCalledWith(
+        expect(championshipsService.findOwned).toHaveBeenCalledWith(
             CHAMPIONSHIP_ID,
+            USER_ID,
         );
         expect(robotsRepository.create).toHaveBeenCalledOnce();
         expect(created).toMatchObject({
@@ -139,9 +141,9 @@ describe('RobotsService.create', () => {
         );
     });
 
-    it('rejects an unknown championship', async () => {
+    it('rejects an unknown or unowned championship', async () => {
         const { service, robotsRepository, championshipsService } = setup([]);
-        championshipsService.findOne.mockRejectedValue(
+        championshipsService.findOwned.mockRejectedValue(
             new NotFoundException('championship_not_found'),
         );
 
@@ -156,7 +158,7 @@ describe('RobotsService.update', () => {
     it('lets a robot keep its own name with different case', async () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
 
-        await service.update(TITA_ID, { name: 'TITÃ' });
+        await service.update(TITA_ID, { name: 'TITÃ' }, USER_ID);
 
         expect(robotsRepository.update).toHaveBeenCalledWith(
             TITA_ID,
@@ -172,7 +174,7 @@ describe('RobotsService.update', () => {
         ]);
 
         await expect(
-            service.update(MARTE_ID, { name: 'titã' }),
+            service.update(MARTE_ID, { name: 'titã' }, USER_ID),
         ).rejects.toThrow(new ConflictException('robot_name_taken'));
         expect(robotsRepository.update).not.toHaveBeenCalled();
     });
@@ -180,7 +182,7 @@ describe('RobotsService.update', () => {
     it('skips the name check when the name is not changing', async () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
 
-        await service.update(TITA_ID, { team: 'Equipe Nova' });
+        await service.update(TITA_ID, { team: 'Equipe Nova' }, USER_ID);
 
         expect(robotsRepository.findByName).not.toHaveBeenCalled();
         expect(robotsRepository.update).toHaveBeenCalledWith(
@@ -195,16 +197,16 @@ describe('RobotsService.update', () => {
         robotsRepository.update.mockRejectedValue(uniqueViolation());
 
         await expect(
-            service.update(TITA_ID, { name: 'Marte' }),
+            service.update(TITA_ID, { name: 'Marte' }, USER_ID),
         ).rejects.toThrow(new ConflictException('robot_name_taken'));
     });
 
     it('rejects an unknown robot', async () => {
         const { service } = setup([]);
 
-        await expect(service.update(TITA_ID, { name: 'Titã' })).rejects.toThrow(
-            new NotFoundException('robot_not_found'),
-        );
+        await expect(
+            service.update(TITA_ID, { name: 'Titã' }, USER_ID),
+        ).rejects.toThrow(new NotFoundException('robot_not_found'));
     });
 });
 
@@ -212,7 +214,7 @@ describe('RobotsService.remove', () => {
     it('soft-deletes a robot without matches', async () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
 
-        await service.remove(TITA_ID);
+        await service.remove(TITA_ID, USER_ID);
 
         expect(robotsRepository.remove).toHaveBeenCalledWith(TITA_ID);
     });
@@ -222,7 +224,7 @@ describe('RobotsService.remove', () => {
             hasMatches: true,
         });
 
-        await expect(service.remove(TITA_ID)).rejects.toThrow(
+        await expect(service.remove(TITA_ID, USER_ID)).rejects.toThrow(
             new ConflictException('robot_has_matches'),
         );
     });
@@ -230,7 +232,7 @@ describe('RobotsService.remove', () => {
     it('rejects an unknown robot', async () => {
         const { service } = setup([]);
 
-        await expect(service.remove(TITA_ID)).rejects.toThrow(
+        await expect(service.remove(TITA_ID, USER_ID)).rejects.toThrow(
             new NotFoundException('robot_not_found'),
         );
     });
@@ -243,7 +245,7 @@ describe('RobotsService.update while in a match', () => {
         });
 
         await expect(
-            service.update(TITA_ID, { weightClass: 'featherweight' }),
+            service.update(TITA_ID, { weightClass: 'featherweight' }, USER_ID),
         ).rejects.toThrow(new ConflictException('robot_has_matches'));
         expect(robotsRepository.update).toHaveBeenCalledWith(
             TITA_ID,
@@ -262,7 +264,7 @@ describe('RobotsService.update while in a match', () => {
             weightClass: 'lightweight' as const,
         };
 
-        await service.update(TITA_ID, dto);
+        await service.update(TITA_ID, dto, USER_ID);
 
         expect(robotsRepository.update).toHaveBeenCalledWith(TITA_ID, dto, {
             requireNoMatches: false,
@@ -272,7 +274,11 @@ describe('RobotsService.update while in a match', () => {
     it('allows a weight class change when the robot has no matches', async () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
 
-        await service.update(TITA_ID, { weightClass: 'featherweight' });
+        await service.update(
+            TITA_ID,
+            { weightClass: 'featherweight' },
+            USER_ID,
+        );
 
         expect(robotsRepository.update).toHaveBeenCalledWith(
             TITA_ID,
@@ -306,7 +312,7 @@ describe('RobotsService writes that lose a race', () => {
         robotsRepository.update.mockResolvedValueOnce('not_found');
 
         await expect(
-            service.update(TITA_ID, { team: 'Equipe Nova' }),
+            service.update(TITA_ID, { team: 'Equipe Nova' }, USER_ID),
         ).rejects.toThrow(new NotFoundException('robot_not_found'));
     });
 
@@ -315,7 +321,7 @@ describe('RobotsService writes that lose a race', () => {
         robotsRepository.update.mockResolvedValueOnce('has_matches');
 
         await expect(
-            service.update(TITA_ID, { weightClass: 'featherweight' }),
+            service.update(TITA_ID, { weightClass: 'featherweight' }, USER_ID),
         ).rejects.toThrow(new ConflictException('robot_has_matches'));
     });
 
@@ -323,7 +329,7 @@ describe('RobotsService writes that lose a race', () => {
         const { service, robotsRepository } = setup([robot(TITA_ID, 'Titã')]);
         robotsRepository.remove.mockResolvedValueOnce('not_found');
 
-        await expect(service.remove(TITA_ID)).rejects.toThrow(
+        await expect(service.remove(TITA_ID, USER_ID)).rejects.toThrow(
             new NotFoundException('robot_not_found'),
         );
     });
@@ -337,5 +343,71 @@ describe('RobotsService.create while the championship is deleted', () => {
         await expect(service.create(createDto, USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),
         );
+    });
+});
+
+describe('RobotsService writes by a non-owner', () => {
+    const OTHER_USER_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+
+    it('hides the robot on update, before the name check and the write', async () => {
+        const { service, robotsRepository, championshipsService } = setup([
+            robot(TITA_ID, 'Titã'),
+        ]);
+        championshipsService.isOwnedBy.mockResolvedValue(false);
+
+        await expect(
+            service.update(TITA_ID, { name: 'Marte' }, OTHER_USER_ID),
+        ).rejects.toThrow(new NotFoundException('robot_not_found'));
+        expect(championshipsService.isOwnedBy).toHaveBeenCalledWith(
+            CHAMPIONSHIP_ID,
+            OTHER_USER_ID,
+        );
+        expect(robotsRepository.findByName).not.toHaveBeenCalled();
+        expect(robotsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('hides the robot on remove, even when it is in a match', async () => {
+        const { service, robotsRepository, championshipsService } = setup(
+            [robot(TITA_ID, 'Titã')],
+            { hasMatches: true },
+        );
+        championshipsService.isOwnedBy.mockResolvedValue(false);
+
+        await expect(service.remove(TITA_ID, OTHER_USER_ID)).rejects.toThrow(
+            new NotFoundException('robot_not_found'),
+        );
+        expect(robotsRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it('hides a weight class change that would have answered has_matches', async () => {
+        const { service, robotsRepository, championshipsService } = setup(
+            [robot(TITA_ID, 'Titã')],
+            { hasMatches: true },
+        );
+        championshipsService.isOwnedBy.mockResolvedValue(false);
+
+        await expect(
+            service.update(
+                TITA_ID,
+                { weightClass: 'featherweight' },
+                OTHER_USER_ID,
+            ),
+        ).rejects.toThrow(new NotFoundException('robot_not_found'));
+        expect(robotsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('logs the hidden robot at warn', async () => {
+        const { service, championshipsService } = setup([
+            robot(TITA_ID, 'Titã'),
+        ]);
+        championshipsService.isOwnedBy.mockResolvedValue(false);
+        const warn = vi
+            .spyOn(service.logger, 'warn')
+            .mockImplementation(() => {});
+
+        await expect(service.remove(TITA_ID, OTHER_USER_ID)).rejects.toThrow(
+            NotFoundException,
+        );
+        expect(warn).toHaveBeenCalledWith('robot_not_found', { id: TITA_ID });
     });
 });

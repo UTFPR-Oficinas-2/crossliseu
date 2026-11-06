@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { DataSource } from 'typeorm';
+import { Robot } from '../src/modules/robots/entities/robot.entity.js';
 import { Championship } from '../src/modules/championships/entities/championship.entity.js';
 import {
     createTestApp,
@@ -156,5 +157,84 @@ describe('championship ownership (e2e)', () => {
             const found = await http().get(`/${path}/${id}`).expect(200);
             expect(found.body.id).toBe(id);
         }
+    });
+
+    describe('robots', () => {
+        it("answers 404 championship_not_found when POST /robots targets another account's championship", async () => {
+            const response = await http()
+                .post('/robots')
+                .set(bearer(tokenB))
+                .send({
+                    name: 'Intruso',
+                    weightClass: 'lightweight',
+                    team: 'Equipe B',
+                    championshipId: champA.id,
+                })
+                .expect(404);
+
+            expect(response.body.message).toBe('championship_not_found');
+            await expect(
+                ds.getRepository(Robot).countBy({ championshipId: champA.id }),
+            ).resolves.toBe(0);
+        });
+
+        it('answers a non-owner PATCH with 404 and leaves the row unchanged', async () => {
+            const robot = await seedRobot(ds, champA.id, { name: 'Titã' });
+
+            const response = await http()
+                .patch(`/robots/${robot.id}`)
+                .set(bearer(tokenB))
+                .send({ name: 'Roubado' })
+                .expect(404);
+
+            expect(response.body.message).toBe('robot_not_found');
+            const row = await ds
+                .getRepository(Robot)
+                .findOneByOrFail({ id: robot.id });
+            expect(row.name).toBe('Titã');
+        });
+
+        it('answers a non-owner DELETE with 404 and keeps the row', async () => {
+            const robot = await seedRobot(ds, champA.id, { name: 'Titã' });
+
+            const response = await http()
+                .delete(`/robots/${robot.id}`)
+                .set(bearer(tokenB))
+                .expect(404);
+
+            expect(response.body.message).toBe('robot_not_found');
+            await expect(
+                ds.getRepository(Robot).findOneBy({ id: robot.id }),
+            ).resolves.not.toBeNull();
+        });
+
+        it('answers a non-owner DELETE with 404, not 409, for a robot in a match', async () => {
+            const a = await seedRobot(ds, champA.id, { name: 'Titã' });
+            const b = await seedRobot(ds, champA.id, { name: 'Marte' });
+            await seedMatch(ds, champA.id, a.id, b.id);
+
+            const response = await http()
+                .delete(`/robots/${a.id}`)
+                .set(bearer(tokenB))
+                .expect(404);
+
+            expect(response.body.message).toBe('robot_not_found');
+        });
+
+        it('lets the owner PATCH and DELETE', async () => {
+            const robot = await seedRobot(ds, champA.id, { name: 'Titã' });
+
+            const patched = await http()
+                .patch(`/robots/${robot.id}`)
+                .set(bearer(tokenA))
+                .send({ name: 'Titã II' })
+                .expect(200);
+            expect(patched.body.name).toBe('Titã II');
+
+            await http()
+                .delete(`/robots/${robot.id}`)
+                .set(bearer(tokenA))
+                .expect(204);
+        });
     });
 });

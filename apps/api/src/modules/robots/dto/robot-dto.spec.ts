@@ -113,4 +113,20 @@ describe('robot DTOs', () => {
             'weightClass',
         ]);
     });
+
+    it('rejects a championshipId on update, so a robot cannot change owner', async () => {
+        const dto = plainToInstance(UpdateRobotDto, {
+            name: 'Titã',
+            championshipId: CHAMPIONSHIP_ID,
+        });
+
+        const errors = await validate(dto, {
+            whitelist: true,
+            forbidNonWhitelisted: true,
+        });
+
+        expect(errors.map((error) => error.property)).toEqual([
+            'championshipId',
+        ]);
+    });
 });
