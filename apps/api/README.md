@@ -57,9 +57,7 @@ curl -X POST http://localhost:3000/auth/login \
 
 Send the returned token as `Authorization: Bearer <token>`. Tokens expire after 2 hours.
 
-Public routes: `POST /auth/login`, `GET /championships`, `GET /championships/:id`, `GET /matches`, `GET /matches/:id`, `GET /robots`, `GET /robots/:id`.
-
-`GET /championships/mine` is protected and lists only the caller's *live* championships.
+Public routes: `POST /auth/login`, `GET /championships`, `GET /championships/:id`, `GET /matches`, `GET /matches/:id`. `GET /championships/mine` is protected and lists only the caller's championships.
 
 Each account is an organization. Management is per account: a write to a championship, or to its robots or matches, that belongs to another account answers 404 with the same message as an unknown id. Public reads are not per account.
 
