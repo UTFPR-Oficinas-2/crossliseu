@@ -86,9 +86,14 @@ const subtitle = computed(() => {
           {{ subtitle }}
         </p>
       </div>
-      <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
-        Criar campeonato
-      </AppButton>
+      <div class="my-championships__header-actions">
+        <AppButton variant="secondary" class="my-championships__create" :to="{ name: 'arenas' }">
+          Arenas
+        </AppButton>
+        <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
+          Criar campeonato
+        </AppButton>
+      </div>
     </header>
 
     <p
@@ -192,6 +197,12 @@ const subtitle = computed(() => {
 
 .my-championships__muted {
   color: var(--color-muted);
+}
+
+.my-championships__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .my-championships__create {

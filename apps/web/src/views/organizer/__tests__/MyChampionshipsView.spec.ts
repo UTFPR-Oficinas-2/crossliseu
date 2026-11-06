@@ -58,6 +58,7 @@ async function mountView(path = '/manage') {
     routes: [
       { path: '/manage', name: 'my-championships', component: MyChampionshipsView },
       { path: '/manage/new', name: 'championship-create', component: stub },
+      { path: '/manage/arenas', name: 'arenas', component: stub },
       {
         path: '/manage/:championshipId/participants',
         name: 'championship-participants',
@@ -91,6 +92,13 @@ describe('MyChampionshipsView', () => {
     await mountView()
 
     expect(getManagedChampionships).toHaveBeenCalledWith(token)
+  })
+
+  it('links to the arenas screen from the header', async () => {
+    const { wrapper } = await mountView()
+
+    const link = wrapper.findAll('a').find((a) => a.text() === 'Arenas')!
+    expect(link.attributes('href')).toBe('/manage/arenas')
   })
 
   it('renders a row per championship and a pluralised subtitle', async () => {

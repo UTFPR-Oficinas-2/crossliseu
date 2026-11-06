@@ -47,6 +47,12 @@ const appRoutes: RouteRecordRaw[] = [
         props: { mode: 'create' },
       },
       {
+        // Declared before `:championshipId`, which would otherwise read "arenas" as an id
+        path: 'arenas',
+        name: 'arenas',
+        component: () => import('../views/organizer/ArenasView.vue'),
+      },
+      {
         // There is no overview page: managing a championship opens its participants
         path: ':championshipId',
         redirect: (to) => ({
