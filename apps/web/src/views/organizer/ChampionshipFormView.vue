@@ -7,8 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import InputField from '@/components/ui/InputField.vue'
-import { isApiEnabled } from '@/api/client'
-import { createChampionship, getChampionship, updateChampionship } from '@/mocks'
+import { createChampionship, getChampionship, updateChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 import {
   describeSaveError,
@@ -110,7 +109,10 @@ async function onSubmit() {
       if (isUnmounted) return
       // Not dirty any more: skip the leave confirmation
       baseline.value = { ...values }
-      await router.push({ name: 'championship-overview', params: { championshipId: created.id } })
+      await router.push({
+        name: 'championship-participants',
+        params: { championshipId: created.id },
+      })
     } else {
       const updated = await updateChampionship(championshipId!, input, token)
       if (isUnmounted) return
@@ -133,7 +135,7 @@ async function onSubmit() {
 const cancelTarget = computed(() =>
   mode === 'create'
     ? { name: 'my-championships' }
-    : { name: 'championship-overview', params: { championshipId } },
+    : { name: 'championship-participants', params: { championshipId } },
 )
 
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'
@@ -150,8 +152,8 @@ onBeforeUnmount(() => {
 
 const nextSteps = [
   'Cadastre os participantes e seus robôs.',
-  'Crie as lutas e defina a ordem.',
-  'Abra a preparação da luta para o operador.',
+  'Monte as lutas entre os participantes.',
+  'Na operação, escolha a arena e a luta.',
 ]
 </script>
 
@@ -181,14 +183,6 @@ const nextSteps = [
     <h1 class="championship-form__title text-display-page">
       {{ mode === 'create' ? 'Criar campeonato' : 'Editar campeonato' }}
     </h1>
-    <p class="championship-form__muted text-body-m">
-      {{
-        mode === 'create'
-          ? 'Preencha os dados principais. Participantes e lutas são cadastrados depois de salvar.'
-          : 'Altere os dados do campeonato. As mudanças aparecem na página pública assim que você salvar.'
-      }}
-    </p>
-
     <p
       v-if="loadState === 'loading'"
       class="championship-form__muted text-body-m"
@@ -300,7 +294,6 @@ const nextSteps = [
 
     <footer class="championship-form__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
-      <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
     </footer>
   </div>
 </template>

@@ -5,12 +5,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Championship, MatchState, MatchSummary, Robot } from '@/types'
 import MatchesView from '../MatchesView.vue'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getMatchSummaries: vi.fn<(championshipId: string) => Promise<MatchSummary[]>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
 }))
-import { getChampionship, getMatchSummaries, getRobots } from '@/mocks'
+import { getChampionship, getMatchSummaries, getRobots } from '@/data'
 
 const stub = { render: () => null }
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
@@ -21,7 +21,7 @@ const robot = (id: string, name: string): Robot => ({
   championshipId: 'c1',
   name,
   team: 'Equipe',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
 })
 const match = (
   id: string,
@@ -32,10 +32,11 @@ const match = (
   ...base,
   id,
   championshipId: 'c1',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   robotAId,
   robotBId,
   state,
+  scheduledAt: '2026-12-09T14:00:00.000Z',
 })
 
 const robots = [
@@ -45,8 +46,8 @@ const robots = [
   robot('r4', 'Cobalto'),
 ]
 const matches = [
-  match('m1', 'r1', 'r2', 'waiting'),
-  match('m2', 'r3', 'r4', 'running'),
+  match('m1', 'r1', 'r2', 'scheduled'),
+  match('m2', 'r3', 'r4', 'ongoing'),
   match('m3', 'r1', 'r3', 'paused'),
   match('m4', 'r2', 'r4', 'finished'),
 ]
@@ -105,7 +106,7 @@ describe('MatchesView', () => {
       'Nêmesis × Cobalto',
     ])
     const statuses = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[0]!.text())
-    expect(statuses).toEqual(['Programada', 'Em andamento', 'Em andamento', 'Encerrada'])
+    expect(statuses).toEqual(['Programada', 'Em andamento', 'Pausada', 'Encerrada'])
     expect(wrapper.text()).toContain('4 lutas · montadas manualmente, sem chaveamento automático.')
     expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
       'Meus campeonatos',
@@ -167,7 +168,7 @@ describe('MatchesView', () => {
 
     await tab(wrapper, 'Programadas').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.state).toBe('waiting')
+    expect(router.currentRoute.value.query.state).toBe('scheduled')
     expect(pairs(wrapper)).toEqual(['Titã × Nêmesis'])
 
     await tab(wrapper, 'Em andamento').trigger('click')
@@ -185,11 +186,22 @@ describe('MatchesView', () => {
   })
 
   it('restores the tab from the query and ignores unknown values', async () => {
-    const running = await mountView('/manage/c1/matches?state=running')
+    const running = await mountView('/manage/c1/matches?state=ongoing')
     expect(tab(running.wrapper, 'Em andamento').attributes('aria-selected')).toBe('true')
 
     const bogus = await mountView('/manage/c1/matches?state=bogus')
     expect(tab(bogus.wrapper, 'Todas').attributes('aria-selected')).toBe('true')
+
+    const legacy = await mountView('/manage/c1/matches?state=waiting')
+    expect(tab(legacy.wrapper, 'Todas').attributes('aria-selected')).toBe('true')
+  })
+
+  it('shows a paused fight with the amber PAUSADA pill', async () => {
+    const { wrapper } = await mountView()
+    const pill = wrapper.findAll('tbody tr')[2]!.get('.status-pill')
+
+    expect(pill.text()).toBe('Pausada')
+    expect(pill.classes()).toContain('status-pill--warning')
   })
 
   it('shows empty states', async () => {

@@ -5,8 +5,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Championship } from '@/types'
 import MyChampionshipsView from '../MyChampionshipsView.vue'
 
-vi.mock('@/mocks', () => ({ getManagedChampionships: vi.fn<() => Promise<Championship[]>>() }))
-import { getManagedChampionships } from '@/mocks'
+vi.mock('@/data', () => ({ getManagedChampionships: vi.fn<() => Promise<Championship[]>>() }))
+import { getManagedChampionships } from '@/data'
 
 const stub = { render: () => null }
 
@@ -16,7 +16,7 @@ const fixture: Championship[] = [
     ...base,
     id: 'c1',
     name: 'Copa Andamento',
-    status: 'running',
+    status: 'ongoing',
     startDate: '2026-10-04',
     endDate: '2026-10-06',
     robotCount: 16,
@@ -37,7 +37,7 @@ const fixture: Championship[] = [
     ...base,
     id: 'c3',
     name: 'Copa Encerrada',
-    status: 'finished',
+    status: 'closed',
     startDate: '2025-12-10',
     robotCount: 16,
     fightsDone: 15,
@@ -51,7 +51,11 @@ async function mountView(path = '/manage') {
     routes: [
       { path: '/manage', name: 'my-championships', component: MyChampionshipsView },
       { path: '/manage/new', name: 'championship-create', component: stub },
-      { path: '/manage/:championshipId', name: 'championship-overview', component: stub },
+      {
+        path: '/manage/:championshipId/participants',
+        name: 'championship-participants',
+        component: stub,
+      },
       { path: '/championships/:championshipId', name: 'championship', component: stub },
     ],
   })
@@ -77,11 +81,11 @@ describe('MyChampionshipsView', () => {
     const { wrapper } = await mountView()
 
     expect(wrapper.findAll('li')).toHaveLength(3)
-    expect(wrapper.text()).toContain('Você tem permissão para gerenciar 3 campeonatos.')
+    expect(wrapper.text()).toContain('3 campeonatos cadastrados.')
 
     vi.mocked(getManagedChampionships).mockResolvedValue([fixture[0]!])
     const single = await mountView()
-    expect(single.wrapper.text()).toContain('Você tem permissão para gerenciar 1 campeonato.')
+    expect(single.wrapper.text()).toContain('1 campeonato cadastrado.')
   })
 
   it('highlights Gerenciar only for the running row and links to the public page', async () => {
@@ -92,7 +96,7 @@ describe('MyChampionshipsView', () => {
     expect(manage[0]!.classes()).toContain('app-button--primary')
     expect(manage[1]!.classes()).toContain('app-button--secondary')
     expect(manage[2]!.classes()).toContain('app-button--secondary')
-    expect(manage[0]!.attributes('href')).toBe('/manage/c1')
+    expect(manage[0]!.attributes('href')).toBe('/manage/c1/participants')
 
     const pub = rows[0]!.findAll('a').find((a) => a.text() === 'Ver pública')!
     expect(pub.classes()).toContain('app-button--ghost')
@@ -104,7 +108,7 @@ describe('MyChampionshipsView', () => {
 
     await tab(wrapper, 'Encerrados').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.status).toBe('finished')
+    expect(router.currentRoute.value.query.status).toBe('closed')
     expect(rowNames(wrapper)).toEqual(['Copa Encerrada'])
 
     await tab(wrapper, 'Em andamento').trigger('click')
@@ -118,17 +122,38 @@ describe('MyChampionshipsView', () => {
   })
 
   it('restores the filter from the query and ignores unknown values', async () => {
-    const running = await mountView('/manage?status=running')
+    const running = await mountView('/manage?status=ongoing')
     expect(tab(running.wrapper, 'Em andamento').attributes('aria-selected')).toBe('true')
     expect(rowNames(running.wrapper)).toEqual(['Copa Andamento'])
 
     const bogus = await mountView('/manage?status=bogus')
     expect(tab(bogus.wrapper, 'Todos').attributes('aria-selected')).toBe('true')
+
+    const legacy = await mountView('/manage?status=running')
+    expect(tab(legacy.wrapper, 'Todos').attributes('aria-selected')).toBe('true')
+  })
+
+  it('offers Todos, Em andamento and Encerrados only', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
+      'Todos',
+      'Em andamento',
+      'Encerrados',
+    ])
+  })
+
+  it('shows the fight count only on closed rows', async () => {
+    const { wrapper } = await mountView()
+    const metas = wrapper.findAll('li').map((li) => li.find('p').text())
+
+    expect(metas[0]).not.toContain('lutas')
+    expect(metas[2]).toContain('15 de 15 lutas')
   })
 
   it('shows empty states', async () => {
     vi.mocked(getManagedChampionships).mockResolvedValue([fixture[2]!])
-    const { wrapper } = await mountView('/manage?status=running')
+    const { wrapper } = await mountView('/manage?status=ongoing')
     expect(wrapper.text()).toContain('Nenhum campeonato em andamento.')
 
     vi.mocked(getManagedChampionships).mockResolvedValue([])

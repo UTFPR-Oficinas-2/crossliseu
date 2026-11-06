@@ -32,9 +32,11 @@
   --space-8: 40px;
   --space-9: 48px;
   --space-page-x: 64px; /* page side padding (public and app navs) */
+  --space-page-x-mobile: 16px; /* page side padding below 768px */
   --space-page-y: 56px; /* public page content top/bottom padding */
   /* Off-scale values used by Figma components (progress bar, status pill, card gap, nav tags) */
   --space-5px: 5px;
+  --space-2px: 2px; /* select menu row gap */
   --space-6px: 6px;
   --space-7px: 7px;
   --space-10px: 10px;
@@ -45,7 +47,7 @@
 
   /* Sizes (component dimensions from Figma) */
   --size-control: 44px; /* button, tab and sidebar item height */
-  --size-control-lg: 48px; /* home live strip action button height */
+  --size-control-lg: 48px; /* large page action buttons */
   --size-field: 48px; /* input height */
   --size-button-min: 120px;
   --size-tab-min: 110px;
@@ -55,19 +57,22 @@
   --size-nav-height: 88px; /* public and app navs */
   --size-nav-operator-height: 72px;
   --size-nav-referee-height: 64px;
+  --size-nav-mobile-height: 64px; /* public and app navs below 768px */
+  --size-control-compact: 40px; /* operator nav button, participant row buttons */
   --size-page-max: 1440px; /* public content max width (Figma desktop frame) */
   --size-sidebar: 260px; /* organizer sidebar width */
   --size-step-line: 3px; /* operator step indicator line */
   --size-referee-frame: 390px; /* referee mobile frame width */
   --size-avatar: 28px;
-  --size-accent-border: 4px; /* home live strip left border */
-  --size-live-action: 176px; /* home live strip action button width */
+  --size-live-action: 176px; /* organizer robot/team columns and aside widths */
   --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
   --size-form-card: 480px; /* sign-in card width */
   --size-dot: 8px; /* status dot, e.g. the error banner marker */
   --size-aside: 360px; /* organizer form aside column */
   --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
   --size-menu-max: 320px; /* select menu height before it scrolls */
+  --size-toolbar-select: 292px; /* category picker beside a list search */
+  --size-fight-pair-min: 180px; /* Row / Fight competitors before the row wraps */
 
   /* Radius */
   --radius-xs: 2px;
@@ -82,6 +87,10 @@
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
   --opacity-disabled: 0.5;
+  --opacity-dimmed: 0.4; /* disabled select option (Figma Select / Option) */
+
+  /* Elevation (Figma Select / Menu drop shadow) */
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 35%);
 
   /* Text styles */
   --text-display-page-family: var(--font-heading);
@@ -96,7 +105,7 @@
   --text-heading-xl-line-height: 1.1;
   --text-heading-xl-tracking: 0;
 
-  /* Metric / Overview value; Figma uses raw text here, not a published text style */
+  /* Numeric / L (big numerals) */
   --text-numeric-l-family: var(--font-heading);
   --text-numeric-l-weight: 700;
   --text-numeric-l-size: 36px;

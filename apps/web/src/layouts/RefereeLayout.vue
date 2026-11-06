@@ -5,7 +5,7 @@
 // route.
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getRefereeAccess } from '@/mocks'
+import { getRefereeAccess } from '@/data'
 import type { RefereeAccess } from '@/types'
 
 /** Every match has exactly three referee seats (see `RefereeSeat`) */
@@ -15,7 +15,8 @@ const route = useRoute()
 
 const access = ref<RefereeAccess | null>(null)
 
-// Data loading lives here so it can be swapped for the API later.
+// Data loading lives here. The API has no referee access yet, so a failed load is treated like
+// an unknown link (header without the seat tag).
 let loadId = 0
 async function load(token: string | null) {
   const current = ++loadId
@@ -23,7 +24,12 @@ async function load(token: string | null) {
     access.value = null
     return
   }
-  const loaded = await getRefereeAccess(token)
+  let loaded: RefereeAccess | null = null
+  try {
+    loaded = await getRefereeAccess(token)
+  } catch (error) {
+    console.error('Could not load the referee access', error)
+  }
   // Ignore a stale response if the token changed while loading
   if (current === loadId) access.value = loaded
 }

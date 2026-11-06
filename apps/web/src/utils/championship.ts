@@ -1,33 +1,14 @@
-// Championship display helpers shared by the organizer pages and the demo data layer.
+// Championship display helpers shared by the organizer pages.
 import type { Championship, ChampionshipStatus } from '@/types'
-
-/** Calendar day (UTC) of an ISO date or timestamp, as `YYYY-MM-DD` */
-const utcDay = (value: string | Date) =>
-  (typeof value === 'string' ? new Date(value) : value).toISOString().slice(0, 10)
-
-/**
- * Mirrors `Championship.setInitialStatus` in apps/api (UTC calendar days, both ends inclusive).
- * API rows carry their own `status`; this is only for championships written in demo mode.
- */
-export function championshipStatusFromDates(
-  startDate: string,
-  endDate: string,
-  now: Date = new Date(),
-): ChampionshipStatus {
-  const today = utcDay(now)
-  if (utcDay(endDate) < today) return 'finished'
-  if (utcDay(startDate) > today) return 'scheduled'
-  return 'running'
-}
 
 /** Figma 06: EM ANDAMENTO orange, PROGRAMADO blue, ENCERRADO muted */
 export const championshipStatusPill: Record<
   ChampionshipStatus,
   { label: string; tone: 'accent' | 'info' | 'neutral' }
 > = {
-  running: { label: 'Em andamento', tone: 'accent' },
+  ongoing: { label: 'Em andamento', tone: 'accent' },
   scheduled: { label: 'Programado', tone: 'info' },
-  finished: { label: 'Encerrado', tone: 'neutral' },
+  closed: { label: 'Encerrado', tone: 'neutral' },
 }
 
 const dayMonthYear = new Intl.DateTimeFormat('pt-BR', {
@@ -60,20 +41,28 @@ export function formatDateRange(startDate: string, endDate?: string | null): str
 
 const numberFormat = new Intl.NumberFormat('pt-BR')
 
-/** Row meta line with only what the API returns: "10 dez 2025 · 16 robôs · 15 de 15 lutas" */
+/**
+ * Row meta line with only what the API returns: "10 dez 2025 · 16 robôs", plus
+ * "· 15 de 15 lutas" once the championship is closed (Figma ORG-01)
+ */
 export function championshipMeta(
   championship: Pick<
     Championship,
-    'startDate' | 'endDate' | 'robotCount' | 'fightsDone' | 'fightsTotal'
+    'status' | 'startDate' | 'endDate' | 'robotCount' | 'fightsDone' | 'fightsTotal'
   >,
 ): string {
-  const { startDate, endDate, robotCount, fightsDone, fightsTotal } = championship
+  const { status, startDate, endDate, robotCount, fightsDone, fightsTotal } = championship
   const segments: string[] = []
   if (startDate) segments.push(formatDateRange(startDate, endDate))
   if (robotCount !== undefined) {
     segments.push(`${numberFormat.format(robotCount)} ${robotCount === 1 ? 'robô' : 'robôs'}`)
   }
-  if (fightsTotal !== undefined && fightsTotal > 0 && fightsDone !== undefined) {
+  if (
+    status === 'closed' &&
+    fightsTotal !== undefined &&
+    fightsTotal > 0 &&
+    fightsDone !== undefined
+  ) {
     segments.push(
       `${numberFormat.format(fightsDone)} de ${numberFormat.format(fightsTotal)} ${fightsTotal === 1 ? 'luta' : 'lutas'}`,
     )

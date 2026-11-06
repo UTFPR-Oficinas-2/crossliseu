@@ -7,7 +7,6 @@ import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import FightRow from '@/components/ui/FightRow.vue'
 import InputField from '@/components/ui/InputField.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
-import OverviewMetric from '@/components/ui/OverviewMetric.vue'
 import PublicNav from '@/components/ui/PublicNav.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import type { SelectOption } from '@/components/ui/select-field'
@@ -23,7 +22,6 @@ const buttonVariants = [
 ] as const
 
 const statusPills = [
-  { tone: 'live', label: 'Em andamento' },
   { tone: 'neutral', label: 'Aguardando' },
   { tone: 'success', label: 'Encerrada' },
   { tone: 'warning', label: 'Pausada' },
@@ -44,13 +42,13 @@ const invalidEmail = ref('arbitro@')
 const disabledCode = ref('ARB-4821')
 
 const robotOptions: SelectOption[] = [
-  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · Peso leve' },
-  { value: 'nemesis', label: 'Nêmesis', meta: 'Equipe Impacto · Peso leve' },
-  { value: 'cobalto', label: 'Cobalto', meta: 'Equipe Órbita · Peso leve' },
+  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · beetleweight' },
+  { value: 'nemesis', label: 'Nêmesis', meta: 'Equipe Impacto · beetleweight' },
+  { value: 'cobalto', label: 'Cobalto', meta: 'Equipe Órbita · beetleweight' },
   {
     value: 'marte',
     label: 'Marte',
-    meta: 'Equipe Órbita · Peso leve',
+    meta: 'Equipe Órbita · beetleweight',
     disabled: true,
     disabledReason: 'Já escolhido como Robô 1',
   },
@@ -61,39 +59,33 @@ const emptyRobot = ref('')
 const championships = [
   {
     name: 'Crossliseu 2026 · Etapa Curitiba',
-    edition: 3,
-    date: '2026-10-17',
-    status: 'running',
-    robotCount: 16,
+    startDate: '2026-10-17',
+    status: 'ongoing',
     fightsDone: 6,
     fightsTotal: 15,
   },
   {
     name: 'Copa UTFPR de Robôs de Combate',
-    edition: 1,
-    date: '2026-12-09',
+    startDate: '2026-12-09',
     status: 'scheduled',
-    robotCount: 8,
     fightsDone: 0,
     fightsTotal: 7,
   },
   {
     name: 'Crossliseu 2026 · Etapa Ponta Grossa',
-    edition: 2,
-    date: '2026-06-21',
-    status: 'finished',
-    robotCount: 12,
+    startDate: '2026-06-21',
+    status: 'closed',
     fightsDone: 11,
     fightsTotal: 11,
   },
 ] as const
 
 const fights = [
-  { fightNumber: 1, robotA: 'Claudio', robotB: 'Gepeto', status: 'done' },
-  { fightNumber: 2, robotA: 'Ses', robotB: 'Braz', status: 'running' },
-  { fightNumber: 3, robotA: 'Faísca', robotB: 'Trovão', status: 'paused' },
-  { fightNumber: 4, robotA: 'Martelinho', robotB: 'Destruidor Supremo II', status: 'waiting' },
-  { fightNumber: 5, robotA: 'Volt', robotB: 'Ferrugem', status: 'cancelled' },
+  { fightNumber: 1, robotA: 'Claudio', robotB: 'Gepeto', state: 'finished', winner: 'A' },
+  { fightNumber: 2, robotA: 'Ses', robotB: 'Braz', state: 'ongoing' },
+  { fightNumber: 3, robotA: 'Faísca', robotB: 'Trovão', state: 'paused' },
+  { fightNumber: 4, robotA: 'Martelinho', robotB: 'Destruidor Supremo II', state: 'scheduled' },
+  { fightNumber: 5, robotA: 'Volt', robotB: 'Ferrugem', state: 'finished', winner: null },
 ] as const
 
 const operatorExits = ref(0)
@@ -251,8 +243,8 @@ const signOuts = ref(0)
           v-model="pickedRobot"
           label="Robô 2 *"
           :options="robotOptions"
-          group-label="Participantes · Peso leve"
-          hint="Equipe Órbita · Peso leve"
+          group-label="Participantes · beetleweight"
+          hint="Equipe Órbita · beetleweight"
         />
         <SelectField
           v-model="emptyRobot"
@@ -281,21 +273,12 @@ const signOuts = ref(0)
     </section>
 
     <section class="preview__section">
-      <h2 class="text-heading-m">Metric / Overview</h2>
-      <div class="preview__metrics">
-        <OverviewMetric :value="16" label="Robôs inscritos" />
-        <OverviewMetric :value="1234" label="Número com milhar (pt-BR)" />
-        <OverviewMetric value="3/8" label="Valor em texto" />
-      </div>
-    </section>
-
-    <section class="preview__section">
       <h2 class="text-heading-m">Row / Fight</h2>
       <div class="preview__fights">
         <FightRow v-for="fight in fights" :key="fight.fightNumber" v-bind="fight">
           <AppButton variant="secondary" :to="{ name: 'dev-components' }">Detalhes</AppButton>
         </FightRow>
-        <FightRow :fight-number="6" robot-a="Sem ações" robot-b="Slot vazio" status="waiting" />
+        <FightRow :fight-number="6" robot-a="Sem ações" robot-b="Slot vazio" state="scheduled" />
       </div>
     </section>
 
@@ -330,9 +313,11 @@ const signOuts = ref(0)
       <h2 class="text-heading-m">Navigation / Operator</h2>
       <div class="preview__nav">
         <OperatorNav
+          arena="Arena 01"
           championship="Crossliseu 2026 · Etapa Curitiba"
-          :fight-number="8"
-          arena="ARENA 01"
+          robot-a="Marte"
+          robot-b="Cobalto"
+          arena-connected
           @exit="operatorExits++"
         />
       </div>
@@ -421,12 +406,6 @@ const signOuts = ref(0)
 .preview__tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-4);
-}
-
-.preview__metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--space-4);
 }
 

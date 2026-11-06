@@ -6,20 +6,25 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { Championship, Robot } from '@/types'
+import type { Championship, Robot, WeightClass } from '@/types'
 import ParticipantsView from '../ParticipantsView.vue'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
   deleteRobot: vi.fn<(id: string, token: string) => Promise<void>>(),
 }))
-import { deleteRobot, getChampionship, getRobots } from '@/mocks'
+import { deleteRobot, getChampionship, getRobots } from '@/data'
 
 const stub = { render: () => null }
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
 const championship: Championship = { ...base, id: 'c1', name: 'Copa 2026', startDate: '2026-12-09' }
-const robot = (id: string, name: string, team: string, weightClass = 'lightweight'): Robot => ({
+const robot = (
+  id: string,
+  name: string,
+  team: string,
+  weightClass: WeightClass = 'beetleweight',
+): Robot => ({
   ...base,
   id,
   championshipId: 'c1',
@@ -30,7 +35,7 @@ const robot = (id: string, name: string, team: string, weightClass = 'lightweigh
 const fixture = () => [
   robot('r1', 'Titã', 'Equipe Volt'),
   robot('r2', 'Aço', 'Equipe Aço'),
-  robot('r3', 'Marte', 'Equipe Volt', 'heavyweight'),
+  robot('r3', 'Marte', 'Equipe Volt', 'antweight'),
 ]
 
 let token = ''
@@ -93,7 +98,7 @@ describe('ParticipantsView', () => {
     expect(rowNames(wrapper)).toEqual(['Titã', 'Aço', 'Marte'])
     const marte = wrapper.findAll('tbody tr')[2]!
     expect(marte.text()).toContain('Equipe Volt')
-    expect(marte.text()).toContain('Peso pesado')
+    expect(marte.text()).toContain('antweight')
     expect(wrapper.text()).toContain('3 robôs inscritos · 2 equipes')
     expect(wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())).toEqual([
       'Meus campeonatos',
@@ -117,7 +122,7 @@ describe('ParticipantsView', () => {
     expect(rows.map((tr) => tr.get('[role="rowheader"]').text())).toEqual(['Titã', 'Aço', 'Marte'])
     const cells = rows[0]!.findAll('[role="cell"]')
     expect(cells).toHaveLength(3)
-    expect(cells.slice(0, 2).map((td) => td.text())).toEqual(['Equipe Volt', 'Peso leve'])
+    expect(cells.slice(0, 2).map((td) => td.text())).toEqual(['Equipe Volt', 'beetleweight'])
     expect(cells[2]!.findAll('a, button').map((el) => el.attributes('aria-label'))).toEqual([
       'Editar Titã',
       'Remover Titã',
@@ -156,11 +161,36 @@ describe('ParticipantsView', () => {
     expect(rowNames(wrapper)).toHaveLength(3)
   })
 
+  it('filters by category and clears both filters', async () => {
+    const { wrapper } = await mountView()
+    const picker = wrapper.get('[role="combobox"]')
+
+    expect(picker.text()).toBe('Todas as categorias')
+    await picker.trigger('click')
+    await wrapper
+      .findAll('[role="option"]')
+      .find((o) => o.text().includes('antweight'))!
+      .trigger('click')
+    expect(rowNames(wrapper)).toEqual(['Marte'])
+
+    await wrapper.get<HTMLInputElement>('input[type="search"]').setValue('aco')
+    expect(wrapper.text()).toContain('Ajuste os filtros ou cadastre um novo participante.')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Limpar busca')!
+      .trigger('click')
+
+    expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('')
+    expect(wrapper.get('[role="combobox"]').text()).toBe('Todas as categorias')
+    expect(rowNames(wrapper)).toHaveLength(3)
+  })
+
   it('labels the search field for screen readers only', async () => {
     const { wrapper } = await mountView()
     const label = wrapper.get('label')
 
     expect(label.text()).toBe('Buscar participantes')
+    expect(wrapper.get('.select-field__label').classes()).toContain('visually-hidden')
     expect(label.classes()).toContain('visually-hidden')
     expect(wrapper.get('input[type="search"]').attributes('placeholder')).toBe(
       'Buscar robô ou equipe',

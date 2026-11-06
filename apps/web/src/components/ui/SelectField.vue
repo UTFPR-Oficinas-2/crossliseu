@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Figma: `Select / Menu` (126:663) and `Select / Option` (126:666), used by frame 10b. A
+// Figma: `Select / Menu` (148:625) and `Select / Option` (126:614), used by frame 10b. A
 // select-only combobox (WAI-ARIA APG): focus stays on the trigger, which points at the active
 // option with aria-activedescendant. No hover styles: the active option gets an inset ring for
 // keyboard users, and the selected one gets the orange-dim background and a check.
@@ -15,16 +15,19 @@ const {
   error,
   disabled = false,
   required = false,
+  hideLabel = false,
 } = defineProps<{
   label: string
   options: readonly SelectOption[]
-  /** Overline above the options, e.g. "Participantes · Peso leve" */
+  /** Overline above the options, e.g. "Participantes · beetleweight" */
   groupLabel?: string
   placeholder?: string
   hint?: string
   error?: string
   disabled?: boolean
   required?: boolean
+  /** Keeps the label for screen readers only */
+  hideLabel?: boolean
 }>()
 
 const model = defineModel<string>({ default: '' })
@@ -144,7 +147,12 @@ function onFocusOut(event: FocusEvent) {
     }"
     @focusout="onFocusOut"
   >
-    <span :id="labelId" class="select-field__label text-label-s" @click="trigger?.focus()">
+    <span
+      :id="labelId"
+      class="select-field__label text-label-s"
+      :class="{ 'visually-hidden': hideLabel }"
+      @click="trigger?.focus()"
+    >
       {{ label }}
     </span>
     <div class="select-field__control">
@@ -311,9 +319,7 @@ function onFocusOut(event: FocusEvent) {
   transform: rotate(180deg);
 }
 
-/* Figma shows the menu in flow; it floats here so opening it doesn't push the form around.
-   TODO design: Figma gives the menu a drop shadow (0 8px 24px, black at 35%) and a 2px gap
-   between rows; neither has a token, so both are left out */
+/* Figma shows the menu in flow; it floats here so opening it doesn't push the form around */
 .select-field__menu {
   position: absolute;
   top: 100%;
@@ -327,6 +333,7 @@ function onFocusOut(event: FocusEvent) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-raised);
+  box-shadow: var(--shadow-menu);
 }
 
 .select-field__group {
@@ -335,6 +342,9 @@ function onFocusOut(event: FocusEvent) {
 }
 
 .select-field__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2px);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -378,10 +388,9 @@ function onFocusOut(event: FocusEvent) {
   color: var(--color-orange);
 }
 
-/* TODO design: Figma dims a disabled option to 40%; the shared disabled opacity token is 50% */
 .select-field__option[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: var(--opacity-disabled);
+  opacity: var(--opacity-dimmed);
 }
 
 .select-field__message {

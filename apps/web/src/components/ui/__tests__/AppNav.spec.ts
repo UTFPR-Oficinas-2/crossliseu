@@ -28,6 +28,13 @@ describe('AppNav', () => {
     expect(wrapper.text()).toContain('Meus campeonatos')
   })
 
+  it('links to Operação when the operator route exists', () => {
+    const wrapper = mountNav([{ path: '/operator', name: 'operator', component: stub }])
+
+    const link = wrapper.findAll('a').find((a) => a.text() === 'Operação')
+    expect(link?.attributes('href')).toBe('/operator')
+  })
+
   it('emits signOut when "Sair" is clicked', async () => {
     const wrapper = mountNav()
 

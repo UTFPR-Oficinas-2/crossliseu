@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/api/client'
 import type { Robot } from '@/types'
+import { WEIGHT_CLASSES } from '@/utils/robot'
 import {
   PARTICIPANT_MESSAGES,
   WEIGHT_CLASS_OPTIONS,
@@ -29,7 +30,7 @@ describe('validateParticipantForm', () => {
 
   it('accepts filled values', () => {
     expect(
-      validateParticipantForm({ name: 'Titã', team: 'Equipe Volt', weightClass: 'heavyweight' }),
+      validateParticipantForm({ name: 'Titã', team: 'Equipe Volt', weightClass: 'antweight' }),
     ).toEqual({})
   })
 })
@@ -41,7 +42,7 @@ describe('form values', () => {
       championshipId: 'c1',
       name: 'Titã',
       team: 'Equipe Volt',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
       owner: 'A. Moraes',
       createdAt: '',
       modifiedAt: '',
@@ -51,38 +52,22 @@ describe('form values', () => {
     expect(participantValuesFrom(robot)).toEqual({
       name: 'Titã',
       team: 'Equipe Volt',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
     })
   })
 
-  it('leaves an older weight class blank so the organizer picks one', () => {
-    const robot: Robot = {
-      id: 'r1',
-      championshipId: 'c1',
-      name: 'Titã',
-      team: 'Equipe Volt',
-      weightClass: '3 kg',
-      createdAt: '',
-      modifiedAt: '',
-    }
-
-    expect(participantValuesFrom(robot).weightClass).toBe('')
-  })
-
-  it('offers the two weight classes with their labels', () => {
-    expect(WEIGHT_CLASS_OPTIONS).toEqual([
-      { value: 'lightweight', label: 'Peso leve' },
-      { value: 'heavyweight', label: 'Peso pesado' },
-    ])
+  it('offers the API weight classes, untranslated, in API order', () => {
+    expect(WEIGHT_CLASS_OPTIONS.map((o) => o.value)).toEqual([...WEIGHT_CLASSES])
+    expect(WEIGHT_CLASS_OPTIONS.every((o) => o.label === o.value)).toBe(true)
   })
 
   it('normalizes the payload like the API', () => {
     expect(
-      toRobotInput({ name: '  Titã ', team: 'Equipe   Volt', weightClass: 'lightweight' }),
+      toRobotInput({ name: '  Titã ', team: 'Equipe   Volt', weightClass: 'beetleweight' }),
     ).toEqual({
       name: 'Titã',
       team: 'Equipe Volt',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
     })
   })
 })
@@ -90,11 +75,11 @@ describe('form values', () => {
 describe('participantPreview', () => {
   it('shows what will be saved', () => {
     expect(
-      participantPreview({ name: ' Titã ', team: 'Equipe Volt', weightClass: 'heavyweight' }),
+      participantPreview({ name: ' Titã ', team: 'Equipe Volt', weightClass: 'antweight' }),
     ).toEqual({
       robot: 'Titã',
       team: 'Equipe Volt',
-      details: 'Peso pesado',
+      details: 'antweight',
     })
   })
 
@@ -131,7 +116,7 @@ describe('describeSaveError', () => {
         apiError(
           400,
           'team should not be empty',
-          'weightClass must be one of the following values: lightweight, heavyweight',
+          'weightClass must be one of the following values: fairyweight, antweight, beetleweight, hobbyweight, featherweight, lightweight',
         ),
       ),
     ).toEqual({

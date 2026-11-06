@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// Figma: `07 / Organizador · Visão geral` (node 2:15) — `Navigation / App` + `Organizer / Shell`
+// Figma: `Navigation / App` + `Organizer / Shell` (from the former overview frame, node 2:15)
 // (sidebar 21:305, main 21:333). Only the frame is built here; page content goes in <RouterView />.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, type RouteRecordName } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppNav from '@/components/ui/AppNav.vue'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
-import { getChampionship } from '@/mocks'
+import { getChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -44,7 +44,6 @@ watch(
 )
 
 const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
-  { routeName: 'championship-overview', label: 'Visão geral' },
   { routeName: 'championship-participants', label: 'Participantes' },
   { routeName: 'championship-matches', label: 'Lutas' },
   { routeName: 'championship-settings', label: 'Configurações' },
@@ -86,9 +85,6 @@ const activeSidebarItem = computed(() => route.meta.sidebar ?? route.name)
           >
             Ver página pública
           </AppButton>
-          <p class="organizer-layout__note text-body-s">
-            Somente organizadores autorizados podem alterar este campeonato.
-          </p>
         </div>
       </aside>
 
@@ -166,10 +162,6 @@ const activeSidebarItem = computed(() => route.meta.sidebar ?? route.name)
 .organizer-layout__public-link {
   width: 100%;
   min-width: 0;
-}
-
-.organizer-layout__note {
-  color: var(--color-muted);
 }
 
 .organizer-layout__main {

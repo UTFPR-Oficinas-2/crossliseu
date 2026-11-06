@@ -42,7 +42,7 @@ describe('robots API', () => {
     const body = {
       name: 'Titã',
       team: 'Equipe Volt',
-      weightClass: 'lightweight' as const,
+      weightClass: 'beetleweight' as const,
       championshipId: 'c1',
     }
 
@@ -83,23 +83,24 @@ describe('matches API', () => {
     expect(lastRequest(fetchMock).url).toMatch(/\/matches\?championshipId=c1$/)
   })
 
-  it('creates without a weight class and updates only the robots', async () => {
+  it('creates with scheduledAt and without a weight class; updates robots or time', async () => {
     const fetchMock = stubFetch()
 
-    await createMatch({ championshipId: 'c1', robotAId: 'r1', robotBId: 'r2' }, 'tok')
+    const scheduledAt = '2026-12-09T13:00:00.000Z'
+    await createMatch({ championshipId: 'c1', robotAId: 'r1', robotBId: 'r2', scheduledAt }, 'tok')
     // toEqual: an extra key such as weightClass is a 400 in production (forbidNonWhitelisted)
     expect(lastRequest(fetchMock)).toEqual({
       url: expect.stringMatching(/\/matches$/),
       method: 'POST',
-      body: { championshipId: 'c1', robotAId: 'r1', robotBId: 'r2' },
+      body: { championshipId: 'c1', robotAId: 'r1', robotBId: 'r2', scheduledAt },
       authorization: 'Bearer tok',
     })
 
-    await updateMatch('m1', { robotBId: 'r3' }, 'tok')
+    await updateMatch('m1', { robotBId: 'r3', scheduledAt }, 'tok')
     expect(lastRequest(fetchMock)).toEqual({
       url: expect.stringMatching(/\/matches\/m1$/),
       method: 'PATCH',
-      body: { robotBId: 'r3' },
+      body: { robotBId: 'r3', scheduledAt },
       authorization: 'Bearer tok',
     })
   })

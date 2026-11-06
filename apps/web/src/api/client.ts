@@ -1,10 +1,8 @@
 // Thin fetch wrapper for apps/api. The base URL comes from `VITE_API_URL` (e.g. `/api` in dev,
-// proxied by Vite; `/crossliseu/api` in production, same origin via the host NGINX).
-// When it is unset, `@/mocks` keeps serving demo data in dev. Production builds always use the
-// API (vite.config.ts fails the build without `VITE_API_URL`), so the mock branch is dropped.
+// proxied by Vite; `/crossliseu/api` in production, same origin via the host NGINX). It is
+// required in every build and in the dev server (vite.config.ts fails without it), so the app
+// never falls back to fake data.
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
-
-export const isApiEnabled = import.meta.env.PROD || API_URL !== ''
 
 export class ApiError extends Error {
   /** HTTP status, or `0` when the request never got a response (network/CORS failure) */
