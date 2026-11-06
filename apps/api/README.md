@@ -33,6 +33,7 @@ npm run start:dev          # http://localhost:3000
 | `npm run test:db` | Run the database and e2e tests in `test/` against `POSTGRES_TEST_DB` (dropped and recreated on each run; needs Postgres up) |
 | `npm run migration:generate` / `migration:run` / `migration:revert` | Manage migrations, see [Migrations](#migrations) |
 | `npm run seed:admin` | Create the admin user, see [Seeding the admin](#seeding-the-admin) |
+| `npm run seed:arena` | Create an arena or rotate its device token, see [Seeding an arena](#seeding-an-arena) |
 
 ## Configuration
 
@@ -88,3 +89,26 @@ npm run seed:admin
 ```
 
 Inside Docker Compose use `docker compose exec api npm run seed:admin` instead.
+
+## Seeding an arena
+
+Each physical arena box needs a row in `arenas` and a device token. Pass the arena's name and the `deviceId` flashed on the box:
+
+```bash
+ARENA_NAME="Arena 1" ARENA_DEVICE_ID=arena-1 npm run seed:arena
+```
+
+It prints `Created arena "Arena 1"` and `Device token (shown once): <64 hex chars>`. Only a bcrypt hash is stored, so copy the token into the box's firmware config now; it can't be read back.
+
+Running it again with the same `ARENA_DEVICE_ID` updates the name and **rotates the token**: the old token stops working and a new one is printed. Use that when a token leaks or is lost.
+
+Inside Docker Compose use `docker compose exec -e ARENA_NAME="Arena 1" -e ARENA_DEVICE_ID=arena-1 api npm run seed:arena`.
+
+## Arenas
+
+| Route | Description |
+| --- | --- |
+| `GET /arenas` | List arenas as `{ id, name, online, currentMatchId }`. `online` is always `false` until arena devices connect |
+| `PUT /arenas/:id/current-match` | Body `{ "matchId": "<uuid>" }`. Select (or swap to) the scheduled match the arena runs next |
+
+`PUT` answers 404 `arena_not_found` / `match_not_found`, or 409 with `match_not_scheduled`, `match_already_current` (current on another arena) or `arena_match_started` (the arena's current match already started). Selecting the arena's current match again succeeds and changes nothing. Deleting a match clears it from its arena.
