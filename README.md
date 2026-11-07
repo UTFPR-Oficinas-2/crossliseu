@@ -66,11 +66,13 @@ docker compose exec api npm run seed:admin
 | API | <http://localhost:3000> |
 | Swagger | <http://localhost:3000/docs> |
 
-Use `POSTGRES_HOST=postgres` in `.env`. Compose sets `VITE_API_URL=/api` for the web container, so the web app talks to the API through the Vite proxy; see the [web guide](apps/web/README.md#configuration).
+Each container keeps `node_modules` in a Docker volume and reinstalls it on start when `package-lock.json` changed, so after pulling new dependencies a plain `docker compose up` is enough. If a container fails with "node_modules is not writable", the volume predates this setup; remove it once with `docker compose down && docker volume rm crossliseu_api_node_modules crossliseu_web_node_modules` (your database volume is kept).
+
+Compose points the API at the `postgres` container whatever `POSTGRES_HOST` says in `.env`. It also sets `VITE_API_URL=/api` for the web container, so the web app talks to the API through the Vite proxy; see the [web guide](apps/web/README.md#configuration).
 
 ### Option B: run the apps on your machine
 
-Requires Node 22.18+ (or 24.12+) and Docker for PostgreSQL. Set `POSTGRES_HOST=localhost` in `.env`.
+Requires Node 26 (the exact version is in [`.nvmrc`](.nvmrc); `nvm use` or `fnm use` picks it up) and Docker for PostgreSQL. Set `POSTGRES_HOST=localhost` in `.env`.
 
 ```bash
 docker compose up -d postgres

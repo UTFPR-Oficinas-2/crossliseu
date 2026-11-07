@@ -8,6 +8,7 @@ import { UsersModule } from './modules/users/users.module.js';
 import { ChampionshipsModule } from './modules/championships/championships.module.js';
 import { RobotsModule } from './modules/robots/robots.module.js';
 import { ArenasModule } from './modules/arenas/arenas.module.js';
+import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { ArenasModule } from './modules/arenas/arenas.module.js';
         ChampionshipsModule,
         RobotsModule,
         ArenasModule,
+        HealthModule,
     ],
     controllers: [],
     providers: [],

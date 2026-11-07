@@ -12,6 +12,8 @@ services:
     build:
       context: ./apps/api
       target: prod
+    # Node as PID 1 ignores SIGTERM; tini forwards it so shutdown hooks run
+    init: true
     env_file:
       - ./.env
     environment:
@@ -38,7 +40,8 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:18
+    # Pin the minor version; bump it on purpose (same major keeps the data compatible)
+    image: postgres:18.6-trixie
     # Loopback only, for SSH tunnels (ssh -L 5433:localhost:5432 ediasv.dev).
     # Never drop the 127.0.0.1: Docker's iptables rules bypass UFW.
     ports:
