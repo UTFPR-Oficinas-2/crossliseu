@@ -68,6 +68,8 @@ docker compose exec api npm run seed:admin
 
 Each container keeps `node_modules` in a Docker volume and reinstalls it on start when `package-lock.json` changed, so after pulling new dependencies a plain `docker compose up` is enough. If a container fails with "node_modules is not writable", the volume predates this setup; remove it once with `docker compose down && docker volume rm crossliseu_api_node_modules crossliseu_web_node_modules` (your database volume is kept).
 
+Postgres is pinned to `postgres:18.6-trixie`. A `crossliseu_postgres_data` volume created by an older image (such as `postgres:18-bookworm`) carries an older C library collation, and `npm run test:db` fails with "collation version mismatch". Remove it with `docker compose down && docker volume rm crossliseu_postgres_data`, start again and rerun the migrations and the seed above. This deletes your local data.
+
 Compose points the API at the `postgres` container whatever `POSTGRES_HOST` says in `.env`. It also sets `VITE_API_URL=/api` for the web container, so the web app talks to the API through the Vite proxy; see the [web guide](apps/web/README.md#configuration).
 
 ### Option B: run the apps on your machine
