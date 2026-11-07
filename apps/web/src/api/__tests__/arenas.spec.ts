@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createArena, deleteArena, listArenas, renameArena, rotateArenaToken } from '@/api/arenas'
+import {
+  clearArenaCurrentMatch,
+  createArena,
+  deleteArena,
+  listArenas,
+  renameArena,
+  rotateArenaToken,
+} from '@/api/arenas'
 
 function stubFetch(status: number, body?: unknown) {
   const fetchMock = vi
@@ -62,6 +69,15 @@ describe('api/arenas', () => {
     await expect(deleteArena('a1', 't')).resolves.toBeUndefined()
     const { url, init } = lastCall(fetchMock)
     expect(url.endsWith('/arenas/a1')).toBe(true)
+    expect(init.method).toBe('DELETE')
+  })
+
+  it('clears the current match with DELETE /arenas/:id/current-match', async () => {
+    const fetchMock = stubFetch(200, {})
+
+    await clearArenaCurrentMatch('a/1', 't')
+    const { url, init } = lastCall(fetchMock)
+    expect(url.endsWith('/arenas/a%2F1/current-match')).toBe(true)
     expect(init.method).toBe('DELETE')
   })
 })

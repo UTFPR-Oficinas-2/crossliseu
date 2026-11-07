@@ -160,11 +160,41 @@ export class ArenasService {
         return this.toResponse(arena);
     }
 
-    /** Leaves the arena without a current match (used when a match ends, #17) */
-    async clearCurrentMatch(arenaId: string): Promise<void> {
-        if (!(await this.arenasRepository.clearCurrentMatch(arenaId))) {
+    /**
+     * Closes the arena's match or undoes a pick before Start, leaving the arena without a current
+     * match; refused while the match is live. Without a current match it changes nothing.
+     */
+    async clearCurrentMatch(
+        arenaId: string,
+        userId: string,
+    ): Promise<ArenaResponse> {
+        const result = await this.arenasRepository.clearCurrentMatch(
+            arenaId,
+            userId,
+        );
+        if (result !== 'done') {
+            this.logger.warn(result, { arenaId });
+            throw lockedException(result);
+        }
+
+        const arena = await this.arenasRepository.findOwned(arenaId, userId);
+        if (!arena) {
+            // Deleted right after the write
             this.logger.warn('arena_not_found', { arenaId });
             throw new NotFoundException('arena_not_found');
+        }
+        return this.toResponse(arena);
+    }
+
+    /** Same as clearCurrentMatch, without an account check: for the arena device link (#19) */
+    async releaseCurrentMatch(arenaId: string): Promise<void> {
+        const result = await this.arenasRepository.clearCurrentMatch(
+            arenaId,
+            null,
+        );
+        if (result !== 'done') {
+            this.logger.warn(result, { arenaId });
+            throw lockedException(result);
         }
     }
 

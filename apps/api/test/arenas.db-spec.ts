@@ -640,4 +640,187 @@ describe('arenas (db)', () => {
             await http().delete(`/arenas/${ids.arena1}`).expect(401);
         });
     });
+
+    describe('ArenasRepository.clearCurrentMatch', () => {
+        it.each(['scheduled', 'finished'] as const)(
+            'clears a %s current match',
+            async (state) => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, state);
+
+                expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                    'done',
+                );
+                expect(await currentMatchOf(ids.arena1)).toBeNull();
+            },
+        );
+
+        it('clears a finished match so the next one can be selected', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await setState(ids.m1, 'finished');
+            expect(
+                await arenas.setCurrentMatch(ids.arena1, ids.m2, ownerA),
+            ).toBe('arena_match_started');
+
+            await arenas.clearCurrentMatch(ids.arena1, ownerA);
+
+            expect(
+                await arenas.setCurrentMatch(ids.arena1, ids.m2, ownerA),
+            ).toBe('done');
+        });
+
+        it('frees the match for another arena', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await arenas.clearCurrentMatch(ids.arena1, ownerA);
+
+            expect(
+                await arenas.setCurrentMatch(ids.arena2, ids.m1, ownerA),
+            ).toBe('done');
+        });
+
+        it('succeeds and changes nothing without a current match', async () => {
+            expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                'done',
+            );
+            expect(await currentMatchOf(ids.arena1)).toBeNull();
+        });
+
+        it.each(['ongoing', 'paused'] as const)(
+            'refuses with arena_match_live while the match is %s',
+            async (state) => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, state);
+
+                expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                    'arena_match_live',
+                );
+                expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+            },
+        );
+
+        it("answers arena_not_found for another account's arena", async () => {
+            expect(await arenas.clearCurrentMatch(ids.arenaB, ownerA)).toBe(
+                'arena_not_found',
+            );
+        });
+
+        it('ignores ownership when called without an owner', async () => {
+            const [{ owner_user_id: ownerB }]: { owner_user_id: string }[] =
+                await ds.query(
+                    `SELECT "owner_user_id" FROM "arenas" WHERE "id" = $1`,
+                    [ids.arenaB],
+                );
+            await arenas.setCurrentMatch(ids.arenaB, ids.mB, ownerB);
+
+            expect(await arenas.clearCurrentMatch(ids.arenaB, null)).toBe(
+                'done',
+            );
+            expect(await currentMatchOf(ids.arenaB)).toBeNull();
+        });
+
+        it('waits for a concurrent start and refuses', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            // A "start": lock the match row, flip it to ongoing, hold the lock, then commit
+            const start = ds.transaction(async (manager) => {
+                await manager.query(
+                    `SELECT 1 FROM "matches" WHERE "id" = $1 FOR UPDATE`,
+                    [ids.m1],
+                );
+                await manager.query(
+                    `UPDATE "matches" SET "state" = 'ongoing' WHERE "id" = $1`,
+                    [ids.m1],
+                );
+                await new Promise((resolve) => setTimeout(resolve, 300));
+            });
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            const [result] = await Promise.all([
+                arenas.clearCurrentMatch(ids.arena1, ownerA),
+                start,
+            ]);
+
+            expect(result).toBe('arena_match_live');
+            expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+        });
+    });
+
+    describe('DELETE /arenas/:id/current-match', () => {
+        const clear = (id: string, headers = auth()) =>
+            http().delete(`/arenas/${id}/current-match`).set(headers);
+
+        it('clears and returns the arena', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+
+            const response = await clear(ids.arena1).expect(200);
+
+            expect(response.body).toEqual({
+                id: ids.arena1,
+                name: 'Arena 1',
+                deviceId: 'Arena 1-device',
+                online: false,
+                currentMatchId: null,
+                currentMatch: null,
+            });
+            expect(await currentMatchOf(ids.arena1)).toBeNull();
+        });
+
+        it('is idempotent', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+
+            const first = await clear(ids.arena1).expect(200);
+            const second = await clear(ids.arena1).expect(200);
+
+            expect(second.body).toEqual(first.body);
+        });
+
+        it.each(['ongoing', 'paused'] as const)(
+            'answers 409 arena_match_live while the match is %s',
+            async (state) => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, state);
+
+                const response = await clear(ids.arena1).expect(409);
+
+                expect(response.body.message).toBe('arena_match_live');
+                expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+            },
+        );
+
+        it('answers 404 arena_not_found, not 409, for another account on a live match', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await setState(ids.m1, 'ongoing');
+
+            const response = await clear(ids.arena1, authB()).expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+            expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+        });
+
+        it('answers 404 arena_not_found for an unknown arena', async () => {
+            const response = await clear(UNKNOWN_ID).expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+        });
+
+        it('answers 404 arena_not_found for a deleted arena', async () => {
+            await ds.query(
+                `UPDATE "arenas" SET "deleted_at" = now() WHERE "id" = $1`,
+                [ids.arena1],
+            );
+
+            const response = await clear(ids.arena1).expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+        });
+
+        it('answers 400 for an id that is not a UUID', async () => {
+            await clear('abc').expect(400);
+        });
+
+        it('rejects a request without a token with 401', async () => {
+            await http()
+                .delete(`/arenas/${ids.arena1}/current-match`)
+                .expect(401);
+        });
+    });
 });
