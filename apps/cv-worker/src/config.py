@@ -25,3 +25,11 @@ ROBOT_COLORS = {
 # Processing
 BLUR_KERNEL = 5   # GaussianBlur, made odd if needed; 0 disables it
 MORPH_KERNEL = 5  # opening + closing of the masks; 0 disables it
+
+# Detection
+MIN_CONTOUR_AREA = 500  # px; smaller regions are noise. Synthetic marker is ~85x85 = ~7200 px
+
+# Tracking
+# A detection farther than this * frames since last seen is an impossible jump.
+# Synthetic video: robots move at most ~7 px/frame.
+MAX_SPEED_PX_PER_FRAME = 7
