@@ -125,6 +125,14 @@ Defined in `.env` at the repository root (copy from `.env.example`).
 
 Work is merged into `dev` (CI runs on every pull request into `dev` or `main`); `dev` is merged into `main` only when stable. A push to `main` runs CI, publishes the images to GHCR and deploys to the VPS over SSH (`compose.prod.yml` in `/opt/crossliseu`). Migrations run before the new containers start. The workflow needs these repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` and, optionally, `VPS_PORT`. The VPS also needs its own `.env` in `/opt/crossliseu`. NGINX configuration lives in [`deploy/nginx`](deploy/nginx).
 
+The deploy does not create users. On an empty production database, create the admin once on the VPS. The production image has no `ts-node`, so `npm run seed:admin` does not work there; run the compiled seed instead. It reads `ADMIN_USERNAME` and `ADMIN_EMAIL` from the VPS `.env` and asks for the password, so the password never has to be stored in the file:
+
+```bash
+ssh -t <vps> 'cd /opt/crossliseu && read -rsp "Admin password: " P && echo && ADMIN_PASSWORD="$P" docker compose -f compose.prod.yml run --rm -e ADMIN_PASSWORD api node dist/database/seeds/create-admin.seed.js'
+```
+
+Running it again for an existing username updates that user's email and password.
+
 ## Documentation
 
 - [API guide](apps/api/README.md)
