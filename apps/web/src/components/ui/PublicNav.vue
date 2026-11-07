@@ -66,4 +66,26 @@ const canSignIn = useRouter().hasRoute('sign-in')
   outline: var(--focus-ring-width) solid var(--color-orange);
   outline-offset: var(--focus-ring-offset);
 }
+
+/* Figma `Navigation / Mobile` (below 768px) */
+@media (max-width: 767px) {
+  .public-nav {
+    min-height: var(--size-nav-mobile-height);
+    padding: var(--space-3) var(--space-page-x-mobile);
+    border-bottom-color: var(--color-border);
+  }
+
+  .public-nav__brand {
+    font-family: var(--text-heading-m-family);
+    font-weight: var(--text-heading-m-weight);
+    font-size: var(--text-heading-m-size);
+    line-height: var(--text-heading-m-line-height);
+    letter-spacing: var(--text-heading-m-tracking);
+  }
+
+  /* Type=Public keeps only the wordmark and Entrar */
+  .public-nav__link {
+    display: none;
+  }
+}
 </style>

@@ -4,7 +4,7 @@
 export interface SelectOption {
   value: string
   label: string
-  /** Muted text on the right, e.g. "Equipe Volt · Peso leve" */
+  /** Muted text on the right, e.g. "Equipe Volt · beetleweight" */
   meta?: string
   disabled?: boolean
   /** Shown in place of `meta` while disabled, e.g. "Já escolhido como Robô 1" */

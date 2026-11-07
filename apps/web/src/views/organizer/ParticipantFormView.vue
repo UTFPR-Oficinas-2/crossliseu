@@ -9,7 +9,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import InputField from '@/components/ui/InputField.vue'
 import SelectField from '@/components/ui/SelectField.vue'
-import { createRobot, getChampionship, getRobots, updateRobot } from '@/mocks'
+import { createRobot, getChampionship, getRobots, updateRobot } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 import type { Robot } from '@/types'
 import LoadStatePanel from './components/LoadStatePanel.vue'
@@ -197,13 +197,6 @@ onBeforeUnmount(() => {
     <h1 class="participant-form__title text-display-page">
       {{ mode === 'create' ? 'Adicionar participante' : 'Editar participante' }}
     </h1>
-    <p v-if="loadState === 'ready'" class="participant-form__muted text-body-m">
-      {{
-        mode === 'create'
-          ? 'Cadastre um robô e a equipe dele neste campeonato.'
-          : 'Altere os dados do robô. As mudanças aparecem nas lutas e na página pública.'
-      }}
-    </p>
 
     <LoadStatePanel
       v-if="loadState !== 'ready'"
@@ -303,8 +296,8 @@ onBeforeUnmount(() => {
             :details="preview.details"
           />
           <p class="participant-form__muted text-body-s">
-            Assim o robô aparece para operador, árbitros e público. O lado A ou B é definido na
-            preparação de cada luta.
+            Assim o robô aparece para operador, árbitros e público. O lado (A ou B) é escolhido pelo
+            operador antes de iniciar cada luta.
           </p>
         </section>
         <section class="participant-form__panel participant-form__panel--required">

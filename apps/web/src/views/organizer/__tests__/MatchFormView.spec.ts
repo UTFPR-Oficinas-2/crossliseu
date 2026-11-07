@@ -6,12 +6,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { MatchInput } from '@/mocks'
-import type { Championship, MatchState, MatchSummary, Robot } from '@/types'
+import type { MatchInput } from '@/data'
+import type { Championship, MatchState, MatchSummary, Robot, WeightClass } from '@/types'
 import MatchFormView from '../MatchFormView.vue'
-import { MATCH_MESSAGES } from '../match-form'
+import { MATCH_MESSAGES, toScheduledAtIso } from '../match-form'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
   getMatchSummaries: vi.fn<(championshipId: string) => Promise<MatchSummary[]>>(),
@@ -27,13 +27,13 @@ import {
   getMatchSummaries,
   getRobots,
   updateMatch,
-} from '@/mocks'
+} from '@/data'
 
 const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'
 const base = { createdAt: '2026-01-01T00:00:00.000Z', modifiedAt: '2026-01-01T00:00:00.000Z' }
 const championship: Championship = { ...base, id: 'c1', name: 'Copa 2026', startDate: '2026-12-09' }
-const robot = (id: string, name: string, team: string, weightClass: string): Robot => ({
+const robot = (id: string, name: string, team: string, weightClass: WeightClass): Robot => ({
   ...base,
   id,
   championshipId: 'c1',
@@ -42,19 +42,20 @@ const robot = (id: string, name: string, team: string, weightClass: string): Rob
   weightClass,
 })
 const robots = [
-  robot('tita', 'Titã', 'Equipe Volt', 'lightweight'),
-  robot('marte', 'Marte', 'Equipe Órbita', 'lightweight'),
-  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'lightweight'),
-  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'heavyweight'),
+  robot('tita', 'Titã', 'Equipe Volt', 'beetleweight'),
+  robot('marte', 'Marte', 'Equipe Órbita', 'beetleweight'),
+  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'beetleweight'),
+  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'antweight'),
 ]
-const summary = (state: MatchState = 'waiting'): MatchSummary => ({
+const summary = (state: MatchState = 'scheduled'): MatchSummary => ({
   ...base,
   id: 'm1',
   championshipId: 'c1',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
   robotAId: 'tita',
   robotBId: 'marte',
   state,
+  scheduledAt: '2026-12-09T14:00:00.000Z',
 })
 
 let token = ''
@@ -121,6 +122,26 @@ async function submit(wrapper: Wrapper) {
   await flushPromises()
 }
 
+const subtitle = (wrapper: Wrapper) => wrapper.get('.match-form__subtitle').text()
+const PREVIEW_NOTE =
+  'Assim a luta aparece na lista do campeonato. O lado de cada robô é escolhido pelo operador antes de iniciar.'
+
+/** Step 1: category and time, then "Próximo" */
+async function fillStep1(
+  wrapper: Wrapper,
+  weightClass = 'beetleweight',
+  when = '2026-12-09T14:30',
+) {
+  await comboboxes(wrapper)[0]!.trigger('click')
+  await wrapper
+    .findAll('[role="option"]')
+    .find((o) => o.text().includes(weightClass))!
+    .trigger('click')
+  await wrapper.get('input[type="datetime-local"]').setValue(when)
+  await buttonByText(wrapper, 'Próximo')!.trigger('click')
+  await flushPromises()
+}
+
 describe('MatchFormView', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -137,7 +158,7 @@ describe('MatchFormView', () => {
     confirmSpy.mockRestore()
   })
 
-  it('create: shows two empty pickers, the breadcrumb and Criar luta', async () => {
+  it('create: starts at step 1 with the category and the time', async () => {
     const { wrapper } = await mountView('/manage/c1/matches/new')
 
     expect(wrapper.get('h1').text()).toBe('Nova luta')
@@ -147,14 +168,60 @@ describe('MatchFormView', () => {
       'Lutas',
       'Nova luta',
     ])
-    expect(comboboxes(wrapper).map((c) => c.text())).toEqual(['Escolha um robô', 'Escolha um robô'])
-    expect(wrapper.get('button[type="submit"]').text()).toBe('Criar luta')
-    expect(buttonByText(wrapper, 'Excluir luta')).toBeUndefined()
+    expect(subtitle(wrapper)).toBe('Passo 1 de 2 · escolha a categoria e o horário previsto.')
+    expect(wrapper.get('#match-form-heading').text()).toBe('Categoria e horário')
+    expect(comboboxes(wrapper).map((c) => c.text())).toEqual(['Selecione a categoria'])
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(true)
+    expect(cancelLink(wrapper).attributes('href')).toBe('/manage/c1/matches')
+    expect(buttonByText(wrapper, 'Próximo')).toBeDefined()
+    expect(buttonByText(wrapper, 'Criar luta')).toBeUndefined()
+    const aside = wrapper.get('aside').text()
+    expect(aside).toContain('Como funciona')
+    expect(aside).toContain(
+      'Escolha a categoria de peso e o horário previsto. No passo seguinte, só aparecem os robôs inscritos nessa categoria.',
+    )
+    expect(aside).toContain('Regras do confronto')
+    expect(aside).toContain(
+      'A categoria define quais robôs aparecem no próximo passo. Robôs de outras categorias não são listados.',
+    )
     expect(getMatchSummaries).not.toHaveBeenCalled()
   })
 
-  it("lists only Robô 1's weight class for Robô 2 and disables Robô 1 there", async () => {
+  it('create: "Próximo" with empty fields shows both step-1 messages', async () => {
     const { wrapper } = await mountView('/manage/c1/matches/new')
+
+    await buttonByText(wrapper, 'Próximo')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Escolha a categoria de peso.')
+    expect(wrapper.text()).toContain('Informe a data e o horário.')
+    expect(subtitle(wrapper)).toContain('Passo 1 de 2')
+  })
+
+  it('create: moves to step 2 and back, keeping the values', async () => {
+    const { wrapper } = await mountView('/manage/c1/matches/new')
+
+    await fillStep1(wrapper)
+
+    expect(subtitle(wrapper)).toBe('Passo 2 de 2 · escolha dois robôs da categoria escolhida.')
+    expect(wrapper.get('#match-form-heading').text()).toBe('Confronto')
+    expect(comboboxes(wrapper).map((c) => c.text())).toEqual(['Escolha um robô', 'Escolha um robô'])
+    expect(buttonByText(wrapper, 'Criar luta')).toBeDefined()
+    expect(wrapper.get('aside').text()).toContain(PREVIEW_NOTE)
+
+    await buttonByText(wrapper, 'Voltar')!.trigger('click')
+    await flushPromises()
+
+    expect(subtitle(wrapper)).toContain('Passo 1 de 2')
+    expect(comboboxes(wrapper)[0]!.text()).toBe('beetleweight')
+    expect(wrapper.get<HTMLInputElement>('input[type="datetime-local"]').element.value).toBe(
+      '2026-12-09T14:30',
+    )
+  })
+
+  it('create: step 2 lists only the chosen category and disables the other pick', async () => {
+    const { wrapper } = await mountView('/manage/c1/matches/new')
+    await fillStep1(wrapper)
 
     await pick(wrapper, 0, 'Marte')
     await comboboxes(wrapper)[1]!.trigger('click')
@@ -163,23 +230,12 @@ describe('MatchFormView', () => {
     const marte = options(wrapper, 1)[1]!
     expect(marte.attributes('aria-disabled')).toBe('true')
     expect(marte.text()).toContain('Já escolhido como Robô 1')
-    expect(wrapper.text()).toContain('Participantes · Peso leve')
-    expect(wrapper.text()).toContain('Equipe Órbita · Peso leve')
+    expect(wrapper.text()).toContain('Participantes · beetleweight')
   })
 
-  it('clears Robô 2 when Robô 1 switches to another weight class', async () => {
+  it('create: submitting step 2 empty shows both robot messages and does not save', async () => {
     const { wrapper } = await mountView('/manage/c1/matches/new')
-
-    await pick(wrapper, 0, 'Marte')
-    await pick(wrapper, 1, 'Cobalto')
-    await pick(wrapper, 0, 'Bigorna')
-
-    expect(comboboxes(wrapper)[0]!.text()).toBe('Bigorna')
-    expect(comboboxes(wrapper)[1]!.text()).toBe('Escolha um robô')
-  })
-
-  it('submitting empty shows both required messages and does not save', async () => {
-    const { wrapper } = await mountView('/manage/c1/matches/new')
+    await fillStep1(wrapper)
 
     await submit(wrapper)
 
@@ -188,8 +244,9 @@ describe('MatchFormView', () => {
     expect(createMatch).not.toHaveBeenCalled()
   })
 
-  it('creates the match and returns to the list without confirming', async () => {
+  it('creates the match with its time and returns to the list without confirming', async () => {
     const { wrapper, router } = await mountView('/manage/c1/matches/new')
+    await fillStep1(wrapper)
 
     await pick(wrapper, 0, 'Marte')
     await pick(wrapper, 1, 'Cobalto')
@@ -197,7 +254,11 @@ describe('MatchFormView', () => {
 
     expect(createMatch).toHaveBeenCalledWith(
       'c1',
-      { robotAId: 'marte', robotBId: 'cobalto' },
+      {
+        robotAId: 'marte',
+        robotBId: 'cobalto',
+        scheduledAt: toScheduledAtIso('2026-12-09T14:30'),
+      },
       token,
     )
     expect(router.currentRoute.value.name).toBe('championship-matches')
@@ -209,6 +270,7 @@ describe('MatchFormView', () => {
       new ApiError(400, 'match_weight_class_mismatch', ['match_weight_class_mismatch']),
     )
     const { wrapper } = await mountView('/manage/c1/matches/new')
+    await fillStep1(wrapper)
 
     await pick(wrapper, 0, 'Marte')
     await pick(wrapper, 1, 'Cobalto')
@@ -221,6 +283,7 @@ describe('MatchFormView', () => {
 
   it('updates the preview as robots are picked', async () => {
     const { wrapper } = await mountView('/manage/c1/matches/new')
+    await fillStep1(wrapper)
     const aside = () => wrapper.get('aside').text()
 
     expect(aside()).toContain('Robô 1')
@@ -231,29 +294,41 @@ describe('MatchFormView', () => {
 
     expect(aside()).toContain('Marte')
     expect(aside()).toContain('Cobalto')
-    expect(aside()).toContain('Equipe Órbita × Equipe Órbita · Peso leve')
+    expect(aside()).toContain('Equipe Órbita × Equipe Órbita · beetleweight')
   })
 
-  it('asks for participants when fewer than two robots exist', async () => {
-    vi.mocked(getRobots).mockResolvedValue([robots[0]!])
+  it('asks for participants when the category has fewer than two robots', async () => {
     const { wrapper } = await mountView('/manage/c1/matches/new')
+    await fillStep1(wrapper, 'antweight')
 
-    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Esta categoria precisa de pelo menos dois robôs inscritos.')
+    expect(comboboxes(wrapper)).toHaveLength(0)
     const add = wrapper.findAll('a').find((a) => a.text() === 'Adicionar participante')!
     expect(add.attributes('href')).toBe('/manage/c1/participants/new')
+    expect(buttonByText(wrapper, 'Voltar')).toBeDefined()
   })
 
   it('edit: pre-fills the robots and saves', async () => {
     const { wrapper, router } = await mountView('/manage/c1/matches/m1/edit')
 
     expect(wrapper.get('h1').text()).toBe('Editar luta')
+    expect(subtitle(wrapper)).toBe('Só lutas programadas podem ser editadas ou excluídas.')
     expect(comboboxes(wrapper).map((c) => c.text())).toEqual(['Titã', 'Marte'])
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(false)
+    expect(wrapper.findAll('button, a').map((b) => b.text())).toEqual(
+      expect.arrayContaining(['Excluir luta', 'Cancelar', 'Salvar luta']),
+    )
     expect(wrapper.get('button[type="submit"]').text()).toBe('Salvar luta')
+    expect(wrapper.get('aside').text()).toContain(PREVIEW_NOTE)
 
     await pick(wrapper, 1, 'Cobalto')
     await submit(wrapper)
 
-    expect(updateMatch).toHaveBeenCalledWith('m1', { robotAId: 'tita', robotBId: 'cobalto' }, token)
+    expect(updateMatch).toHaveBeenCalledWith(
+      'm1',
+      { robotAId: 'tita', robotBId: 'cobalto', scheduledAt: '2026-12-09T14:00:00.000Z' },
+      token,
+    )
     expect(router.currentRoute.value.name).toBe('championship-matches')
   })
 
@@ -270,7 +345,7 @@ describe('MatchFormView', () => {
   })
 
   it('edit: refuses a match that is no longer scheduled', async () => {
-    vi.mocked(getMatchSummaries).mockResolvedValue([summary('running')])
+    vi.mocked(getMatchSummaries).mockResolvedValue([summary('ongoing')])
     const { wrapper } = await mountView('/manage/c1/matches/m1/edit')
 
     expect(wrapper.find('form').exists()).toBe(false)
@@ -345,7 +420,7 @@ describe('MatchFormView', () => {
 
   it('asks before leaving with unsaved changes', async () => {
     const { wrapper, router } = await mountView('/manage/c1/matches/new')
-    await pick(wrapper, 0, 'Marte')
+    await wrapper.get('input[type="datetime-local"]').setValue('2026-12-09T14:30')
 
     confirmSpy.mockReturnValue(false)
     await cancelLink(wrapper).trigger('click')

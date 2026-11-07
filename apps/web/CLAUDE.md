@@ -78,7 +78,7 @@ Use these classes instead of setting font-family/size/weight in components.
 
 - `src/components/ui/` holds one design-system component per Figma component.
 - Blocks used only inside one section live in `src/views/<section>/components/`.
-- `src/mocks/` is typed demo data, used in dev when `VITE_API_URL` is unset.
+- `src/data/` is the data access layer: it calls `src/api/` and maps payloads to `src/types`. There is no demo data.
 
 ### Figma component → Vue file
 
@@ -94,7 +94,6 @@ Use these classes instead of setting font-family/size/weight in components.
 | `Card / Championship`                                | `ChampionshipCard.vue`                                    |
 | `Row / Fight` (`hasAction`)                          | `FightRow.vue`                                            |
 | `Competitor / Tile` (Side = A · B)                   | `CompetitorTile.vue` (`side: 'A' \| 'B'` prop)            |
-| `Metric / Overview`                                  | `OverviewMetric.vue` (no planned screen uses it now)      |
 | `Navigation / Public · App · Operator`               | `PublicNav.vue`, `AppNav.vue`, `OperatorNav.vue`          |
 | `Navigation / Mobile` · `Navigation / Operator · Mobile` | Same nav components below 768 px                      |
 
@@ -111,10 +110,10 @@ slots. Each component's Figma description repeats its Vue file and props.
 - Interface text is **Portuguese (pt-BR)** exactly as in Figma. Code identifiers, file names,
   comments and commits are in English.
 - Format dates and numbers with `Intl` using `pt-BR`.
-- Sign-in, championships, participants and match scheduling use the API through `src/api/`;
-  every other page still uses typed data from `src/mocks/`. Don't call the API or invent
-  endpoints unless asked. Keep data loading in one place per view so it can be swapped for the
-  API later.
+- Every page gets its data from the API through `src/data/` (which uses `src/api/`). No mocks, no
+  demo data, no build-mode gates: what runs locally is what ships. Where `apps/api` has no
+  endpoint yet (arenas, operator match data, referee access) the `src/data/` function rejects with
+  `not_implemented`; don't invent endpoints unless asked. Keep data loading in one place per view.
 - Don't add dependencies other than the `@fontsource` packages without asking.
 
 ## Accessibility and layout
@@ -128,22 +127,27 @@ slots. Each component's Figma description repeats its Vue file and props.
 
 ## Domain rules the UI must respect
 
-- Match state (waiting, running, paused, finished) and recording/upload/analysis states
-  (pendente, processando, concluído, falhou) are separate. Never merge them into one status.
-- Referee screens show each referee's own values only. **Don't calculate or show an official
-  total score** — the scoring formula is still undecided.
+- Match states and weight classes are the API's values (`scheduled | ongoing | paused | finished`;
+  weight classes untranslated, e.g. `beetleweight`). Championship status is
+  `scheduled | ongoing | closed`.
+- Match state and recording/upload/analysis states (pendente, processando, concluído, falhou)
+  are separate. Never merge them into one status.
+- Every screen shows only the total points per competitor (sum of the 3 referees). Never show a
+  single referee's partial.
 - The server owns the fight (status, timer, end reason). Nothing is blocked by an offline arena
   or by referees who aren't connected: show the status, never disable Start because of it.
 - Surrender only comes from the arena box buttons and only counts while the fight is running.
-  The web app has no surrender buttons; the operator ends the fight (`operator_ended`) and can
+  The web app has no surrender buttons; the operator ends the fight (`manual`) and can
   correct the reason before closing it (#57).
-- `endReason` labels: `time_out` = TEMPO ESGOTADO, `operator_ended` = ENCERRADA PELO OPERADOR,
-  `surrender_A` / `surrender_B` = DESISTÊNCIA DO LADO A / B.
+- `endReason` labels: `time_out` = TEMPO ESGOTADO, `manual` = ENCERRADA PELO OPERADOR,
+  `surrender` = DESISTÊNCIA DO LADO A / B (the side opposite `winnerRobotId`);
+  `winnerRobotId: null` = EMPATE.
 - Arenas are global (not per championship), one ESP32 box each.
 - Referees join with their own link, without an account. No "ready" step and no correction window.
   Scoring is +1 / −1 per side, nothing else.
 - A fight can end in a draw (EMPATE). The public sees scheduled fights as well as results.
-- Robô 1 is Lado A and Robô 2 is Lado B, fixed when the fight is created. Fight order is manual.
+- Robô 1 / Robô 2 have no side when the fight is created; the operator assigns Lado A / Lado B
+  before Start. Fight order is manual.
   Don't build brackets, seeding or automatic advancement.
 - There is no public self-registration on the sign-in page.
 - Being signed in doesn't grant management access. Hide controls the user can't use, but

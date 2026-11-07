@@ -1,24 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import type { MatchSummary, Robot } from '@/types'
-import { inMatchFilter, matchFilterFrom, matchRows, matchesSubtitle } from '../matches-list'
+import {
+  MATCH_FILTERS,
+  inMatchFilter,
+  matchFilterFrom,
+  matchRows,
+  matchesSubtitle,
+} from '../matches-list'
+
+describe('MATCH_FILTERS', () => {
+  it('are the API states plus Todas', () => {
+    expect(MATCH_FILTERS.map((f) => f.value)).toEqual(['all', 'scheduled', 'ongoing', 'finished'])
+  })
+})
 
 describe('matchFilterFrom', () => {
   it('reads known tabs and falls back to all', () => {
-    expect(matchFilterFrom('waiting')).toBe('waiting')
-    expect(matchFilterFrom('running')).toBe('running')
+    expect(matchFilterFrom('scheduled')).toBe('scheduled')
+    expect(matchFilterFrom('ongoing')).toBe('ongoing')
     expect(matchFilterFrom('finished')).toBe('finished')
     expect(matchFilterFrom('paused')).toBe('all')
-    expect(matchFilterFrom(['waiting'])).toBe('all')
+    expect(matchFilterFrom(['scheduled'])).toBe('all')
     expect(matchFilterFrom(undefined)).toBe('all')
+    // Values from before the API state names
+    expect(matchFilterFrom('waiting')).toBe('all')
+    expect(matchFilterFrom('running')).toBe('all')
   })
 })
 
 describe('inMatchFilter', () => {
   it('puts running and paused fights under "Em andamento"', () => {
-    expect(inMatchFilter('running', 'running')).toBe(true)
-    expect(inMatchFilter('paused', 'running')).toBe(true)
-    expect(inMatchFilter('waiting', 'running')).toBe(false)
-    expect(inMatchFilter('waiting', 'waiting')).toBe(true)
+    expect(inMatchFilter('ongoing', 'ongoing')).toBe(true)
+    expect(inMatchFilter('paused', 'ongoing')).toBe(true)
+    expect(inMatchFilter('scheduled', 'ongoing')).toBe(false)
+    expect(inMatchFilter('scheduled', 'scheduled')).toBe(true)
     expect(inMatchFilter('finished', 'finished')).toBe(true)
     expect(inMatchFilter('finished', 'all')).toBe(true)
   })
@@ -38,17 +53,18 @@ describe('matchRows', () => {
       championshipId: 'c1',
       name,
       team: 'Equipe',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
       createdAt: '',
       modifiedAt: '',
     })
     const match: MatchSummary = {
       id: 'm1',
       championshipId: 'c1',
-      weightClass: 'lightweight',
+      weightClass: 'beetleweight',
       robotAId: 'r1',
       robotBId: 'gone',
-      state: 'waiting',
+      state: 'scheduled',
+      scheduledAt: '',
       createdAt: '',
       modifiedAt: '',
     }

@@ -1,22 +1,24 @@
 <script setup lang="ts">
-// Figma: `Navigation / Operator` (node 23:421). Top bar shown while the operator runs a fight.
-import { computed } from 'vue'
+// Figma: `Navigation / Operator` (node 23:421, phone 153:1543). Top bar shown while the operator
+// runs a fight: the fight context and the arena box connection on the left, the exit on the right.
+// The arena status is shown, never used to block anything.
 import AppButton from '@/components/ui/AppButton.vue'
+import StatusPill from '@/components/ui/StatusPill.vue'
 
-const { championship, fightNumber, arena } = defineProps<{
+const { arena, championship, robotA, robotB, arenaConnected } = defineProps<{
+  /** Arena name, e.g. "Arena 01" */
+  arena: string
   /** Championship name, e.g. "Copa Crossliseu 2026" */
   championship: string
-  /** Fight number, shown zero-padded: 8 → "Luta 08" */
-  fightNumber: number
-  /** Arena label, e.g. "ARENA 01" */
-  arena: string
+  robotA: string
+  robotB: string
+  /** The arena's ESP32 box is connected */
+  arenaConnected: boolean
 }>()
 
 const emit = defineEmits<{
   exit: []
 }>()
-
-const fightLabel = computed(() => `Luta ${String(fightNumber).padStart(2, '0')}`)
 </script>
 
 <template>
@@ -25,15 +27,18 @@ const fightLabel = computed(() => `Luta ${String(fightNumber).padStart(2, '0')}`
       <p class="operator-nav__brand text-heading-m">Crossliseu</p>
       <span class="operator-nav__mode text-mono-s">OPERAÇÃO</span>
       <p class="operator-nav__context text-body-m">
-        <span>{{ championship }}</span>
-        <span class="operator-nav__separator" aria-hidden="true">·</span>
-        <span>{{ fightLabel }}</span>
+        {{ arena }} · {{ championship }} · {{ robotA }} × {{ robotB }}
       </p>
+      <StatusPill
+        :label="arenaConnected ? 'Arena conectada' : 'Arena não conectada'"
+        :tone="arenaConnected ? 'success' : 'danger'"
+      />
     </div>
 
     <div class="operator-nav__right">
-      <p class="operator-nav__arena text-mono-m">{{ arena }}</p>
-      <AppButton variant="secondary" @click="emit('exit')">Sair da operação</AppButton>
+      <AppButton variant="secondary" class="operator-nav__exit" @click="emit('exit')">
+        Sair da operação
+      </AppButton>
     </div>
   </header>
 </template>
@@ -41,6 +46,7 @@ const fightLabel = computed(() => `Luta ${String(fightNumber).padStart(2, '0')}`
 <style scoped>
 .operator-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
@@ -53,6 +59,7 @@ const fightLabel = computed(() => `Luta ${String(fightNumber).padStart(2, '0')}`
 .operator-nav__left {
   display: flex;
   flex: 1 1 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-14px);
   min-width: 0;
@@ -77,10 +84,6 @@ const fightLabel = computed(() => `Luta ${String(fightNumber).padStart(2, '0')}`
 }
 
 .operator-nav__context {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
   min-width: 0;
   margin: 0;
   color: var(--color-muted);
@@ -94,9 +97,14 @@ const fightLabel = computed(() => `Luta ${String(fightNumber).padStart(2, '0')}`
   gap: var(--space-4);
 }
 
-.operator-nav__arena {
-  margin: 0;
-  color: var(--color-text);
-  white-space: nowrap;
+.operator-nav__exit {
+  min-height: var(--size-control-compact);
+}
+
+/* Figma `Navigation / Operator · Mobile` (below 768px) */
+@media (max-width: 767px) {
+  .operator-nav {
+    padding: var(--space-3) var(--space-page-x-mobile);
+  }
 }
 </style>

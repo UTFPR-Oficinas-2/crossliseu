@@ -1,19 +1,25 @@
-// Pure logic for MatchFormView (Figma 10b): the two robot pickers, and validation mirroring
-// `MatchesService.resolveRobots` in apps/api.
+// Pure logic for MatchFormView (Figma ORG-07a/b and ORG-08): step 1 picks the category and the
+// time, step 2 the two robots of that category. Validation mirrors `MatchesService.resolveRobots`
+// in apps/api.
 import { ApiError } from '@/api/client'
 import type { SelectOption } from '@/components/ui/select-field'
-import type { MatchInput } from '@/mocks'
-import type { MatchSummary, Robot } from '@/types'
-import { weightClassLabel } from '@/utils/robot'
+import type { MatchInput } from '@/data'
+import type { MatchSummary, Robot, WeightClass } from '@/types'
 
 export interface MatchFormValues {
+  weightClass: WeightClass | ''
+  /** `datetime-local` value ("2026-12-09T14:30"), in the browser's time zone */
+  scheduledAt: string
   robotAId: string
   robotBId: string
 }
 export type MatchFormField = keyof MatchFormValues
+export type RobotField = 'robotAId' | 'robotBId'
 export type MatchFormErrors = Partial<Record<MatchFormField, string>>
 
 export const MATCH_MESSAGES = {
+  weightClassRequired: 'Escolha a categoria de peso.',
+  scheduledAtRequired: 'Informe a data e o horário.',
   robotARequired: 'Escolha o robô 1.',
   robotBRequired: 'Escolha o robô 2.',
   mustDiffer: 'Escolha dois robôs diferentes.',
@@ -29,9 +35,29 @@ export const MATCH_MESSAGES = {
   deleteGeneric: 'Não foi possível excluir a luta. Tente novamente.',
 } as const
 
-export const emptyMatchValues = (): MatchFormValues => ({ robotAId: '', robotBId: '' })
+export const emptyMatchValues = (): MatchFormValues => ({
+  weightClass: '',
+  scheduledAt: '',
+  robotAId: '',
+  robotBId: '',
+})
+
+/** `datetime-local` value → ISO timestamp, read in the browser's time zone */
+export const toScheduledAtIso = (local: string): string => new Date(local).toISOString()
+
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+/** ISO timestamp → `datetime-local` value ("YYYY-MM-DDTHH:mm") in the browser's time zone */
+export function toLocalInput(iso: string): string {
+  const date = new Date(iso)
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(
+    date.getHours(),
+  )}:${pad2(date.getMinutes())}`
+}
 
 export const matchValuesFrom = (match: MatchSummary): MatchFormValues => ({
+  weightClass: match.weightClass,
+  scheduledAt: toLocalInput(match.scheduledAt),
   robotAId: match.robotAId,
   robotBId: match.robotBId,
 })
@@ -39,16 +65,44 @@ export const matchValuesFrom = (match: MatchSummary): MatchFormValues => ({
 export const toMatchInput = (values: MatchFormValues): MatchInput => ({
   robotAId: values.robotAId,
   robotBId: values.robotBId,
+  scheduledAt: toScheduledAtIso(values.scheduledAt),
 })
 
-const slotNumber: Record<MatchFormField, 1 | 2> = { robotAId: 1, robotBId: 2 }
-const otherSlot = (slot: MatchFormField): MatchFormField =>
-  slot === 'robotAId' ? 'robotBId' : 'robotAId'
+/** Step 1 (ORG-07a): the category and the planned time */
+export function validateStep1(values: MatchFormValues): MatchFormErrors {
+  const errors: MatchFormErrors = {}
+  if (!values.weightClass) errors.weightClass = MATCH_MESSAGES.weightClassRequired
+  if (!values.scheduledAt || Number.isNaN(new Date(values.scheduledAt).getTime())) {
+    errors.scheduledAt = MATCH_MESSAGES.scheduledAtRequired
+  }
+  return errors
+}
+
+const slotNumber: Record<RobotField, 1 | 2> = { robotAId: 1, robotBId: 2 }
+const otherSlot = (slot: RobotField): RobotField => (slot === 'robotAId' ? 'robotBId' : 'robotAId')
 const findRobot = (robots: Robot[], id: string) => robots.find((r) => r.id === id)
 
-/** "Equipe Órbita · Peso leve" */
-export const robotSummary = (robot: Robot) =>
-  `${robot.team} · ${weightClassLabel(robot.weightClass)}`
+/** Robots a match of this category can pair */
+export const robotsInClass = (robots: Robot[], weightClass: WeightClass | ''): Robot[] =>
+  weightClass ? robots.filter((r) => r.weightClass === weightClass) : []
+
+/** Changes the category; picked robots of another class are cleared */
+export function withWeightClass(
+  robots: Robot[],
+  values: MatchFormValues,
+  weightClass: WeightClass | '',
+): MatchFormValues {
+  const keep = (id: string) => (findRobot(robots, id)?.weightClass === weightClass ? id : '')
+  return {
+    ...values,
+    weightClass,
+    robotAId: keep(values.robotAId),
+    robotBId: keep(values.robotBId),
+  }
+}
+
+/** "Equipe Órbita · beetleweight" */
+export const robotSummary = (robot: Robot) => `${robot.team} · ${robot.weightClass}`
 
 /** Hint under a picker: the picked robot's team and weight class */
 export function robotHint(robots: Robot[], robotId: string): string | undefined {
@@ -57,22 +111,19 @@ export function robotHint(robots: Robot[], robotId: string): string | undefined 
 }
 
 /**
- * Options for one picker. Robô 2 lists only Robô 1's weight class once Robô 1 is picked. Robô 1
- * always lists every robot so the organizer can switch class (`pickRobot` then clears Robô 2).
- * The robot picked on the other side stays in the list, disabled.
+ * Options for one picker: only robots of the chosen category. The robot picked on the other side
+ * stays in the list, disabled.
  */
 export function robotOptions(
   robots: Robot[],
   values: MatchFormValues,
-  slot: MatchFormField,
+  slot: RobotField,
 ): { groupLabel: string; options: SelectOption[] } {
   const other = otherSlot(slot)
-  const weightClass =
-    slot === 'robotBId' ? findRobot(robots, values.robotAId)?.weightClass : undefined
-  const listed = weightClass ? robots.filter((r) => r.weightClass === weightClass) : robots
+  const { weightClass } = values
   return {
-    groupLabel: weightClass ? `Participantes · ${weightClassLabel(weightClass)}` : 'Participantes',
-    options: listed.map((robot) => {
+    groupLabel: weightClass ? `Participantes · ${weightClass}` : 'Participantes',
+    options: robotsInClass(robots, weightClass).map((robot) => {
       const taken = robot.id === values[other]
       return {
         value: robot.id,
@@ -83,22 +134,6 @@ export function robotOptions(
       }
     }),
   }
-}
-
-/** Sets one side. A Robô 1 of another weight class clears Robô 2. */
-export function pickRobot(
-  robots: Robot[],
-  values: MatchFormValues,
-  slot: MatchFormField,
-  robotId: string,
-): MatchFormValues {
-  const next: MatchFormValues = { ...values, [slot]: robotId }
-  if (slot === 'robotAId') {
-    const robotA = findRobot(robots, robotId)
-    const robotB = findRobot(robots, next.robotBId)
-    if (robotA && robotB && robotA.weightClass !== robotB.weightClass) next.robotBId = ''
-  }
-  return next
 }
 
 export function validateMatchForm(robots: Robot[], values: MatchFormValues): MatchFormErrors {
@@ -116,19 +151,19 @@ export function validateMatchForm(robots: Robot[], values: MatchFormValues): Mat
   return errors
 }
 
-/** "Prévia na lista": "Marte × Cobalto" and "Equipe Órbita × Equipe Órbita · Peso leve" */
+/** "Prévia na lista": "Marte × Cobalto" and "Equipe Órbita × Equipe Órbita · beetleweight" */
 export function matchPreview(
   robots: Robot[],
   values: MatchFormValues,
 ): { robotA: string; robotB: string; teams: string } {
   const robotA = findRobot(robots, values.robotAId)
   const robotB = findRobot(robots, values.robotBId)
-  const weightClass = (robotA ?? robotB)?.weightClass
+  const { weightClass } = values
   const teams = `${robotA?.team ?? 'Equipe'} × ${robotB?.team ?? 'Equipe'}`
   return {
     robotA: robotA?.name ?? 'Robô 1',
     robotB: robotB?.name ?? 'Robô 2',
-    teams: weightClass ? `${teams} · ${weightClassLabel(weightClass)}` : teams,
+    teams: weightClass ? `${teams} · ${weightClass}` : teams,
   }
 }
 

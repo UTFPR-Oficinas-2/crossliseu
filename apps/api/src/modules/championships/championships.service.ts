@@ -49,6 +49,12 @@ export class ChampionshipsService {
         return this.withCounts(await this.championshipsRepository.findAll());
     }
 
+    async findMine(userId: string) {
+        return this.withCounts(
+            await this.championshipsRepository.findByOwner(userId),
+        );
+    }
+
     async findOne(id: string) {
         const [championship] = await this.withCounts([
             await this.findEntity(id),
@@ -67,8 +73,37 @@ export class ChampionshipsService {
         return championship;
     }
 
-    async update(id: string, updateChampionshipDto: UpdateChampionshipDto) {
-        const championship = await this.findEntity(id);
+    /** False for an unknown or deleted championship too */
+    async isOwnedBy(championshipId: string, userId: string) {
+        return (
+            (await this.championshipsRepository.findOneOwned(
+                championshipId,
+                userId,
+            )) !== null
+        );
+    }
+
+    /** The championship when the user owns it; anyone else gets the unknown-id 404 */
+    async findOwned(id: string, userId: string) {
+        const championship = await this.championshipsRepository.findOneOwned(
+            id,
+            userId,
+        );
+
+        if (!championship) {
+            this.logger.warn('championship_not_found', { id: id });
+            throw new NotFoundException('championship_not_found');
+        }
+
+        return championship;
+    }
+
+    async update(
+        id: string,
+        updateChampionshipDto: UpdateChampionshipDto,
+        userId: string,
+    ) {
+        const championship = await this.findOwned(id, userId);
 
         this.assertValidDateRange(
             updateChampionshipDto.startDate ?? championship.startDate,
@@ -81,8 +116,8 @@ export class ChampionshipsService {
     }
 
     /** Removes the championship with its robots and matches, unless a match is being fought */
-    async remove(id: string) {
-        await this.findEntity(id);
+    async remove(id: string, userId: string) {
+        await this.findOwned(id, userId);
 
         const result = await this.championshipsRepository.removeCascade(id);
         if (result === 'not_found') {

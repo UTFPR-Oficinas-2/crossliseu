@@ -1,6 +1,6 @@
 // Pure logic for ParticipantsView (Figma 09)
 import { ApiError } from '@/api/client'
-import type { Robot } from '@/types'
+import type { Robot, WeightClass } from '@/types'
 
 const numberFormat = new Intl.NumberFormat('pt-BR')
 
@@ -17,11 +17,22 @@ export function participantsSubtitle(robots: Robot[]): string {
 const fold = (value: string) =>
   value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR')
 
-/** "Buscar robô ou equipe": matches the robot name or the team, ignoring case and accents */
-export function filterRobots(robots: Robot[], query: string): Robot[] {
+/**
+ * "Buscar robô ou equipe" matches the robot name or the team, ignoring case and accents;
+ * the category picker keeps one weight class, or every class with 'all'.
+ */
+export function filterRobots(
+  robots: Robot[],
+  query: string,
+  weightClass: WeightClass | 'all',
+): Robot[] {
   const needle = fold(query.trim())
-  if (!needle) return robots
-  return robots.filter((r) => fold(r.name).includes(needle) || fold(r.team).includes(needle))
+  if (!needle && weightClass === 'all') return robots
+  return robots.filter(
+    (r) =>
+      (weightClass === 'all' || r.weightClass === weightClass) &&
+      (!needle || fold(r.name).includes(needle) || fold(r.team).includes(needle)),
+  )
 }
 
 export const REMOVE_MESSAGES = {

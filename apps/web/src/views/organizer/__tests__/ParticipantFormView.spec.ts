@@ -6,19 +6,19 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { RobotInput } from '@/mocks'
+import type { RobotInput } from '@/data'
 import type { Championship, Robot } from '@/types'
 import ParticipantFormView from '../ParticipantFormView.vue'
 import { PARTICIPANT_MESSAGES } from '../participant-form'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   getRobots: vi.fn<(championshipId: string) => Promise<Robot[]>>(),
   createRobot:
     vi.fn<(championshipId: string, input: RobotInput, token: string) => Promise<Robot>>(),
   updateRobot: vi.fn<(id: string, input: RobotInput, token: string) => Promise<Robot>>(),
 }))
-import { createRobot, getChampionship, getRobots, updateRobot } from '@/mocks'
+import { createRobot, getChampionship, getRobots, updateRobot } from '@/data'
 
 const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'
@@ -30,7 +30,7 @@ const tita: Robot = {
   championshipId: 'c1',
   name: 'Titã',
   team: 'Equipe Volt',
-  weightClass: 'lightweight',
+  weightClass: 'beetleweight',
 }
 
 let token = ''
@@ -86,7 +86,7 @@ const cancelLink = (wrapper: Wrapper) => wrapper.findAll('a').find((a) => a.text
 const crumbs = (wrapper: Wrapper) =>
   wrapper.findAll('nav li:not([aria-hidden])').map((li) => li.text())
 
-type WeightClassLabel = 'Peso leve' | 'Peso pesado'
+type WeightClassLabel = 'beetleweight' | 'antweight'
 
 const weightClassPicker = (wrapper: Wrapper) => wrapper.get('[role="combobox"]')
 
@@ -143,6 +143,15 @@ describe('ParticipantFormView', () => {
     expect(getRobots).not.toHaveBeenCalled()
   })
 
+  it('has no subtitle and explains that the operator picks the side', async () => {
+    const { wrapper } = await mountView('/manage/c1/participants/new')
+
+    expect(wrapper.get('h1').element.nextElementSibling?.tagName).not.toBe('P')
+    expect(wrapper.text()).toContain(
+      'Assim o robô aparece para operador, árbitros e público. O lado (A ou B) é escolhido pelo operador antes de iniciar cada luta.',
+    )
+  })
+
   it('create: submitting empty shows the required messages and does not save', async () => {
     const { wrapper } = await mountView('/manage/c1/participants/new')
 
@@ -158,12 +167,12 @@ describe('ParticipantFormView', () => {
     vi.mocked(createRobot).mockResolvedValue(tita)
     const { wrapper, router } = await mountView('/manage/c1/participants/new')
 
-    await fill(wrapper, { name: '  Titã ', team: 'Equipe   Volt', weightClass: 'Peso leve' })
+    await fill(wrapper, { name: '  Titã ', team: 'Equipe   Volt', weightClass: 'beetleweight' })
     await submit(wrapper)
 
     expect(createRobot).toHaveBeenCalledWith(
       'c1',
-      { name: 'Titã', team: 'Equipe Volt', weightClass: 'lightweight' },
+      { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' },
       token,
     )
     expect(router.currentRoute.value.name).toBe('championship-participants')
@@ -174,7 +183,7 @@ describe('ParticipantFormView', () => {
     vi.mocked(createRobot).mockResolvedValue(tita)
     const { wrapper, router } = await mountView('/manage/c1/participants/new', true)
 
-    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'Peso leve' })
+    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' })
     await buttonByText(wrapper, 'Salvar e adicionar outro')!.trigger('click')
     await flushPromises()
 
@@ -193,7 +202,7 @@ describe('ParticipantFormView', () => {
     let resolve: (value: Robot) => void = () => {}
     vi.mocked(createRobot).mockReturnValue(new Promise((r) => (resolve = r)))
     const { wrapper } = await mountView('/manage/c1/participants/new')
-    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'Peso leve' })
+    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' })
 
     await wrapper.get('form').trigger('submit')
     await wrapper.get('form').trigger('submit')
@@ -209,7 +218,7 @@ describe('ParticipantFormView', () => {
       new ApiError(409, 'robot_name_taken', ['robot_name_taken']),
     )
     const { wrapper } = await mountView('/manage/c1/participants/new')
-    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'Peso leve' })
+    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' })
 
     await submit(wrapper)
 
@@ -225,11 +234,11 @@ describe('ParticipantFormView', () => {
     expect(tile().text()).toContain('Lado A · Equipe')
     expect(tile().text()).toContain('Nome do robô')
 
-    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'Peso pesado' })
+    await fill(wrapper, { name: 'Titã', team: 'Equipe Volt', weightClass: 'antweight' })
 
     expect(tile().text()).toContain('Lado A · Equipe Volt')
     expect(tile().text()).toContain('Titã')
-    expect(tile().text()).toContain('Peso pesado')
+    expect(tile().text()).toContain('antweight')
   })
 
   it('edit: pre-fills the robot and saves with a single button', async () => {
@@ -238,7 +247,7 @@ describe('ParticipantFormView', () => {
 
     expect(getRobots).toHaveBeenCalledWith('c1')
     expect(input(wrapper, 'name').element.value).toBe('Titã')
-    expect(weightClassPicker(wrapper).text()).toBe('Peso leve')
+    expect(weightClassPicker(wrapper).text()).toBe('beetleweight')
     expect(wrapper.get('h1').text()).toBe('Editar participante')
     expect(crumbs(wrapper).at(-1)).toBe('Editar participante')
     expect(buttonByText(wrapper, 'Salvar e adicionar outro')).toBeUndefined()
@@ -249,7 +258,7 @@ describe('ParticipantFormView', () => {
 
     expect(updateRobot).toHaveBeenCalledWith(
       'r1',
-      { name: 'Titã', team: 'Equipe Nova', weightClass: 'lightweight' },
+      { name: 'Titã', team: 'Equipe Nova', weightClass: 'beetleweight' },
       token,
     )
     expect(router.currentRoute.value.name).toBe('championship-participants')
@@ -261,22 +270,11 @@ describe('ParticipantFormView', () => {
     )
     const { wrapper } = await mountView('/manage/c1/participants/r1/edit')
 
-    await pickWeightClass(wrapper, 'Peso pesado')
+    await pickWeightClass(wrapper, 'antweight')
     await submit(wrapper)
 
     expect(wrapper.text()).toContain(PARTICIPANT_MESSAGES.weightClassLocked)
     expect(weightClassPicker(wrapper).attributes('aria-invalid')).toBe('true')
-  })
-
-  it('edit: asks for a weight class when the saved one is not one of the two', async () => {
-    vi.mocked(getRobots).mockResolvedValue([{ ...tita, weightClass: '3 kg' }])
-    const { wrapper } = await mountView('/manage/c1/participants/r1/edit')
-
-    expect(weightClassPicker(wrapper).text()).toBe('Escolha a categoria')
-    await submit(wrapper)
-
-    expect(wrapper.text()).toContain(PARTICIPANT_MESSAGES.weightClassRequired)
-    expect(updateRobot).not.toHaveBeenCalled()
   })
 
   it('edit: shows not found for an unknown robot, with a way back to the list', async () => {

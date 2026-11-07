@@ -112,7 +112,8 @@ function setup(robots: Robot[], matches: Match[] = []) {
         ),
     };
     const championshipsService = {
-        findOne: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
+        findOwned: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
+        isOwnedBy: vi.fn().mockResolvedValue(true),
     };
     const service = new MatchesService(
         matchesRepository as unknown as MatchesRepository,
@@ -138,8 +139,9 @@ describe('MatchesService.create', () => {
 
         const created = await service.create(dto, USER_ID);
 
-        expect(championshipsService.findOne).toHaveBeenCalledWith(
+        expect(championshipsService.findOwned).toHaveBeenCalledWith(
             CHAMPIONSHIP_ID,
+            USER_ID,
         );
         expect(matchesRepository.inserted).toHaveBeenCalledOnce();
         expect(created).toMatchObject({
@@ -211,7 +213,7 @@ describe('MatchesService.create', () => {
             robot(ROBOT_A_ID),
             robot(ROBOT_B_ID),
         ]);
-        championshipsService.findOne.mockRejectedValue(
+        championshipsService.findOwned.mockRejectedValue(
             new NotFoundException('championship_not_found'),
         );
 
@@ -220,6 +222,65 @@ describe('MatchesService.create', () => {
         );
         expect(matchesRepository.inserted).not.toHaveBeenCalled();
     });
+});
+
+describe('MatchesService writes by a non-owner', () => {
+    function notOwned(state: MatchState) {
+        const context = setup(
+            [robot(ROBOT_A_ID), robot(ROBOT_B_ID), robot(ROBOT_C_ID)],
+            [match(state)],
+        );
+        context.championshipsService.isOwnedBy.mockResolvedValue(false);
+        vi.spyOn(context.service.logger, 'warn').mockImplementation(() => {});
+        vi.spyOn(context.service.logger, 'error').mockImplementation(() => {});
+        return context;
+    }
+
+    it('rejects creating a match in a championship that is not theirs', async () => {
+        const { service, matchesRepository, championshipsService } = setup([
+            robot(ROBOT_A_ID),
+            robot(ROBOT_B_ID),
+        ]);
+        championshipsService.findOwned.mockRejectedValue(
+            new NotFoundException('championship_not_found'),
+        );
+
+        await expect(service.create(dto, USER_ID)).rejects.toThrow(
+            new NotFoundException('championship_not_found'),
+        );
+        expect(matchesRepository.createWithRobots).not.toHaveBeenCalled();
+    });
+
+    it.each(['scheduled', 'ongoing'] as const)(
+        'answers an update of a %s match as not found',
+        async (state) => {
+            const { service, matchesRepository, championshipsService } =
+                notOwned(state);
+
+            await expect(
+                service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
+            ).rejects.toThrow(new NotFoundException('match_not_found'));
+            expect(championshipsService.isOwnedBy).toHaveBeenCalledWith(
+                CHAMPIONSHIP_ID,
+                USER_ID,
+            );
+            expect(
+                matchesRepository.updateScheduledWithRobots,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['scheduled', 'ongoing'] as const)(
+        'answers a delete of a %s match as not found',
+        async (state) => {
+            const { service, matchesRepository } = notOwned(state);
+
+            await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
+                new NotFoundException('match_not_found'),
+            );
+            expect(matchesRepository.softDeleteIf).not.toHaveBeenCalled();
+        },
+    );
 });
 
 describe('MatchesService.findAll', () => {
@@ -239,9 +300,13 @@ describe('MatchesService.update', () => {
             [match()],
         );
 
-        const updated = await service.update(MATCH_ID, {
-            robotBId: ROBOT_C_ID,
-        });
+        const updated = await service.update(
+            MATCH_ID,
+            {
+                robotBId: ROBOT_C_ID,
+            },
+            USER_ID,
+        );
 
         expect(matchesRepository.updated).toHaveBeenCalledWith(MATCH_ID, {
             robotAId: ROBOT_A_ID,
@@ -261,7 +326,11 @@ describe('MatchesService.update', () => {
         );
         const scheduledAt = new Date('2026-11-11T09:30:00Z');
 
-        const updated = await service.update(MATCH_ID, { scheduledAt });
+        const updated = await service.update(
+            MATCH_ID,
+            { scheduledAt },
+            USER_ID,
+        );
 
         expect(matchesRepository.updated).toHaveBeenCalledWith(MATCH_ID, {
             robotAId: ROBOT_A_ID,
@@ -283,7 +352,7 @@ describe('MatchesService.update', () => {
         );
 
         await expect(
-            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }),
+            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
         ).rejects.toThrow(new BadRequestException('robot_not_in_championship'));
         expect(matchesRepository.updated).not.toHaveBeenCalled();
     });
@@ -299,7 +368,7 @@ describe('MatchesService.update', () => {
         );
 
         await expect(
-            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }),
+            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
         ).rejects.toThrow(
             new BadRequestException('match_weight_class_mismatch'),
         );
@@ -313,7 +382,7 @@ describe('MatchesService.update', () => {
         );
 
         await expect(
-            service.update(MATCH_ID, { robotBId: ROBOT_A_ID }),
+            service.update(MATCH_ID, { robotBId: ROBOT_A_ID }, USER_ID),
         ).rejects.toThrow(new BadRequestException('match_robots_must_differ'));
     });
 
@@ -326,7 +395,7 @@ describe('MatchesService.update', () => {
             );
 
             await expect(
-                service.update(MATCH_ID, { robotBId: ROBOT_C_ID }),
+                service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
             ).rejects.toThrow(new ConflictException('match_not_editable'));
             expect(matchesRepository.updated).not.toHaveBeenCalled();
         },
@@ -336,7 +405,7 @@ describe('MatchesService.update', () => {
         const { service } = setup([robot(ROBOT_A_ID), robot(ROBOT_B_ID)]);
 
         await expect(
-            service.update(MATCH_ID, { robotBId: ROBOT_B_ID }),
+            service.update(MATCH_ID, { robotBId: ROBOT_B_ID }, USER_ID),
         ).rejects.toThrow(new NotFoundException('match_not_found'));
     });
 });
@@ -345,7 +414,7 @@ describe('MatchesService.remove', () => {
     it('soft-deletes a scheduled match', async () => {
         const { service, matchesRepository } = setup([], [match()]);
 
-        await service.remove(MATCH_ID);
+        await service.remove(MATCH_ID, USER_ID);
 
         expect(matchesRepository.softDeleteIf).toHaveBeenCalledWith(MATCH_ID, {
             state: 'scheduled',
@@ -357,7 +426,7 @@ describe('MatchesService.remove', () => {
         async (state) => {
             const { service, matchesRepository } = setup([], [match(state)]);
 
-            await expect(service.remove(MATCH_ID)).rejects.toThrow(
+            await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
                 new ConflictException('match_not_editable'),
             );
             expect(matchesRepository.softDeleteIf).not.toHaveBeenCalled();
@@ -367,7 +436,7 @@ describe('MatchesService.remove', () => {
     it('rejects an unknown match', async () => {
         const { service } = setup([]);
 
-        await expect(service.remove(MATCH_ID)).rejects.toThrow(
+        await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
             new NotFoundException('match_not_found'),
         );
     });
@@ -416,7 +485,7 @@ describe('MatchesService writes that lose a race', () => {
         startedBetweenReadAndWrite(matchesRepository, match('ongoing'));
 
         await expect(
-            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }),
+            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
         ).rejects.toThrow(new ConflictException('match_not_editable'));
         expect(
             matchesRepository.updateScheduledWithRobots,
@@ -432,7 +501,7 @@ describe('MatchesService writes that lose a race', () => {
         startedBetweenReadAndWrite(matchesRepository, null);
 
         await expect(
-            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }),
+            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
         ).rejects.toThrow(new NotFoundException('match_not_found'));
     });
 
@@ -440,7 +509,7 @@ describe('MatchesService writes that lose a race', () => {
         const { service, matchesRepository } = setup([]);
         startedBetweenReadAndWrite(matchesRepository, match('ongoing'));
 
-        await expect(service.remove(MATCH_ID)).rejects.toThrow(
+        await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
             new ConflictException('match_not_editable'),
         );
     });
@@ -449,7 +518,7 @@ describe('MatchesService writes that lose a race', () => {
         const { service, matchesRepository } = setup([]);
         startedBetweenReadAndWrite(matchesRepository, null);
 
-        await expect(service.remove(MATCH_ID)).rejects.toThrow(
+        await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
             new NotFoundException('match_not_found'),
         );
     });
@@ -490,7 +559,7 @@ describe('MatchesService robots read under the lock', () => {
             [match()],
         );
 
-        await service.update(MATCH_ID, { robotBId: ROBOT_C_ID });
+        await service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID);
 
         expect(
             matchesRepository.updateScheduledWithRobots,

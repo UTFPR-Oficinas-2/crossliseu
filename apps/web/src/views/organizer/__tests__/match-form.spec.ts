@@ -1,17 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/api/client'
-import type { Robot } from '@/types'
+import type { Robot, WeightClass } from '@/types'
 import {
   MATCH_MESSAGES,
   describeSaveError,
   matchPreview,
-  pickRobot,
   robotHint,
   robotOptions,
+  robotsInClass,
+  toLocalInput,
+  toMatchInput,
+  toScheduledAtIso,
   validateMatchForm,
+  validateStep1,
+  withWeightClass,
+  type MatchFormValues,
 } from '../match-form'
 
-const robot = (id: string, name: string, team: string, weightClass: string): Robot => ({
+const robot = (id: string, name: string, team: string, weightClass: WeightClass): Robot => ({
   id,
   championshipId: 'c1',
   name,
@@ -22,25 +28,52 @@ const robot = (id: string, name: string, team: string, weightClass: string): Rob
 })
 
 const robots = [
-  robot('tita', 'Titã', 'Equipe Volt', 'lightweight'),
-  robot('marte', 'Marte', 'Equipe Órbita', 'lightweight'),
-  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'lightweight'),
-  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'heavyweight'),
+  robot('tita', 'Titã', 'Equipe Volt', 'beetleweight'),
+  robot('marte', 'Marte', 'Equipe Órbita', 'beetleweight'),
+  robot('cobalto', 'Cobalto', 'Equipe Órbita', 'beetleweight'),
+  robot('bigorna', 'Bigorna', 'Equipe Bigorna', 'antweight'),
 ]
 
-describe('robotOptions', () => {
-  it('lists every robot for Robô 1 and disables the one picked as Robô 2', () => {
-    const { groupLabel, options } = robotOptions(
-      robots,
-      { robotAId: '', robotBId: 'marte' },
-      'robotAId',
-    )
+const values = (overrides: Partial<MatchFormValues> = {}): MatchFormValues => ({
+  weightClass: 'beetleweight',
+  scheduledAt: '2026-12-09T14:30',
+  robotAId: '',
+  robotBId: '',
+  ...overrides,
+})
 
-    expect(groupLabel).toBe('Participantes')
-    expect(options.map((o) => o.value)).toEqual(['tita', 'marte', 'cobalto', 'bigorna'])
+describe('scheduledAt conversion', () => {
+  it('round-trips a datetime-local value through ISO', () => {
+    expect(toLocalInput(toScheduledAtIso('2026-12-09T14:30'))).toBe('2026-12-09T14:30')
+  })
+
+  it('sends a full ISO timestamp', () => {
+    expect(toScheduledAtIso('2026-12-09T14:30')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/)
+  })
+})
+
+describe('validateStep1', () => {
+  it('requires the category and the time', () => {
+    expect(validateStep1(values({ weightClass: '', scheduledAt: '' }))).toEqual({
+      weightClass: 'Escolha a categoria de peso.',
+      scheduledAt: 'Informe a data e o horário.',
+    })
+  })
+
+  it('accepts both', () => {
+    expect(validateStep1(values())).toEqual({})
+  })
+})
+
+describe('robotOptions', () => {
+  it('lists only robots of the chosen class and disables the one picked as Robô 2', () => {
+    const { groupLabel, options } = robotOptions(robots, values({ robotBId: 'marte' }), 'robotAId')
+
+    expect(groupLabel).toBe('Participantes · beetleweight')
+    expect(options.map((o) => o.value)).toEqual(['tita', 'marte', 'cobalto'])
     expect(options[0]).toMatchObject({
       label: 'Titã',
-      meta: 'Equipe Volt · Peso leve',
+      meta: 'Equipe Volt · beetleweight',
       disabled: false,
     })
     expect(options[1]).toMatchObject({
@@ -49,96 +82,96 @@ describe('robotOptions', () => {
     })
   })
 
-  it("lists only Robô 1's weight class for Robô 2 and disables Robô 1", () => {
-    const { groupLabel, options } = robotOptions(
-      robots,
-      { robotAId: 'marte', robotBId: '' },
-      'robotBId',
-    )
+  it('disables Robô 1 in the Robô 2 menu', () => {
+    const { options } = robotOptions(robots, values({ robotAId: 'marte' }), 'robotBId')
 
-    expect(groupLabel).toBe('Participantes · Peso leve')
-    expect(options.map((o) => o.value)).toEqual(['tita', 'marte', 'cobalto'])
     expect(options[1]).toMatchObject({
       disabled: true,
       disabledReason: 'Já escolhido como Robô 1',
     })
   })
 
-  it('lists every robot for Robô 2 until Robô 1 is picked', () => {
-    const { groupLabel, options } = robotOptions(robots, { robotAId: '', robotBId: '' }, 'robotBId')
+  it('lists another class when the category changes', () => {
+    const { options } = robotOptions(robots, values({ weightClass: 'antweight' }), 'robotBId')
 
-    expect(groupLabel).toBe('Participantes')
-    expect(options).toHaveLength(4)
+    expect(options.map((o) => o.value)).toEqual(['bigorna'])
   })
 })
 
-describe('pickRobot', () => {
-  it('clears Robô 2 when Robô 1 changes to another weight class', () => {
+describe('robotsInClass', () => {
+  it('counts the robots a category can pair', () => {
+    expect(robotsInClass(robots, 'beetleweight')).toHaveLength(3)
+    expect(robotsInClass(robots, 'antweight')).toHaveLength(1)
+    expect(robotsInClass(robots, '')).toEqual([])
+  })
+})
+
+describe('withWeightClass', () => {
+  it('drops picked robots of another class', () => {
     expect(
-      pickRobot(robots, { robotAId: 'marte', robotBId: 'cobalto' }, 'robotAId', 'bigorna'),
-    ).toEqual({
-      robotAId: 'bigorna',
-      robotBId: '',
-    })
+      withWeightClass(robots, values({ robotAId: 'marte', robotBId: 'cobalto' }), 'antweight'),
+    ).toMatchObject({ weightClass: 'antweight', robotAId: '', robotBId: '' })
   })
 
-  it('keeps Robô 2 within the same class', () => {
+  it('keeps robots of the same class', () => {
     expect(
-      pickRobot(robots, { robotAId: 'marte', robotBId: 'cobalto' }, 'robotAId', 'tita'),
-    ).toEqual({
-      robotAId: 'tita',
-      robotBId: 'cobalto',
-    })
-  })
-
-  it('sets Robô 2 as picked', () => {
-    expect(pickRobot(robots, { robotAId: 'marte', robotBId: '' }, 'robotBId', 'cobalto')).toEqual({
-      robotAId: 'marte',
-      robotBId: 'cobalto',
-    })
+      withWeightClass(robots, values({ robotAId: 'marte', robotBId: 'cobalto' }), 'beetleweight'),
+    ).toMatchObject({ robotAId: 'marte', robotBId: 'cobalto' })
   })
 })
 
 describe('robotHint', () => {
   it('shows the team and weight class of the picked robot', () => {
-    expect(robotHint(robots, 'marte')).toBe('Equipe Órbita · Peso leve')
+    expect(robotHint(robots, 'marte')).toBe('Equipe Órbita · beetleweight')
     expect(robotHint(robots, '')).toBeUndefined()
   })
 })
 
 describe('validateMatchForm', () => {
   it('requires both robots', () => {
-    expect(validateMatchForm(robots, { robotAId: '', robotBId: '' })).toEqual({
+    expect(validateMatchForm(robots, values())).toEqual({
       robotAId: MATCH_MESSAGES.robotARequired,
       robotBId: MATCH_MESSAGES.robotBRequired,
     })
   })
 
   it('rejects the same robot twice and mixed weight classes', () => {
-    expect(validateMatchForm(robots, { robotAId: 'tita', robotBId: 'tita' })).toEqual({
+    expect(validateMatchForm(robots, values({ robotAId: 'tita', robotBId: 'tita' }))).toEqual({
       robotBId: MATCH_MESSAGES.mustDiffer,
     })
-    expect(validateMatchForm(robots, { robotAId: 'tita', robotBId: 'bigorna' })).toEqual({
+    expect(validateMatchForm(robots, values({ robotAId: 'tita', robotBId: 'bigorna' }))).toEqual({
       robotBId: MATCH_MESSAGES.weightClassMismatch,
     })
   })
 
   it('accepts two robots of the same class', () => {
-    expect(validateMatchForm(robots, { robotAId: 'marte', robotBId: 'cobalto' })).toEqual({})
+    expect(validateMatchForm(robots, values({ robotAId: 'marte', robotBId: 'cobalto' }))).toEqual(
+      {},
+    )
+  })
+})
+
+describe('toMatchInput', () => {
+  it('sends the robots and the ISO time', () => {
+    expect(toMatchInput(values({ robotAId: 'marte', robotBId: 'cobalto' }))).toEqual({
+      robotAId: 'marte',
+      robotBId: 'cobalto',
+      scheduledAt: toScheduledAtIso('2026-12-09T14:30'),
+    })
   })
 })
 
 describe('matchPreview', () => {
   it('shows names, teams and the weight class', () => {
-    expect(matchPreview(robots, { robotAId: 'marte', robotBId: 'cobalto' })).toEqual({
+    expect(matchPreview(robots, values({ robotAId: 'marte', robotBId: 'cobalto' }))).toEqual({
       robotA: 'Marte',
       robotB: 'Cobalto',
-      teams: 'Equipe Órbita × Equipe Órbita · Peso leve',
+      teams: 'Equipe Órbita × Equipe Órbita · beetleweight',
     })
   })
 
   it('uses stand-ins before the robots are picked', () => {
-    expect(matchPreview(robots, { robotAId: '', robotBId: '' })).toEqual({
+    expect(matchPreview(robots, values({ weightClass: '' }))).toEqual({
       robotA: 'Robô 1',
       robotB: 'Robô 2',
       teams: 'Equipe × Equipe',

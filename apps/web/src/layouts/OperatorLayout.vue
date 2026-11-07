@@ -5,8 +5,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
-import { getArenas, getChampionship, getMatch } from '@/mocks'
-import type { Arena, Championship, Match, MatchState } from '@/types'
+import { getArenas, getChampionship, getMatch, getRobots } from '@/data'
+import type { Arena, Championship, Match, MatchState, Robot } from '@/types'
 
 type StepId = 'preparation' | 'running' | 'closing'
 type StepStatus = 'done' | 'current' | 'upcoming'
@@ -18,8 +18,8 @@ const steps: { id: StepId; label: string }[] = [
 ]
 
 const stepByState: Record<MatchState, StepId> = {
-  waiting: 'preparation',
-  running: 'running',
+  scheduled: 'preparation',
+  ongoing: 'running',
   paused: 'running',
   finished: 'closing',
 }
@@ -30,23 +30,37 @@ const router = useRouter()
 const match = ref<Match | null>(null)
 const championship = ref<Championship | null>(null)
 const arena = ref<Arena | null>(null)
+const robots = ref<Robot[]>([])
 
-// Data loading lives here so it can be swapped for the API later.
+// Data loading lives here. The API has no operator match or arena data yet, so a failed load
+// leaves the layout empty (every step reads as upcoming) instead of throwing into the router.
 let loadId = 0
 async function load(matchId: string) {
   const current = ++loadId
-  const loadedMatch = await getMatch(matchId)
-  const [loadedChampionship, arenas]: [Championship | null, Arena[]] = loadedMatch
-    ? await Promise.all([
-        getChampionship(loadedMatch.championshipId),
-        getArenas(loadedMatch.championshipId),
-      ])
-    : [null, []]
+  let loaded: [Match | null, Championship | null, Arena[], Robot[]]
+  try {
+    const loadedMatch = await getMatch(matchId)
+    loaded = loadedMatch
+      ? [
+          loadedMatch,
+          ...(await Promise.all([
+            getChampionship(loadedMatch.championshipId),
+            getArenas(loadedMatch.championshipId),
+            getRobots(loadedMatch.championshipId),
+          ])),
+        ]
+      : [null, null, [], []]
+  } catch (error) {
+    console.error('Could not load the match', error)
+    loaded = [null, null, [], []]
+  }
   // Ignore a stale response if the route changed while loading
   if (current !== loadId) return
+  const [loadedMatch, loadedChampionship, arenas, loadedRobots] = loaded
   match.value = loadedMatch
   championship.value = loadedChampionship
   arena.value = arenas.find((a) => a.id === loadedMatch?.arenaId) ?? null
+  robots.value = loadedRobots
 }
 
 watch(
@@ -55,8 +69,14 @@ watch(
   { immediate: true },
 )
 
-// Figma shows the arena in uppercase: "Arena 01" → "ARENA 01"
-const arenaLabel = computed(() => arena.value?.name.toLocaleUpperCase('pt-BR') ?? '')
+const robotName = (id: string | undefined) => robots.value.find((r) => r.id === id)?.name ?? ''
+const robotNames = computed(() => ({
+  a: robotName(match.value?.robotAId),
+  b: robotName(match.value?.robotBId),
+}))
+
+// Demo value: there is no arena box connection data yet
+const arenaConnected = computed(() => arena.value !== null)
 
 // -1 when there is no match, so every step reads as upcoming
 const currentStepIndex = computed(() => {
@@ -84,9 +104,11 @@ function exitOperation() {
     <!-- Without a match there is no fight context to show, so the nav is omitted -->
     <OperatorNav
       v-if="match"
+      :arena="arena?.name ?? ''"
       :championship="championship?.name ?? ''"
-      :fight-number="match.number"
-      :arena="arenaLabel"
+      :robot-a="robotNames.a"
+      :robot-b="robotNames.b"
+      :arena-connected="arenaConnected"
       @exit="exitOperation"
     />
 

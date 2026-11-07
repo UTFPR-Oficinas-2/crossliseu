@@ -105,10 +105,10 @@ describe('EmptyState', () => {
 })
 
 describe('OrganizerFooter', () => {
-  it('flags demo data when the API is not configured', () => {
+  it('shows the project footer', () => {
     const wrapper = mount(OrganizerFooter)
 
     expect(wrapper.text()).toContain('CROSSLISEU · UTFPR')
-    expect(wrapper.text()).toContain('Conceito visual · dados demonstrativos')
+    expect(wrapper.text()).not.toContain('dados demonstrativos')
   })
 })

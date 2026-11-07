@@ -6,12 +6,12 @@ import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
-import { isApiEnabled } from '@/api/client'
-import { getManagedChampionships } from '@/mocks'
+import { getManagedChampionships } from '@/data'
+import { useAuthStore } from '@/stores/auth'
 import type { Championship } from '@/types'
 import { championshipMeta, championshipStatusPill } from '@/utils/championship'
 
-type Filter = 'all' | 'running' | 'finished'
+type Filter = 'all' | 'ongoing' | 'closed'
 
 const filters: { value: Filter; label: string; empty: string }[] = [
   {
@@ -19,16 +19,17 @@ const filters: { value: Filter; label: string; empty: string }[] = [
     label: 'Todos',
     empty: 'Nenhum campeonato ainda. Use "Criar campeonato" para começar.',
   },
-  { value: 'running', label: 'Em andamento', empty: 'Nenhum campeonato em andamento.' },
-  { value: 'finished', label: 'Encerrados', empty: 'Nenhum campeonato encerrado.' },
+  { value: 'ongoing', label: 'Em andamento', empty: 'Nenhum campeonato em andamento.' },
+  { value: 'closed', label: 'Encerrados', empty: 'Nenhum campeonato encerrado.' },
 ]
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const activeFilter = computed<Filter>(() => {
   const value = route.query.status
-  return value === 'running' || value === 'finished' ? value : 'all'
+  return value === 'ongoing' || value === 'closed' ? value : 'all'
 })
 
 // Kept in the query string so reload and back restore the tab
@@ -43,7 +44,7 @@ const championships = ref<Championship[]>([])
 async function load() {
   loadState.value = 'loading'
   try {
-    championships.value = await getManagedChampionships()
+    championships.value = await getManagedChampionships(auth.token ?? '')
     loadState.value = 'ready'
   } catch (error) {
     console.error('Failed to load managed championships', error)
@@ -70,7 +71,9 @@ const numberFormat = new Intl.NumberFormat('pt-BR')
 
 const subtitle = computed(() => {
   const count = championships.value.length
-  return `Você tem permissão para gerenciar ${numberFormat.format(count)} ${count === 1 ? 'campeonato' : 'campeonatos'}.`
+  return count === 1
+    ? '1 campeonato cadastrado.'
+    : `${numberFormat.format(count)} campeonatos cadastrados.`
 })
 </script>
 
@@ -83,9 +86,14 @@ const subtitle = computed(() => {
           {{ subtitle }}
         </p>
       </div>
-      <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
-        Criar campeonato
-      </AppButton>
+      <div class="my-championships__header-actions">
+        <AppButton variant="secondary" class="my-championships__create" :to="{ name: 'arenas' }">
+          Arenas
+        </AppButton>
+        <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
+          Criar campeonato
+        </AppButton>
+      </div>
     </header>
 
     <p
@@ -140,9 +148,9 @@ const subtitle = computed(() => {
                 Ver pública
               </AppButton>
               <AppButton
-                :variant="c.status === 'running' ? 'primary' : 'secondary'"
+                :variant="c.status === 'ongoing' ? 'primary' : 'secondary'"
                 class="my-championships__action"
-                :to="{ name: 'championship-overview', params: { championshipId: c.id } }"
+                :to="{ name: 'championship-participants', params: { championshipId: c.id } }"
                 :aria-label="`Gerenciar ${c.name}`"
               >
                 Gerenciar
@@ -155,7 +163,6 @@ const subtitle = computed(() => {
 
     <footer class="my-championships__footer text-mono-s">
       <p>CROSSLISEU · UTFPR</p>
-      <p v-if="!isApiEnabled">Conceito visual · dados demonstrativos</p>
     </footer>
   </div>
 </template>
@@ -190,6 +197,12 @@ const subtitle = computed(() => {
 
 .my-championships__muted {
   color: var(--color-muted);
+}
+
+.my-championships__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .my-championships__create {

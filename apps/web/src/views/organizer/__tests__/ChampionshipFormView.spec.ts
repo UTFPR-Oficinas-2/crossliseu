@@ -6,18 +6,18 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
-import type { ChampionshipInput } from '@/mocks'
+import type { ChampionshipInput } from '@/data'
 import type { Championship } from '@/types'
 import ChampionshipFormView from '../ChampionshipFormView.vue'
 import { FORM_MESSAGES } from '../championship-form'
 
-vi.mock('@/mocks', () => ({
+vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
   createChampionship: vi.fn<(input: ChampionshipInput, token: string) => Promise<Championship>>(),
   updateChampionship:
     vi.fn<(id: string, input: ChampionshipInput, token: string) => Promise<Championship>>(),
 }))
-import { createChampionship, getChampionship, updateChampionship } from '@/mocks'
+import { createChampionship, getChampionship, updateChampionship } from '@/data'
 
 const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'
@@ -47,7 +47,11 @@ async function mountView(path: string, attach = false) {
         component: ChampionshipFormView,
         props: { mode: 'create' },
       },
-      { path: '/manage/:championshipId', name: 'championship-overview', component: stub },
+      {
+        path: '/manage/:championshipId/participants',
+        name: 'championship-participants',
+        component: stub,
+      },
       {
         path: '/manage/:championshipId/settings',
         name: 'championship-settings',
@@ -101,6 +105,17 @@ describe('ChampionshipFormView', () => {
     confirmSpy.mockRestore()
   })
 
+  it('create: lists the Figma next steps and has no subtitle', async () => {
+    const { wrapper } = await mountView('/manage/new')
+
+    expect(wrapper.findAll('.championship-form__step').map((li) => li.text().slice(1))).toEqual([
+      'Cadastre os participantes e seus robôs.',
+      'Monte as lutas entre os participantes.',
+      'Na operação, escolha a arena e a luta.',
+    ])
+    expect(wrapper.get('h1').element.nextElementSibling?.tagName).not.toBe('P')
+  })
+
   it('create: starts empty with the create breadcrumb and title', async () => {
     const { wrapper } = await mountView('/manage/new')
 
@@ -138,7 +153,7 @@ describe('ChampionshipFormView', () => {
     expect(wrapper.text()).not.toContain(FORM_MESSAGES.nameRequired)
   })
 
-  it('create: saves the trimmed input and opens the overview without confirming', async () => {
+  it('create: saves the trimmed input and opens the participants without confirming', async () => {
     vi.mocked(createChampionship).mockResolvedValue(row({ id: 'new-id' }))
     const { wrapper, router } = await mountView('/manage/new')
 
@@ -149,7 +164,7 @@ describe('ChampionshipFormView', () => {
       { name: 'Copa', startDate: '2026-12-09', endDate: '2026-12-10' },
       token,
     )
-    expect(router.currentRoute.value.name).toBe('championship-overview')
+    expect(router.currentRoute.value.name).toBe('championship-participants')
     expect(router.currentRoute.value.params.championshipId).toBe('new-id')
     expect(confirmSpy).not.toHaveBeenCalled()
   })
@@ -329,15 +344,15 @@ describe('ChampionshipFormView', () => {
     expect(router.currentRoute.value.fullPath).toBe('/manage')
   })
 
-  it('does not ask when nothing changed, and cancel goes to the overview in edit mode', async () => {
+  it('does not ask when nothing changed, and cancel goes to the participants in edit mode', async () => {
     vi.mocked(getChampionship).mockResolvedValue(row())
     const { wrapper, router } = await mountView('/manage/c1/settings')
 
-    expect(cancelLink(wrapper).attributes('href')).toBe('/manage/c1')
+    expect(cancelLink(wrapper).attributes('href')).toBe('/manage/c1/participants')
     await cancelLink(wrapper).trigger('click')
     await flushPromises()
 
     expect(confirmSpy).not.toHaveBeenCalled()
-    expect(router.currentRoute.value.fullPath).toBe('/manage/c1')
+    expect(router.currentRoute.value.fullPath).toBe('/manage/c1/participants')
   })
 })

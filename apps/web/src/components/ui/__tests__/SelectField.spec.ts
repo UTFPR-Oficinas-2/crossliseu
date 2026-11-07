@@ -5,15 +5,15 @@ import SelectField from '../SelectField.vue'
 import { firstEnabled, stepEnabled, type SelectOption } from '../select-field'
 
 const options: SelectOption[] = [
-  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · Peso leve' },
+  { value: 'tita', label: 'Titã', meta: 'Equipe Volt · beetleweight' },
   {
     value: 'marte',
     label: 'Marte',
-    meta: 'Equipe Órbita · Peso leve',
+    meta: 'Equipe Órbita · beetleweight',
     disabled: true,
     disabledReason: 'Já escolhido como Robô 1',
   },
-  { value: 'aco', label: 'Aço', meta: 'Equipe Aço · Peso leve' },
+  { value: 'aco', label: 'Aço', meta: 'Equipe Aço · beetleweight' },
 ]
 
 const mounted: { unmount: () => void }[] = []
@@ -31,7 +31,7 @@ function mountSelect(
   }> = {},
 ) {
   const wrapper = mount(SelectField, {
-    props: { label: 'Robô 2 *', options, groupLabel: 'Participantes · Peso leve', ...props },
+    props: { label: 'Robô 2 *', options, groupLabel: 'Participantes · beetleweight', ...props },
     attachTo: document.body,
   })
   mounted.push(wrapper)
@@ -74,9 +74,9 @@ describe('SelectField', () => {
 
     expect(combobox(wrapper).attributes('aria-expanded')).toBe('true')
     expect(wrapper.get('[role="listbox"]').isVisible()).toBe(true)
-    expect(wrapper.text()).toContain('Participantes · Peso leve')
+    expect(wrapper.text()).toContain('Participantes · beetleweight')
     const [tita, marte] = optionEls(wrapper)
-    expect(tita!.text()).toContain('Equipe Volt · Peso leve')
+    expect(tita!.text()).toContain('Equipe Volt · beetleweight')
     expect(marte!.attributes('aria-disabled')).toBe('true')
     expect(marte!.text()).toContain('Já escolhido como Robô 1')
     expect(marte!.text()).not.toContain('Equipe Órbita')
@@ -179,14 +179,14 @@ describe('SelectField', () => {
 
   it('shows the error instead of the hint and marks the field invalid', () => {
     const wrapper = mountSelect({
-      hint: 'Equipe Bigorna · Peso pesado',
+      hint: 'Equipe Bigorna · antweight',
       error: 'Escolha o robô 2.',
     })
     const describedBy = combobox(wrapper).attributes('aria-describedby')!
 
     expect(combobox(wrapper).attributes('aria-invalid')).toBe('true')
     expect(wrapper.get(`[id="${describedBy}"]`).text()).toBe('Escolha o robô 2.')
-    expect(wrapper.text()).not.toContain('Equipe Bigorna · Peso pesado')
+    expect(wrapper.text()).not.toContain('Equipe Bigorna · antweight')
   })
 
   it('does not open while disabled', async () => {
@@ -206,7 +206,7 @@ describe('SelectField', () => {
 
     expect(ids.map((id) => wrapper.get(`[id="${id}"]`).text())).toEqual([
       'Robô 2 *',
-      'Participantes · Peso leve',
+      'Participantes · beetleweight',
     ])
     expect(combobox(wrapper).attributes('aria-labelledby')).toBe(ids[0])
   })

@@ -1,82 +1,51 @@
 <script setup lang="ts">
-// Figma: `Card / Championship` (node 11:37)
+// Figma: `Card / Championship` (node 11:37) and its PUB-01 instances
 import { computed } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import StatusPill from '@/components/ui/StatusPill.vue'
-
 // Championship state only. Recording/upload states are separate and never shown here.
-type ChampionshipStatus = 'scheduled' | 'running' | 'finished'
+import type { ChampionshipStatus } from '@/types'
+import { championshipStatusPill, formatDateRange } from '@/utils/championship'
 
 const {
   name,
-  edition,
-  date,
+  startDate,
+  endDate = null,
   status,
-  robotCount,
   fightsDone,
   fightsTotal,
   to = '/',
 } = defineProps<{
   name: string
-  /** Hidden when missing */
-  edition?: number
-  /** Date object or ISO string ("2026-12-09") */
-  date: Date | string
+  /** ISO date ("2026-12-09") */
+  startDate: string
+  /** ISO date; the card shows a range when it differs from `startDate` */
+  endDate?: string | null
   status: ChampionshipStatus
-  robotCount: number
   fightsDone: number
   fightsTotal: number
-  /** Championship page; placeholder until routes exist */
+  /** Championship page */
   to?: RouteLocationRaw
 }>()
 
-const pill = computed(() => {
-  switch (status) {
-    case 'running':
-      return { label: 'Em andamento', tone: 'live' as const }
-    case 'finished':
-      // TODO design: Figma only defines "Em andamento"
-      return { label: 'Encerrado', tone: 'neutral' as const }
-    default:
-      // TODO design: Figma only defines "Em andamento"
-      return { label: 'Agendado', tone: 'neutral' as const }
-  }
-})
+const pill = computed(() => championshipStatusPill[status])
 
-// 1 → "EDIÇÃO 01"
-const editionLabel = computed(() =>
-  edition === undefined ? null : `EDIÇÃO ${String(edition).padStart(2, '0')}`,
-)
-
-const dateFormat = new Intl.DateTimeFormat('pt-BR', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
-
-// "09 DEZ 2026"
-const formattedDate = computed(() => {
-  const value = typeof date === 'string' ? new Date(date) : date
-  const parts = dateFormat.formatToParts(value)
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? ''
-  return `${get('day')} ${get('month').replace('.', '')} ${get('year')}`.toUpperCase()
-})
+// "09 DEZ 2026", "19 – 20 DEZ 2026"
+const formattedDate = computed(() => formatDateRange(startDate, endDate).toUpperCase())
 
 const numberFormat = new Intl.NumberFormat('pt-BR')
 
-// "16 robôs · 6 de 15 lutas"
-const summary = computed(() => {
-  const robots = `${numberFormat.format(robotCount)} ${robotCount === 1 ? 'robô' : 'robôs'}`
-  const fights = `${numberFormat.format(fightsDone)} de ${numberFormat.format(fightsTotal)} ${
-    fightsTotal === 1 ? 'luta' : 'lutas'
-  }`
-  return `${robots} · ${fights}`
-})
+// "6 de 15 lutas"; a scheduled championship has no progress to report
+const summary = computed(() =>
+  status === 'scheduled'
+    ? null
+    : `${numberFormat.format(fightsDone)} de ${numberFormat.format(fightsTotal)} ${
+        fightsTotal === 1 ? 'luta' : 'lutas'
+      }`,
+)
 
 const progress = computed(() => {
-  if (fightsTotal <= 0) return 0
+  if (status === 'scheduled' || fightsTotal <= 0) return 0
   return Math.min(100, Math.max(0, (fightsDone / fightsTotal) * 100))
 })
 </script>
@@ -85,7 +54,6 @@ const progress = computed(() => {
   <article class="championship-card">
     <header class="championship-card__header">
       <StatusPill :label="pill.label" :tone="pill.tone" />
-      <p v-if="editionLabel" class="championship-card__edition text-mono-s">{{ editionLabel }}</p>
     </header>
 
     <h3 class="championship-card__name text-heading-m">{{ name }}</h3>
@@ -94,11 +62,15 @@ const progress = computed(() => {
 
     <!-- Decorative: the footer text states the same progress -->
     <div class="championship-card__track" aria-hidden="true">
-      <div class="championship-card__bar" :style="{ width: `${progress}%` }" />
+      <div
+        class="championship-card__bar"
+        :class="{ 'championship-card__bar--done': status === 'closed' }"
+        :style="{ width: `${progress}%` }"
+      />
     </div>
 
     <footer class="championship-card__footer">
-      <p class="championship-card__summary text-body-s">{{ summary }}</p>
+      <p v-if="summary" class="championship-card__summary text-body-s">{{ summary }}</p>
       <RouterLink :to="to" class="championship-card__link text-label-s">
         Ver campeonato <span aria-hidden="true">→</span>
       </RouterLink>
@@ -127,11 +99,6 @@ const progress = computed(() => {
   gap: var(--space-2);
 }
 
-.championship-card__edition {
-  color: var(--color-muted);
-  white-space: nowrap;
-}
-
 .championship-card__name {
   color: var(--color-text);
   text-transform: uppercase;
@@ -154,6 +121,10 @@ const progress = computed(() => {
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--color-orange);
+}
+
+.championship-card__bar--done {
+  background: var(--color-green);
 }
 
 .championship-card__summary {

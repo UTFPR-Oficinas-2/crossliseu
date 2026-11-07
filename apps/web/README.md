@@ -4,7 +4,7 @@ Vue 3 single-page app for following championships and fights. Part of the [Cross
 
 ## Requirements
 
-- Node `^22.18.0 || >=24.12.0`
+- Node 26 (exact version in [`.nvmrc`](../../.nvmrc))
 - The [API](../api/README.md) running, to use real data (optional in development)
 
 ## Getting started
@@ -35,7 +35,7 @@ npm run dev                # http://localhost:5173
 | `API_PROXY_TARGET` | Dev server | Where `/api` is proxied to. Defaults to `http://localhost:3000`; use `http://api:3000` inside Docker Compose. |
 | `BASE_PATH` | Docker build arg | Public path of the app. Defaults to `/`. |
 
-Without `VITE_API_URL`, the dev server shows demo data instead of calling the API. Production builds fail without it.
+`VITE_API_URL` is required: the dev server and production builds both fail without it. There is no demo data; every screen reads from the API.
 
 To develop against a local API:
 
@@ -49,8 +49,11 @@ VITE_API_URL=/api npm run dev
 | --- | --- |
 | `/` | Homepage |
 | `/sign-in` | Sign-in (needs the API) |
-| `/manage/*`, `/operator/:matchId`, `/referee/:accessToken`, `/championships/:id`, `/matches/:id` | Prototype screens: development builds only, mock data |
-| `/dev/components` | Component preview, development builds only |
+| `/manage/*` | Organizer screens, backed by the API |
+| `/operator/:matchId`, `/referee/:accessToken`, `/championships/:id`, `/matches/:id` | Built to the Figma specs; the API has no endpoints for them yet, so they show errors |
+| `/dev/components` | Design-system component preview |
+
+Every route is registered in every build.
 
 ## Contributing
 

@@ -1,0 +1,22 @@
+# Opens PRs when the pinned versions (Docker base images, GitHub Actions) get updates.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: [/apps/api, /apps/web]
+    schedule: { interval: weekly }
+    target-branch: dev
+    # Node and Postgres majors are deliberate upgrades (and Node must match /.nvmrc)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly }
+    target-branch: dev
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    target-branch: dev

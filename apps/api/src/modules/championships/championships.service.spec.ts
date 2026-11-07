@@ -14,6 +14,7 @@ import type {
 const ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_ID = '22222222-2222-4222-8222-222222222222';
 const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const OTHER_USER_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 
 function championship(
     id = ID,
@@ -36,6 +37,18 @@ function setup(
             return Promise.resolve(entity);
         }),
         findAll: vi.fn().mockResolvedValue(championships),
+        findByOwner: vi.fn((ownerUserId: string) =>
+            Promise.resolve(
+                championships.filter((c) => c.createdByUserId === ownerUserId),
+            ),
+        ),
+        findOneOwned: vi.fn((id: string, ownerUserId: string) =>
+            Promise.resolve(
+                championships.find(
+                    (c) => c.id === id && c.createdByUserId === ownerUserId,
+                ) ?? null,
+            ),
+        ),
         findOne: vi.fn((id: string) =>
             Promise.resolve(championships.find((c) => c.id === id) ?? null),
         ),
@@ -134,7 +147,11 @@ describe('ChampionshipsService.update', () => {
         const { service, championshipsRepository } = setup([championship()]);
 
         await expect(
-            service.update(ID, { endDate: new Date('2026-11-01T00:00:00Z') }),
+            service.update(
+                ID,
+                { endDate: new Date('2026-11-01T00:00:00Z') },
+                USER_ID,
+            ),
         ).rejects.toThrow(
             new BadRequestException('championship_end_before_start'),
         );
@@ -144,7 +161,7 @@ describe('ChampionshipsService.update', () => {
     it('saves a valid change and returns the reloaded championship', async () => {
         const { service, championshipsRepository } = setup([championship()]);
 
-        const updated = await service.update(ID, { name: 'Copa II' });
+        const updated = await service.update(ID, { name: 'Copa II' }, USER_ID);
 
         expect(championshipsRepository.update).toHaveBeenCalledWith(ID, {
             name: 'Copa II',
@@ -155,9 +172,9 @@ describe('ChampionshipsService.update', () => {
     it('rejects an unknown championship', async () => {
         const { service } = setup([]);
 
-        await expect(service.update(ID, { name: 'X' })).rejects.toThrow(
-            new NotFoundException('championship_not_found'),
-        );
+        await expect(
+            service.update(ID, { name: 'X' }, USER_ID),
+        ).rejects.toThrow(new NotFoundException('championship_not_found'));
     });
 });
 
@@ -197,7 +214,7 @@ describe('ChampionshipsService.remove', () => {
     it('removes the championship with its robots and matches', async () => {
         const { service, championshipsRepository } = setup([championship()]);
 
-        await expect(service.remove(ID)).resolves.toBeUndefined();
+        await expect(service.remove(ID, USER_ID)).resolves.toBeUndefined();
         expect(championshipsRepository.removeCascade).toHaveBeenCalledWith(ID);
     });
 
@@ -209,7 +226,7 @@ describe('ChampionshipsService.remove', () => {
             'has_live_match',
         );
 
-        await expect(service.remove(ID)).rejects.toThrow(
+        await expect(service.remove(ID, USER_ID)).rejects.toThrow(
             new ConflictException('championship_has_live_match'),
         );
         expect(error).toHaveBeenCalledWith('championship_has_live_match', {
@@ -223,8 +240,62 @@ describe('ChampionshipsService.remove', () => {
             'not_found',
         );
 
-        await expect(service.remove(ID)).rejects.toThrow(
+        await expect(service.remove(ID, USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),
         );
+    });
+});
+
+describe('ChampionshipsService ownership', () => {
+    it('lists only the championships the user created', async () => {
+        const mine = championship(ID);
+        const theirs = championship(OTHER_ID);
+        theirs.createdByUserId = OTHER_USER_ID;
+        const { service } = setup([mine, theirs]);
+
+        const listed = await service.findMine(USER_ID);
+
+        expect(listed.map((c) => c.id)).toEqual([ID]);
+    });
+
+    it('tells an owner from a non-owner and from an unknown id', async () => {
+        const { service } = setup([championship()]);
+
+        await expect(service.isOwnedBy(ID, USER_ID)).resolves.toBe(true);
+        await expect(service.isOwnedBy(ID, OTHER_USER_ID)).resolves.toBe(false);
+        await expect(service.isOwnedBy(OTHER_ID, USER_ID)).resolves.toBe(false);
+    });
+
+    it('findOwned answers a non-owner like an unknown id', async () => {
+        const { service, warn } = setup([championship()]);
+
+        await expect(service.findOwned(ID, OTHER_USER_ID)).rejects.toThrow(
+            new NotFoundException('championship_not_found'),
+        );
+        expect(warn).toHaveBeenCalledWith('championship_not_found', { id: ID });
+        await expect(service.findOwned(ID, USER_ID)).resolves.toMatchObject({
+            id: ID,
+        });
+    });
+
+    it("does not update another account's championship", async () => {
+        const { service, championshipsRepository } = setup([championship()]);
+
+        await expect(
+            service.update(ID, { name: 'X' }, OTHER_USER_ID),
+        ).rejects.toThrow(new NotFoundException('championship_not_found'));
+        expect(championshipsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it("does not remove another account's championship, even with a live match", async () => {
+        const { service, championshipsRepository } = setup([championship()]);
+        championshipsRepository.removeCascade.mockResolvedValueOnce(
+            'has_live_match',
+        );
+
+        await expect(service.remove(ID, OTHER_USER_ID)).rejects.toThrow(
+            new NotFoundException('championship_not_found'),
+        );
+        expect(championshipsRepository.removeCascade).not.toHaveBeenCalled();
     });
 });

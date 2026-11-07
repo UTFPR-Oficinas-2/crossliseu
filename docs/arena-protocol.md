@@ -13,7 +13,7 @@ The contract between an arena's ESP32 box and the API. The firmware (`firmware/`
 
 An arena is the physical space where two robots fight. It has exactly one box, and at most one match at a time.
 
-The arena has no match until the operator opens the lobby for a match (the one the referees join) and selects which match runs on this arena. From then until the operator closes that match, it is the arena's **current match**, and every `state` sent to the box describes it. With no current match, the box gets `idle`.
+The arena has no match until the operator opens the lobby for a match (the one the referees join) and selects which match runs on this arena. From then until the operator closes that match, it is the arena's **current match**, and every `state` sent to the box describes it. Closing it (or undoing a pick before Start) is `DELETE /arenas/:id/current-match`, refused while the match is ongoing or paused. With no current match, the box gets `idle`.
 
 Before Start, the operator can change the selection (for example, after picking the wrong match). The box then gets a new `ready` with the new `matchId`.
 
@@ -31,14 +31,14 @@ Connecting happens in two layers. First the box's WebSocket library opens the so
 
 ### Identity
 
-Each physical arena box is flashed with its `deviceId` and `token`. They come from the `arenas` table (#33), which is not tied to a championship, so a box is flashed once and works for every event. The values live in a firmware config file that is **not committed**. Swapping the ESP32 inside a box means flashing the new chip with the same values.
+Each physical arena box is flashed with its `deviceId` and `token`. Both come from the Arenas page of the web app (#33), where an account creates the box's row in the `arenas` table; that table is not tied to a championship, so a box is flashed once and works for every event. An arena belongs to exactly one account. The table stores only a bcrypt hash of the token: the page shows the plain token once, and generating a new token for the arena invalidates the old one. Only live (not deleted) arenas are accepted at handshake; deleting an arena makes its token stop working. The values live in a firmware `config.h` that is **not committed**. Swapping the ESP32 inside a box means flashing the new chip with the same values.
 
 ### Handshake
 
 The server handles a new socket in this order:
 
 1. **Wait for `hello`.** If no `hello` arrives within 5 s of opening the socket, close with `4002`. Any other message before `welcome` is answered with `error` (`not_authenticated`) and ignored; the 5 s limit keeps running.
-2. **Check credentials.** If `deviceId` / `token` are wrong, or a field is missing or has the wrong type, close with `4001`.
+2. **Check credentials.** If `deviceId` / `token` are wrong, the arena is unknown or has been deleted (only live arenas are accepted), or a field is missing or has the wrong type, close with `4001`.
 3. **Check the version.** If `protocol` is not supported, close with `4004`.
 4. **Replace any older connection.** If another socket is already logged in with the same `deviceId`, close that old one with `4003`. This happens only here, after the new socket proved its credentials, so a socket that merely knows a `deviceId` cannot knock a box offline.
 5. **Accept.** Reply `welcome`, then immediately a `state`.
@@ -73,7 +73,7 @@ Sent once, as the first message on every new connection.
 | `protocol` | integer | Protocol version the firmware speaks; currently `1` |
 
 ```json
-{ "event": "hello", "data": { "deviceId": "arena-01", "token": "k3V9...q7", "protocol": 1 } }
+{ "event": "hello", "data": { "deviceId": "arena-da-garagem-7f3a", "token": "k3V9...q7", "protocol": 1 } }
 ```
 
 #### `surrender`
@@ -244,7 +244,7 @@ WebSocket close codes 4000–4999 are reserved for applications; these are ours.
 
 | Code | Sent by server when | Box should |
 | --- | --- | --- |
-| `4001` | `deviceId` / `token` is wrong, or `hello` is malformed | Show "not connected" (bad config) and retry every 60 s |
+| `4001` | `deviceId` / `token` is wrong, the arena is unknown or deleted, or `hello` is malformed | Show "not connected" (bad config) and retry every 60 s |
 | `4002` | No `hello` within 5 s of opening | Retry with normal backoff |
 | `4003` | A newer connection with the same `deviceId` logged in and replaced this one | **Stop retrying** until rebooted, so two boxes do not keep replacing each other |
 | `4004` | `protocol` version is not supported | Show "not connected" (update firmware) and retry every 60 s |

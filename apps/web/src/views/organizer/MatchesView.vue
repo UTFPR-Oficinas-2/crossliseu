@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// Figma: `10 / Organizador · Lutas` (node 22:496). Scheduling only: waiting matches can be
-// edited, and the running flow ("Abrir operação", "Preparar", "Ver detalhes") is not built.
-// Finished rows show "A × B": there is no result data for "A venceu B" yet.
+// Figma: `ORG-06 Lutas` (node 22:496). Scheduling only: scheduled matches can be edited, and the
+// running flow ("Abrir operação", "Preparar", "Ver detalhes") is not built. Finished rows show
+// "A × B": the annotation says this list never shows results. "Editar resultado" waits for ORG-09.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
-import { getChampionship, getMatchSummaries, getRobots } from '@/mocks'
+import { getChampionship, getMatchSummaries, getRobots } from '@/data'
 import type { MatchSummary, Robot } from '@/types'
 import { matchStatePill } from '@/utils/match'
 import EmptyState from './components/EmptyState.vue'
@@ -173,7 +173,7 @@ const breadcrumb = computed(() => [
                 </td>
                 <td role="cell" class="matches__cell--actions">
                   <AppButton
-                    v-if="match.state === 'waiting'"
+                    v-if="match.state === 'scheduled'"
                     variant="secondary"
                     :to="{ name: 'match-edit', params: { championshipId, matchId: match.id } }"
                     :aria-label="`Editar luta ${robotA} contra ${robotB}`"

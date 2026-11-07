@@ -16,6 +16,7 @@ const {
   items = [
     { id: 'championships', label: 'Campeonatos', to: { name: 'home' } },
     { id: 'my-championships', label: 'Meus campeonatos', to: { name: 'my-championships' } },
+    { id: 'operator', label: 'Operação', to: { name: 'operator' } },
   ],
   active,
   homeTo = { name: 'home' },
@@ -151,5 +152,22 @@ const visibleItems = computed(() =>
   min-width: 0;
   color: var(--color-text);
   overflow-wrap: anywhere;
+}
+
+/* Figma `Navigation / Mobile` (below 768px) */
+@media (max-width: 767px) {
+  .app-nav {
+    min-height: var(--size-nav-mobile-height);
+    padding: var(--space-3) var(--space-page-x-mobile);
+    border-bottom-color: var(--color-border);
+  }
+
+  .app-nav__logo {
+    font-family: var(--text-heading-m-family);
+    font-weight: var(--text-heading-m-weight);
+    font-size: var(--text-heading-m-size);
+    line-height: var(--text-heading-m-line-height);
+    letter-spacing: var(--text-heading-m-tracking);
+  }
 }
 </style>
