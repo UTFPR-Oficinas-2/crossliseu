@@ -1,18 +1,26 @@
-"""Segmentation starts with create mask function, a pipeline will be develop for this module"""
+"""Segmentation: HSV frame -> one clean binary mask per robot."""
 import cv2
 import numpy as np
 
 
-def create_mask(frame_hsv, lower, upper):
-    lower = np.array(lower, dtype=np.uint8)
-    upper = np.array(upper, dtype=np.uint8)
+def create_mask(frame_hsv, ranges):
+    """White where the pixel falls inside ANY of the (lower, upper) ranges."""
+    mask = np.zeros(frame_hsv.shape[:2], dtype=np.uint8)
 
-    mask = cv2.inRange(frame_hsv, lower, upper)
+    for lower, upper in ranges:
+        range_mask = cv2.inRange(
+            frame_hsv,
+            np.array(lower, dtype=np.uint8),
+            np.array(upper, dtype=np.uint8),
+        )
+        mask = cv2.bitwise_or(mask, range_mask)
 
     return mask
 
-#Concepts of Closing and Opening of the mask, for cleaning
 
+# Concepts of Closing and Opening of the mask, for cleaning
+#   opening = erode then dilate -> removes small white specks
+#   closing = dilate then erode -> fills small black holes inside the marker
 def clean_mask(mask, kernel_size=5):
     if kernel_size <= 0:
         return mask
@@ -27,13 +35,24 @@ def clean_mask(mask, kernel_size=5):
 
     return mask
 
+
 def segment_color(frame_hsv, ranges, kernel_size=5):
     mask = create_mask(frame_hsv, ranges)
     return clean_mask(mask, kernel_size)
 
 
-def segment_all(frame_hsv, colors, kernel_size=5):
+def segment_all(frame_hsv, robot_colors, kernel_size=5):
+    """{robot_id: ranges} -> {robot_id: clean mask}"""
     return {
-        name: segment_color(frame_hsv, ranges, kernel_size)
-        for name, ranges in colors.items()
-    } 
+        robot_id: segment_color(frame_hsv, ranges, kernel_size)
+        for robot_id, ranges in robot_colors.items()
+    }
+
+
+def count_regions(mask):
+    """Number of separate white regions, ignoring regions inside holes of others.
+
+    Used to validate a mask: a good mask has exactly 1 region per robot.
+    """
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return len(contours)
