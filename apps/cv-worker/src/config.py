@@ -4,7 +4,7 @@ from pathlib import Path
 CV_WORKER_DIR = Path(__file__).resolve().parent.parent
 VIDEOS_DIR = CV_WORKER_DIR / "data" / "videos"
 OUTPUT_DIR = CV_WORKER_DIR / "data" / "output"
-DEFAULT_VIDEO = VIDEOS_DIR / "test_two_robots_red_blue_compatible.mp4"
+DEFAULT_VIDEO = VIDEOS_DIR / "video_facil.mp4"
 
 # Robots
 # robot_id -> name used in logs and windows
@@ -19,7 +19,7 @@ ROBOT_NAMES = {
 # Find the values with: python tools/hsv_calibrator.py --robot <id>
 ROBOT_COLORS = {
     1: [((100, 120, 50), (130, 255, 255))],
-    2: [((170, 120, 70), (179, 255, 255)), ((0, 120, 70), (10, 255, 255))],
+    2: [((170, 120, 70), (179, 255, 255)), ((0, 120, 70), (10, 255, 255))]
 }
 
 # Processing
@@ -32,7 +32,7 @@ MIN_CONTOUR_AREA = 500  # px; smaller regions are noise. Synthetic marker is ~85
 # Tracking
 # A detection farther than this * frames since last seen is an impossible jump.
 # Synthetic video: robots move at most ~7 px/frame.
-MAX_SPEED_PX_PER_FRAME = 7
+MAX_SPEED_PX_PER_FRAME = 25
 
 # Heatmap
 HEATMAP_TITLE = "Crossliseu"
