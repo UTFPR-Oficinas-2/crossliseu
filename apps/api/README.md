@@ -4,7 +4,7 @@ NestJS REST API for championships, matches and authentication. Part of the [Cros
 
 ## Requirements
 
-- Node 22.18+ (or 24.12+)
+- Node 26 (exact version in [`.nvmrc`](../../.nvmrc))
 - PostgreSQL 18, started with `docker compose up -d postgres` from the repository root
 - A root `.env` file; see [Environment variables](../../README.md#environment-variables)
 

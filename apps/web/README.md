@@ -4,7 +4,7 @@ Vue 3 single-page app for following championships and fights. Part of the [Cross
 
 ## Requirements
 
-- Node `^22.18.0 || >=24.12.0`
+- Node 26 (exact version in [`.nvmrc`](../../.nvmrc))
 - The [API](../api/README.md) running, to use real data (optional in development)
 
 ## Getting started

@@ -7,6 +7,8 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule);
 
     configureApp(app);
+    // Close DB connections cleanly on SIGTERM (docker stop / compose up -d)
+    app.enableShutdownHooks();
 
     // API docs are a development tool; production (NODE_ENV=production) doesn't serve them
     if (process.env.NODE_ENV !== 'production') {
