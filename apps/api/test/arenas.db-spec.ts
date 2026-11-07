@@ -640,4 +640,107 @@ describe('arenas (db)', () => {
             await http().delete(`/arenas/${ids.arena1}`).expect(401);
         });
     });
+
+    describe('ArenasRepository.clearCurrentMatch', () => {
+        it.each(['scheduled', 'finished'] as const)(
+            'clears a %s current match',
+            async (state) => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, state);
+
+                expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                    'done',
+                );
+                expect(await currentMatchOf(ids.arena1)).toBeNull();
+            },
+        );
+
+        it('clears a finished match so the next one can be selected', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await setState(ids.m1, 'finished');
+            expect(
+                await arenas.setCurrentMatch(ids.arena1, ids.m2, ownerA),
+            ).toBe('arena_match_started');
+
+            await arenas.clearCurrentMatch(ids.arena1, ownerA);
+
+            expect(
+                await arenas.setCurrentMatch(ids.arena1, ids.m2, ownerA),
+            ).toBe('done');
+        });
+
+        it('frees the match for another arena', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await arenas.clearCurrentMatch(ids.arena1, ownerA);
+
+            expect(
+                await arenas.setCurrentMatch(ids.arena2, ids.m1, ownerA),
+            ).toBe('done');
+        });
+
+        it('succeeds and changes nothing without a current match', async () => {
+            expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                'done',
+            );
+            expect(await currentMatchOf(ids.arena1)).toBeNull();
+        });
+
+        it.each(['ongoing', 'paused'] as const)(
+            'refuses with arena_match_live while the match is %s',
+            async (state) => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, state);
+
+                expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                    'arena_match_live',
+                );
+                expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+            },
+        );
+
+        it("answers arena_not_found for another account's arena", async () => {
+            expect(await arenas.clearCurrentMatch(ids.arenaB, ownerA)).toBe(
+                'arena_not_found',
+            );
+        });
+
+        it('ignores ownership when called without an owner', async () => {
+            const [{ owner_user_id: ownerB }]: { owner_user_id: string }[] =
+                await ds.query(
+                    `SELECT "owner_user_id" FROM "arenas" WHERE "id" = $1`,
+                    [ids.arenaB],
+                );
+            await arenas.setCurrentMatch(ids.arenaB, ids.mB, ownerB);
+
+            expect(await arenas.clearCurrentMatch(ids.arenaB, null)).toBe(
+                'done',
+            );
+            expect(await currentMatchOf(ids.arenaB)).toBeNull();
+        });
+
+        it('waits for a concurrent start and refuses', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            // A "start": lock the match row, flip it to ongoing, hold the lock, then commit
+            const start = ds.transaction(async (manager) => {
+                await manager.query(
+                    `SELECT 1 FROM "matches" WHERE "id" = $1 FOR UPDATE`,
+                    [ids.m1],
+                );
+                await manager.query(
+                    `UPDATE "matches" SET "state" = 'ongoing' WHERE "id" = $1`,
+                    [ids.m1],
+                );
+                await new Promise((resolve) => setTimeout(resolve, 300));
+            });
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            const [result] = await Promise.all([
+                arenas.clearCurrentMatch(ids.arena1, ownerA),
+                start,
+            ]);
+
+            expect(result).toBe('arena_match_live');
+            expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+        });
+    });
 });

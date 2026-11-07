@@ -162,13 +162,30 @@ export class ArenasRepository {
         });
     }
 
-    /** False when the arena does not exist */
-    async clearCurrentMatch(arenaId: string): Promise<boolean> {
-        const result = await this.repository.update(
-            { id: arenaId, deletedAt: IsNull() },
-            { currentMatchId: null },
-        );
-        return result.affected === 1;
+    /**
+     * Leaves the arena without a current match, unless that match is live. `ownerUserId` null
+     * skips the account check (arena device link, #19).
+     */
+    clearCurrentMatch(
+        arenaId: string,
+        ownerUserId: string | null,
+    ): Promise<LockedArenaResult> {
+        return this.repository.manager.transaction(async (manager) => {
+            const arena = await this.withLiveCheck(
+                manager,
+                arenaId,
+                ownerUserId,
+            );
+            if (!(arena instanceof Arena)) {
+                return arena;
+            }
+            await manager.update(
+                Arena,
+                { id: arenaId },
+                { currentMatchId: null },
+            );
+            return 'done';
+        });
     }
 
     private async setCurrentMatchLocked(
@@ -228,16 +245,17 @@ export class ArenasRepository {
     }
 
     /**
-     * Locks the owner's arena, then its current match (same order as setCurrentMatch), so the
-     * match can't go live while the caller writes. Returns the arena, or the refusal.
+     * Locks the arena (the owner's, unless `ownerUserId` is null), then its current match (same
+     * order as setCurrentMatch), so the match can't go live while the caller writes. Returns the
+     * arena, or the refusal.
      */
     private async withLiveCheck(
         manager: EntityManager,
         id: string,
-        ownerUserId: string,
+        ownerUserId: string | null,
     ): Promise<Arena | Exclude<LockedArenaResult, 'done'>> {
         const arena = await manager.findOne(Arena, {
-            where: { id, ownerUserId },
+            where: ownerUserId === null ? { id } : { id, ownerUserId },
             lock: { mode: 'pessimistic_write' },
         });
         if (!arena) {
