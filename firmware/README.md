@@ -21,6 +21,8 @@ Each box needs its own `config.h` next to the sketch. Get it from the web app: *
 
 No code reads these defines yet; the connection to the API is tracked in #19.
 
+To test the arena flow without the hardware, the simulator in [`tools/arena-sim`](../tools/arena-sim/arena-sim.mjs) logs in with the same `config.h`: `node tools/arena-sim/arena-sim.mjs --config firmware/config.h`.
+
 ## Strip states
 
 | State | Colour |
