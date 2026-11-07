@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/api/client'
 import type { Arena, MatchState, MatchSummary, Robot } from '@/types'
-import { arenaStatusPill, fightDisabled, fightOptions, pickErrorMessage } from '../arena-fight-pick'
+import {
+  actionHint,
+  arenaChoice,
+  fightDisabled,
+  fightMeta,
+  fightOptions,
+  pickErrorMessage,
+} from '../arena-fight-pick'
 
 const at = '2026-10-01T00:00:00.000Z'
 
@@ -52,10 +59,15 @@ describe('fightOptions', () => {
     expect(options.map((o) => o.match.id)).toEqual(['early', 'late'])
   })
 
-  it('names the robots, with "Robô removido" for a missing one', () => {
+  it('names the robots and teams, with "Robô removido" for a missing one', () => {
     const [option] = fightOptions([match('m1', 'scheduled', at)], robots, [])
 
-    expect(option).toMatchObject({ robotA: 'Titã', robotB: 'Robô removido' })
+    expect(option).toMatchObject({
+      robotA: 'Titã',
+      robotB: 'Robô removido',
+      teamA: 'Volt',
+      teamB: 'Robô removido',
+    })
   })
 
   it('marks the arena that holds the fight as its current match', () => {
@@ -90,16 +102,60 @@ describe('fightDisabled', () => {
   })
 })
 
-describe('arenaStatusPill', () => {
-  it('shows connected arenas in green', () => {
-    expect(arenaStatusPill(arena('a1', null, true))).toEqual({
-      label: 'Conectada',
-      tone: 'success',
+describe('arenaChoice', () => {
+  it('offers a free connected arena', () => {
+    expect(arenaChoice(arena('a1', null, true))).toEqual({
+      meta: 'Livre · caixa da arena conectada',
+      pill: { label: 'Conectado', tone: 'success' },
+      disabled: false,
     })
   })
 
-  it('marks offline arenas as disconnected in red', () => {
-    expect(arenaStatusPill(arena('a1', null))).toEqual({ label: 'Desconectada', tone: 'danger' })
+  it('offers a free offline arena, marked but not blocked', () => {
+    expect(arenaChoice(arena('a1', null))).toEqual({
+      meta: 'Livre · a luta pode rodar sem a caixa, mas sem botões de desistência',
+      pill: { label: 'Não conectado', tone: 'danger' },
+      disabled: false,
+    })
+  })
+
+  it('disables an arena that has a current fight and says which one', () => {
+    const busy: Arena = {
+      ...arena('a1', 'm9', true),
+      currentMatch: { robotAName: 'Titã', robotBName: 'Nêmesis' },
+    }
+
+    expect(arenaChoice(busy)).toEqual({
+      meta: 'Ocupada com Titã × Nêmesis. Feche essa luta para liberar a arena.',
+      pill: { label: 'Em uso', tone: 'accent' },
+      disabled: true,
+    })
+  })
+})
+
+describe('fightMeta', () => {
+  it('shows the teams and the weight class', () => {
+    const [option] = fightOptions([match('m1', 'scheduled', at)], robots, [])
+
+    expect(fightMeta(option!)).toBe('Volt × Robô removido · beetleweight')
+  })
+
+  it('says which arena already has the fight open', () => {
+    const [option] = fightOptions([match('m1', 'scheduled', at)], robots, [arena('a2', 'm1')])
+
+    expect(fightMeta(option!)).toBe('Aberta na Arena a2')
+  })
+})
+
+describe('actionHint', () => {
+  it('asks for both picks until there is an arena', () => {
+    expect(actionHint(null)).toBe('Escolha uma arena e uma luta.')
+  })
+
+  it('says the fight stays on the chosen arena', () => {
+    expect(actionHint(arena('a1', null))).toBe(
+      'A luta fica na Arena a1 até você fechá-la. A caixa da arena passa a mostrar os nomes e o tempo.',
+    )
   })
 })
 

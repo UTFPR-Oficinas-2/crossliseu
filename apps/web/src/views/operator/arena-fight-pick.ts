@@ -3,19 +3,49 @@
 import { ApiError } from '@/api/client'
 import type { StatusTone } from '@/components/ui/status-pill'
 import type { Arena, MatchSummary, Robot } from '@/types'
-import { matchRows } from '@/views/organizer/matches-list'
 
-/** Offline arenas are marked, never blocked: the server owns the fight */
-export function arenaStatusPill(arena: Arena): { label: string; tone: StatusTone } {
+const REMOVED = 'Robô removido'
+
+export interface ArenaChoice {
+  meta: string
+  pill: { label: string; tone: StatusTone }
+  disabled: boolean
+}
+
+/**
+ * How an arena reads in the picker (Figma OPE-01). An arena with a current fight is disabled and
+ * names it; offline arenas are marked but never blocked, since the server owns the fight.
+ */
+export function arenaChoice(arena: Arena): ArenaChoice {
+  if (arena.currentMatchId) {
+    const names = arena.currentMatch
+      ? `${arena.currentMatch.robotAName} × ${arena.currentMatch.robotBName}`
+      : 'outra luta'
+    return {
+      meta: `Ocupada com ${names}. Feche essa luta para liberar a arena.`,
+      pill: { label: 'Em uso', tone: 'accent' },
+      disabled: true,
+    }
+  }
   return arena.online
-    ? { label: 'Conectada', tone: 'success' }
-    : { label: 'Desconectada', tone: 'danger' }
+    ? {
+        meta: 'Livre · caixa da arena conectada',
+        pill: { label: 'Conectado', tone: 'success' },
+        disabled: false,
+      }
+    : {
+        meta: 'Livre · a luta pode rodar sem a caixa, mas sem botões de desistência',
+        pill: { label: 'Não conectado', tone: 'danger' },
+        disabled: false,
+      }
 }
 
 export interface FightOption {
   match: MatchSummary
   robotA: string
   robotB: string
+  teamA: string
+  teamB: string
   /** The arena whose current match this fight already is */
   heldBy: Arena | null
 }
@@ -26,15 +56,34 @@ export function fightOptions(
   robots: Robot[],
   arenas: Arena[],
 ): FightOption[] {
-  const scheduled = matches
+  const byId = new Map(robots.map((robot) => [robot.id, robot]))
+  return matches
     .filter((m) => m.state === 'scheduled')
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
-  return matchRows(scheduled, robots).map(({ match, robotA, robotB }) => ({
-    match,
-    robotA,
-    robotB,
-    heldBy: arenas.find((a) => a.currentMatchId === match.id) ?? null,
-  }))
+    .map((match) => {
+      const a = byId.get(match.robotAId)
+      const b = byId.get(match.robotBId)
+      return {
+        match,
+        robotA: a?.name ?? REMOVED,
+        robotB: b?.name ?? REMOVED,
+        teamA: a?.team ?? REMOVED,
+        teamB: b?.team ?? REMOVED,
+        heldBy: arenas.find((arena) => arena.currentMatchId === match.id) ?? null,
+      }
+    })
+}
+
+/** "Equipe A × Equipe B · beetleweight", or where the fight is already open */
+export function fightMeta(option: FightOption): string {
+  if (option.heldBy) return `Aberta na ${option.heldBy.name}`
+  return `${option.teamA} × ${option.teamB} · ${option.match.weightClass}`
+}
+
+/** Action bar text next to "Abrir luta" */
+export function actionHint(arena: Arena | null): string {
+  if (!arena) return 'Escolha uma arena e uma luta.'
+  return `A luta fica na ${arena.name} até você fechá-la. A caixa da arena passa a mostrar os nomes e o tempo.`
 }
 
 /** A fight already current on another arena can't be picked (409 `match_already_current`) */
