@@ -33,3 +33,13 @@ MIN_CONTOUR_AREA = 500  # px; smaller regions are noise. Synthetic marker is ~85
 # A detection farther than this * frames since last seen is an impossible jump.
 # Synthetic video: robots move at most ~7 px/frame.
 MAX_SPEED_PX_PER_FRAME = 7
+
+# Heatmap
+HEATMAP_TITLE = "Crossliseu"
+HEATMAP_CELL_PX = 20         # grid cell size in pixels (1280x720 -> 64x36 cells)
+HEATMAP_BLUR_CELLS = 1.5     # Gaussian smoothing, in cells; 0 disables it
+# One hue per robot, light -> dark (matplotlib colormap names)
+HEATMAP_COLORMAPS = {
+    1: "Blues",
+    2: "Reds",
+}

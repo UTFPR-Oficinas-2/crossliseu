@@ -5,11 +5,13 @@ import cv2
 
 from capture import VideoCapture
 from config import (
-    BLUR_KERNEL, DEFAULT_VIDEO, MAX_SPEED_PX_PER_FRAME, MIN_CONTOUR_AREA, MORPH_KERNEL,
-    OUTPUT_DIR, ROBOT_COLORS, ROBOT_NAMES,
+    BLUR_KERNEL, DEFAULT_VIDEO, HEATMAP_BLUR_CELLS, HEATMAP_CELL_PX, HEATMAP_COLORMAPS,
+    HEATMAP_TITLE, MAX_SPEED_PX_PER_FRAME, MIN_CONTOUR_AREA, MORPH_KERNEL, OUTPUT_DIR,
+    ROBOT_COLORS, ROBOT_NAMES,
 )
 from debug import show_masks
 from detection import detect_robots
+from heatmap import generate_heatmaps
 from preprocessing import preprocess
 from segmentation import count_regions, segment_all
 from storage import save_trajectories
@@ -33,6 +35,8 @@ def cv_worker(video_path, display=True):
     detected = {robot_id: 0 for robot_id in ROBOT_COLORS}
     # Tracking: one TrajectoryPoint per robot per frame
     tracker = Tracker(ROBOT_COLORS, MAX_SPEED_PX_PER_FRAME)
+    # Heatmap background: the first frame (later: a photo of the empty arena)
+    background = None
     frame_index = 0
 
     try:
@@ -41,6 +45,9 @@ def cv_worker(video_path, display=True):
 
             if frame is None:
                 break
+
+            if background is None:
+                background = frame.copy()
 
             # Pre-processing
             frame_hsv = preprocess(frame, BLUR_KERNEL)
@@ -89,6 +96,15 @@ def cv_worker(video_path, display=True):
         tracker.trajectories, output_path, ROBOT_COLORS, video.width, video.height,
     )
     print(f"\nSaved {rows} rows to {output_path}")
+
+    # Heatmap: one PNG per robot, next to the CSV (needs at least one frame)
+    if background is not None:
+        heatmap_paths = generate_heatmaps(
+            output_path, background, output_path.parent, ROBOT_NAMES, HEATMAP_COLORMAPS,
+            HEATMAP_TITLE, HEATMAP_CELL_PX, HEATMAP_BLUR_CELLS,
+        )
+        for path in heatmap_paths:
+            print(f"Saved heatmap to {path}")
 
 
 def print_summary(stats, detected, tracker, total_frames):
