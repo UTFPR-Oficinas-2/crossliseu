@@ -62,13 +62,17 @@ function setup(
                 return Promise.resolve(setResult);
             },
         ),
-        clearCurrentMatch: vi.fn((arenaId: string) => {
-            const target = arenas.find((entity) => entity.id === arenaId);
-            if (target) {
-                target.currentMatchId = null;
-            }
-            return Promise.resolve(target !== undefined);
-        }),
+        // Applies the clear only on 'done', like the locked transaction
+        clearCurrentMatch: vi.fn(
+            (arenaId: string, _ownerUserId: string | null) => {
+                const target = arenas.find((entity) => entity.id === arenaId);
+                if (lockedResult === 'done' && target) {
+                    target.currentMatchId = null;
+                    target.currentMatch = null;
+                }
+                return Promise.resolve(lockedResult);
+            },
+        ),
         create: vi.fn((_arena: Arena) =>
             Promise.resolve(createResults.shift() ?? 'done'),
         ),
@@ -202,22 +206,64 @@ describe('ArenasService.setCurrentMatch', () => {
 });
 
 describe('ArenasService.clearCurrentMatch', () => {
-    it('clears the pointer', async () => {
-        const current = arena(ARENA_1_ID, 'Arena 1', MATCH_ID);
-        const { service } = setup([current]);
+    it('returns the arena without a current match', async () => {
+        const { service, arenasRepository } = setup([
+            arena(ARENA_1_ID, 'Arena 1', MATCH_ID),
+        ]);
 
-        await service.clearCurrentMatch(ARENA_1_ID);
+        const response = await service.clearCurrentMatch(ARENA_1_ID, OWNER_ID);
 
-        expect(current.currentMatchId).toBeNull();
+        expect(response).toMatchObject({
+            id: ARENA_1_ID,
+            online: false,
+            currentMatchId: null,
+            currentMatch: null,
+        });
+        expect(arenasRepository.clearCurrentMatch).toHaveBeenCalledWith(
+            ARENA_1_ID,
+            OWNER_ID,
+        );
     });
 
-    it('rejects an unknown arena with arena_not_found', async () => {
-        const { service } = setup([]);
+    it.each([
+        ['arena_not_found', NotFoundException],
+        ['arena_match_live', ConflictException],
+    ] as const)('turns %s into %o', async (lockedResult, exception) => {
+        const { service } = setup([arena(ARENA_1_ID, 'Arena 1', MATCH_ID)], {
+            lockedResult,
+        });
 
-        const call = service.clearCurrentMatch(ARENA_1_ID);
+        const call = service.clearCurrentMatch(ARENA_1_ID, OWNER_ID);
 
-        await expect(call).rejects.toThrow(NotFoundException);
-        await expect(call).rejects.toThrow('arena_not_found');
+        await expect(call).rejects.toThrow(exception);
+        await expect(call).rejects.toThrow(lockedResult);
+    });
+});
+
+describe('ArenasService.releaseCurrentMatch', () => {
+    it('clears without an account check', async () => {
+        const { service, arenasRepository } = setup([
+            arena(ARENA_1_ID, 'Arena 1', MATCH_ID),
+        ]);
+
+        await expect(
+            service.releaseCurrentMatch(ARENA_1_ID),
+        ).resolves.toBeUndefined();
+        expect(arenasRepository.clearCurrentMatch).toHaveBeenCalledWith(
+            ARENA_1_ID,
+            null,
+        );
+    });
+
+    it('turns arena_match_live into a ConflictException', async () => {
+        const { service } = setup([arena(ARENA_1_ID, 'Arena 1', MATCH_ID)], {
+            lockedResult: 'arena_match_live',
+        });
+
+        const call = service.releaseCurrentMatch(ARENA_1_ID);
+
+        await expect(call).rejects.toThrow(ConflictException);
+        await expect(call).rejects.toThrow('arena_match_live');
     });
 });
 

@@ -743,4 +743,84 @@ describe('arenas (db)', () => {
             expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
         });
     });
+
+    describe('DELETE /arenas/:id/current-match', () => {
+        const clear = (id: string, headers = auth()) =>
+            http().delete(`/arenas/${id}/current-match`).set(headers);
+
+        it('clears and returns the arena', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+
+            const response = await clear(ids.arena1).expect(200);
+
+            expect(response.body).toEqual({
+                id: ids.arena1,
+                name: 'Arena 1',
+                deviceId: 'Arena 1-device',
+                online: false,
+                currentMatchId: null,
+                currentMatch: null,
+            });
+            expect(await currentMatchOf(ids.arena1)).toBeNull();
+        });
+
+        it('is idempotent', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+
+            const first = await clear(ids.arena1).expect(200);
+            const second = await clear(ids.arena1).expect(200);
+
+            expect(second.body).toEqual(first.body);
+        });
+
+        it.each(['ongoing', 'paused'] as const)(
+            'answers 409 arena_match_live while the match is %s',
+            async (state) => {
+                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+                await setState(ids.m1, state);
+
+                const response = await clear(ids.arena1).expect(409);
+
+                expect(response.body.message).toBe('arena_match_live');
+                expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+            },
+        );
+
+        it('answers 404 arena_not_found, not 409, for another account on a live match', async () => {
+            await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
+            await setState(ids.m1, 'ongoing');
+
+            const response = await clear(ids.arena1, authB()).expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+            expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
+        });
+
+        it('answers 404 arena_not_found for an unknown arena', async () => {
+            const response = await clear(UNKNOWN_ID).expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+        });
+
+        it('answers 404 arena_not_found for a deleted arena', async () => {
+            await ds.query(
+                `UPDATE "arenas" SET "deleted_at" = now() WHERE "id" = $1`,
+                [ids.arena1],
+            );
+
+            const response = await clear(ids.arena1).expect(404);
+
+            expect(response.body.message).toBe('arena_not_found');
+        });
+
+        it('answers 400 for an id that is not a UUID', async () => {
+            await clear('abc').expect(400);
+        });
+
+        it('rejects a request without a token with 401', async () => {
+            await http()
+                .delete(`/arenas/${ids.arena1}/current-match`)
+                .expect(401);
+        });
+    });
 });

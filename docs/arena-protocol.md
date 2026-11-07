@@ -13,7 +13,7 @@ The contract between an arena's ESP32 box and the API. The firmware (`firmware/`
 
 An arena is the physical space where two robots fight. It has exactly one box, and at most one match at a time.
 
-The arena has no match until the operator opens the lobby for a match (the one the referees join) and selects which match runs on this arena. From then until the operator closes that match, it is the arena's **current match**, and every `state` sent to the box describes it. With no current match, the box gets `idle`.
+The arena has no match until the operator opens the lobby for a match (the one the referees join) and selects which match runs on this arena. From then until the operator closes that match, it is the arena's **current match**, and every `state` sent to the box describes it. Closing it (or undoing a pick before Start) is `DELETE /arenas/:id/current-match`, refused while the match is ongoing or paused. With no current match, the box gets `idle`.
 
 Before Start, the operator can change the selection (for example, after picking the wrong match). The box then gets a new `ready` with the new `matchId`.
 

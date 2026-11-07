@@ -72,4 +72,12 @@ export class ArenasController {
     ): Promise<ArenaResponse> {
         return this.arenasService.setCurrentMatch(id, dto, userId);
     }
+
+    @Delete(':id/current-match')
+    clearCurrentMatch(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ): Promise<ArenaResponse> {
+        return this.arenasService.clearCurrentMatch(id, userId);
+    }
 }

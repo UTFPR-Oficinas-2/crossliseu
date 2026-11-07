@@ -10,8 +10,9 @@ among live arenas, case-insensitively (`UQ_arenas_owner_user_id_lower_name`).
 
 An arena is a physical box that runs one match at a time. `arenas.current_match_id`
 is the live pointer to the match the arena runs now (or will run next); it is
-unique, so a match is current on at most one arena, and it is cleared when that
-match is deleted. `matches.arena_id` is the history of where a match was played,
+unique, so a match is current on at most one arena, and it is cleared when the
+operator clears it (`DELETE /arenas/:id/current-match`) or when that match is
+deleted. `matches.arena_id` is the history of where a match was played,
 written when the match starts. `arenas.owner_user_id` is the account that created
 the arena; names are unique per owner among live arenas, so deleting an arena
 frees its name. `arenas.device_id` is globally unique. `token_hash` is the bcrypt
