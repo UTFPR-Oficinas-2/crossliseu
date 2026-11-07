@@ -6,6 +6,7 @@ import {
   listArenas,
   renameArena,
   rotateArenaToken,
+  setArenaCurrentMatch,
 } from '@/api/arenas'
 
 function stubFetch(status: number, body?: unknown) {
@@ -79,5 +80,16 @@ describe('api/arenas', () => {
     const { url, init } = lastCall(fetchMock)
     expect(url.endsWith('/arenas/a%2F1/current-match')).toBe(true)
     expect(init.method).toBe('DELETE')
+  })
+
+  it('picks the current match with PUT /arenas/:id/current-match', async () => {
+    const fetchMock = stubFetch(200, {})
+
+    await setArenaCurrentMatch('a/1', 'm1', 't')
+    const { url, init, headers } = lastCall(fetchMock)
+    expect(url.endsWith('/arenas/a%2F1/current-match')).toBe(true)
+    expect(init.method).toBe('PUT')
+    expect(init.body).toBe(JSON.stringify({ matchId: 'm1' }))
+    expect(headers.Authorization).toBe('Bearer t')
   })
 })

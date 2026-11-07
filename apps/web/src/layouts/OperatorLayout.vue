@@ -4,9 +4,12 @@
 // content (preparation, running, closing) is rendered by the child route.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppNav from '@/components/ui/AppNav.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
-import { getArenas, getChampionship, getMatch, getRobots } from '@/data'
-import type { Arena, Championship, Match, MatchState, Robot } from '@/types'
+import { getArenas, getChampionship, getMatchSummary, getRobots } from '@/data'
+import { useSignOut } from '@/composables/useSignOut'
+import { useAuthStore } from '@/stores/auth'
+import type { Arena, Championship, MatchState, MatchSummary, Robot } from '@/types'
 
 type StepId = 'preparation' | 'running' | 'closing'
 type StepStatus = 'done' | 'current' | 'upcoming'
@@ -26,26 +29,33 @@ const stepByState: Record<MatchState, StepId> = {
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
-const match = ref<Match | null>(null)
+const match = ref<MatchSummary | null>(null)
 const championship = ref<Championship | null>(null)
 const arena = ref<Arena | null>(null)
 const robots = ref<Robot[]>([])
 
-// Data loading lives here. The API has no operator match or arena data yet, so a failed load
-// leaves the layout empty (every step reads as upcoming) instead of throwing into the router.
+// Data loading lives here. A failed load leaves the layout empty (every step reads as upcoming)
+// instead of throwing into the router. The fight's arena is the one whose current match it is:
+// the server keeps that link, so a reload finds the same arena again. Arenas load on their own:
+// failing them only loses the arena badge, not the fight.
 let loadId = 0
 async function load(matchId: string) {
   const current = ++loadId
-  let loaded: [Match | null, Championship | null, Arena[], Robot[]]
+  let loaded: [MatchSummary | null, Championship | null, Arena[], Robot[]]
   try {
-    const loadedMatch = await getMatch(matchId)
+    // The picker route (`/operator`) has no match
+    const loadedMatch = matchId ? await getMatchSummary(matchId) : null
     loaded = loadedMatch
       ? [
           loadedMatch,
           ...(await Promise.all([
             getChampionship(loadedMatch.championshipId),
-            getArenas(loadedMatch.championshipId),
+            getArenas(auth.token ?? '').catch((error: unknown) => {
+              console.error('Could not load the arenas', error)
+              return []
+            }),
             getRobots(loadedMatch.championshipId),
           ])),
         ]
@@ -59,7 +69,7 @@ async function load(matchId: string) {
   const [loadedMatch, loadedChampionship, arenas, loadedRobots] = loaded
   match.value = loadedMatch
   championship.value = loadedChampionship
-  arena.value = arenas.find((a) => a.id === loadedMatch?.arenaId) ?? null
+  arena.value = arenas.find((a) => a.currentMatchId === loadedMatch?.id) ?? null
   robots.value = loadedRobots
 }
 
@@ -75,8 +85,8 @@ const robotNames = computed(() => ({
   b: robotName(match.value?.robotBId),
 }))
 
-// Demo value: there is no arena box connection data yet
-const arenaConnected = computed(() => arena.value !== null)
+// Shown, never used to block anything
+const arenaConnected = computed(() => arena.value?.online ?? false)
 
 // -1 when there is no match, so every step reads as upcoming
 const currentStepIndex = computed(() => {
@@ -97,10 +107,21 @@ function exitOperation() {
     params: { championshipId: match.value.championshipId },
   })
 }
+
+// The picker (`/operator`, Figma OPE-01) has no fight yet and uses the app navigation
+const onPicker = computed(() => !route.params.matchId)
+
+const handleSignOut = useSignOut()
 </script>
 
 <template>
   <div class="operator-layout">
+    <AppNav
+      v-if="onPicker"
+      :user-name="auth.username ?? ''"
+      active="operator"
+      @sign-out="handleSignOut"
+    />
     <!-- Without a match there is no fight context to show, so the nav is omitted -->
     <OperatorNav
       v-if="match"
@@ -146,6 +167,12 @@ function exitOperation() {
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--space-7) var(--space-8) var(--space-9);
+}
+
+@media (max-width: 767px) {
+  .operator-layout__content {
+    padding-inline: var(--space-page-x-mobile);
+  }
 }
 
 .operator-steps {

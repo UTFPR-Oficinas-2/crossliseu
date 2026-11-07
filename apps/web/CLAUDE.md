@@ -120,7 +120,8 @@ slots. Each component's Figma description repeats its Vue file and props.
 
 - Use `<button>` for actions and `<RouterLink>`/`<a>` for navigation, with visible focus states.
 - Lado A = blue, Lado B = pink, **always with a visible text label**. Never color alone.
-- Red is only for destructive actions and errors. Orange is the primary action.
+- Red is only for destructive actions, errors, and a disconnected arena (`Status / Pill` Danger,
+  as in `OperatorNav` and the OPE-01 picker). Orange is the primary action.
 - Referee pages are designed at 390 × 844. Use touch targets of at least 48 px and no hover-only UI.
 - Public, organizer and operator pages have desktop frames (1440) and phone frames (390,
   `· celular`). Switch layouts at 768 px and keep everything fluid down to ~360 px.
