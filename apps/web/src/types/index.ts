@@ -47,11 +47,16 @@ export interface Championship {
   modifiedAt: string
 }
 
+/** An arena as the operator sees it. Arenas belong to an account, not to a championship. */
 export interface Arena {
   id: string
-  championshipId: string
   /** "Arena 01" */
   name: string
+  /** Whether the box is connected; always false until the device link exists (#19) */
+  online: boolean
+  /** The match the operator picked for this arena, kept until it is closed */
+  currentMatchId: string | null
+  currentMatch: { robotAName: string; robotBName: string } | null
 }
 
 /** An arena in the account's list (ESP32 box), as seen by its owner */

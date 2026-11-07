@@ -57,3 +57,20 @@ export function clearArenaCurrentMatch(id: string, token: string): Promise<ApiAr
     token,
   })
 }
+
+/**
+ * PUT /arenas/:id/current-match (JWT). Makes the match the arena's current one (the operator's
+ * pick). 404 `arena_not_found` / `match_not_found`; 409 `match_not_scheduled`,
+ * `match_already_current` (current on another arena) or `arena_match_started`.
+ */
+export function setArenaCurrentMatch(
+  id: string,
+  matchId: string,
+  token: string,
+): Promise<ApiArena> {
+  return apiRequest(`/arenas/${encodeURIComponent(id)}/current-match`, {
+    method: 'PUT',
+    body: { matchId },
+    token,
+  })
+}
