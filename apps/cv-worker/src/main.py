@@ -6,12 +6,13 @@ import cv2
 from capture import VideoCapture
 from config import (
     BLUR_KERNEL, DEFAULT_VIDEO, MAX_SPEED_PX_PER_FRAME, MIN_CONTOUR_AREA, MORPH_KERNEL,
-    ROBOT_COLORS, ROBOT_NAMES,
+    OUTPUT_DIR, ROBOT_COLORS, ROBOT_NAMES,
 )
 from debug import show_masks
 from detection import detect_robots
 from preprocessing import preprocess
 from segmentation import count_regions, segment_all
+from storage import save_trajectories
 from tracking import Tracker
 
 
@@ -80,6 +81,14 @@ def cv_worker(video_path, display=True):
         cv2.destroyAllWindows()
 
     print_summary(stats, detected, tracker, frame_index)
+
+    # Storage: data/output/<video name>/trajectories.csv
+    # Also runs when the run was stopped with q: it saves the frames processed so far.
+    output_path = OUTPUT_DIR / Path(video_path).stem / "trajectories.csv"
+    rows = save_trajectories(
+        tracker.trajectories, output_path, ROBOT_COLORS, video.width, video.height,
+    )
+    print(f"\nSaved {rows} rows to {output_path}")
 
 
 def print_summary(stats, detected, tracker, total_frames):
