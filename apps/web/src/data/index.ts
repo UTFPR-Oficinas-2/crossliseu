@@ -233,15 +233,22 @@ export async function deleteMatch(id: string, token: string): Promise<void> {
 // error instead of inventing endpoints; replace each with a request once the API provides it.
 const notImplemented = () => new ApiError(501, 'not_implemented', ['not_implemented'])
 
+// Shared by both arena views; the match id already comes as `currentMatchId`
+function toCurrentMatch(api: ApiArena): Arena['currentMatch'] {
+  return (
+    api.currentMatch && {
+      robotAName: api.currentMatch.robotAName,
+      robotBName: api.currentMatch.robotBName,
+    }
+  )
+}
+
 function toManagedArena(api: ApiArena): ManagedArena {
   return {
     id: api.id,
     name: api.name,
     deviceId: api.deviceId,
-    currentMatch: api.currentMatch && {
-      robotAName: api.currentMatch.robotAName,
-      robotBName: api.currentMatch.robotBName,
-    },
+    currentMatch: toCurrentMatch(api),
   }
 }
 
@@ -280,10 +287,7 @@ function toArena(api: ApiArena): Arena {
     name: api.name,
     online: api.online,
     currentMatchId: api.currentMatchId,
-    currentMatch: api.currentMatch && {
-      robotAName: api.currentMatch.robotAName,
-      robotBName: api.currentMatch.robotBName,
-    },
+    currentMatch: toCurrentMatch(api),
   }
 }
 
