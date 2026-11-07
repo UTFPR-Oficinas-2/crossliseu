@@ -53,7 +53,8 @@ jobs:
           VITE_API_URL: /crossliseu/api
 
   docker:
-    name: Docker build
+    # Matches the required checks on main: "Docker build (api)" and "Docker build (web)"
+    name: Docker build (${{ matrix.app }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
