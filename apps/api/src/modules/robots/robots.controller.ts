@@ -52,13 +52,17 @@ export class RobotsController {
     update(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateRobotDto: UpdateRobotDto,
+        @CurrentUserId() userId: string,
     ) {
-        return this.robotsService.update(id, updateRobotDto);
+        return this.robotsService.update(id, updateRobotDto, userId);
     }
 
     @Delete(':id')
     @HttpCode(HttpStatus.NO_CONTENT)
-    remove(@Param('id', ParseUUIDPipe) id: string) {
-        return this.robotsService.remove(id);
+    remove(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.robotsService.remove(id, userId);
     }
 }

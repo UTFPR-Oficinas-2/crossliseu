@@ -1,6 +1,7 @@
 import type { Relation } from 'typeorm';
 import { Check, Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
+import { Arena } from '../../arenas/entities/arena.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
 import { Robot } from '../../robots/entities/robot.entity.js';
 import { User } from '../../users/entities/user.entity.js';
@@ -100,6 +101,14 @@ export class Match extends BaseEntity {
     @ManyToOne(() => Robot, { nullable: true })
     @JoinColumn({ name: 'winner_robot_id' })
     winnerRobot?: Relation<Robot> | null;
+
+    // Arena the match was played on; written at Start, not by any DTO
+    @Column({ name: 'arena_id', type: 'uuid', nullable: true })
+    arenaId: string | null;
+
+    @ManyToOne(() => Arena, { nullable: true })
+    @JoinColumn({ name: 'arena_id' })
+    arena?: Relation<Arena> | null;
 
     @Column({ name: 'created_by_user_id', type: 'uuid', nullable: false })
     createdByUserId: string;

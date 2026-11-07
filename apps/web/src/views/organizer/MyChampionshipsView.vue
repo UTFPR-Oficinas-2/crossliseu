@@ -7,6 +7,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
 import { getManagedChampionships } from '@/data'
+import { useAuthStore } from '@/stores/auth'
 import type { Championship } from '@/types'
 import { championshipMeta, championshipStatusPill } from '@/utils/championship'
 
@@ -24,6 +25,7 @@ const filters: { value: Filter; label: string; empty: string }[] = [
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const activeFilter = computed<Filter>(() => {
   const value = route.query.status
@@ -42,7 +44,7 @@ const championships = ref<Championship[]>([])
 async function load() {
   loadState.value = 'loading'
   try {
-    championships.value = await getManagedChampionships()
+    championships.value = await getManagedChampionships(auth.token ?? '')
     loadState.value = 'ready'
   } catch (error) {
     console.error('Failed to load managed championships', error)
@@ -84,9 +86,14 @@ const subtitle = computed(() => {
           {{ subtitle }}
         </p>
       </div>
-      <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
-        Criar campeonato
-      </AppButton>
+      <div class="my-championships__header-actions">
+        <AppButton variant="secondary" class="my-championships__create" :to="{ name: 'arenas' }">
+          Arenas
+        </AppButton>
+        <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
+          Criar campeonato
+        </AppButton>
+      </div>
     </header>
 
     <p
@@ -190,6 +197,12 @@ const subtitle = computed(() => {
 
 .my-championships__muted {
   color: var(--color-muted);
+}
+
+.my-championships__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .my-championships__create {

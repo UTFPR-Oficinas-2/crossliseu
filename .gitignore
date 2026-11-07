@@ -141,7 +141,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .worktrees
 .claude
 
-
 # Python cache
 __pycache__/
 *.pyc
@@ -149,3 +148,6 @@ __pycache__/
 # Python virtual environments
 .venv/
 venv/
+
+# firmware config file that is pasted from the web app
+firmware/config.h

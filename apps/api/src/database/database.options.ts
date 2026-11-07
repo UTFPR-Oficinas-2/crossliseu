@@ -1,4 +1,5 @@
 import type { PostgresDataSourceOptions } from 'typeorm/driver/postgres/PostgresDataSourceOptions.js';
+import { Arena } from '../modules/arenas/entities/arena.entity.js';
 import { Match } from '../modules/matches/entities/match.entity.js';
 import { User } from '../modules/users/entities/user.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
@@ -27,6 +28,7 @@ export function databaseOptions(): PostgresDataSourceOptions {
         password: password,
         database: db,
         entities: [
+            Arena,
             Match,
             User,
             Championship,

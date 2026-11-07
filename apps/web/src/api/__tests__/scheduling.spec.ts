@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { listMyChampionships } from '../championships'
 import { createMatch, deleteMatch, listMatches, updateMatch } from '../matches'
 import { createRobot, deleteRobot, listRobots, updateRobot } from '../robots'
 
@@ -25,6 +26,17 @@ function lastRequest(fetchMock: ReturnType<typeof stubFetch>) {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('championships API', () => {
+  it('lists the account championships with the token', async () => {
+    const fetchMock = stubFetch(200, [])
+
+    await listMyChampionships('t')
+
+    expect(lastRequest(fetchMock).url).toMatch(/\/championships\/mine$/)
+    expect(lastRequest(fetchMock).authorization).toBe('Bearer t')
+  })
 })
 
 describe('robots API', () => {

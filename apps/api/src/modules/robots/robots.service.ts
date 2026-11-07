@@ -31,8 +31,11 @@ export class RobotsService {
     async create(createRobotDto: CreateRobotDto, createdByUserId: string) {
         const { name, weightClass, team, championshipId } = createRobotDto;
 
-        // Throws championship_not_found when it does not exist
-        await this.championshipsService.findOne(championshipId);
+        // Throws championship_not_found when it does not exist or is not the caller's
+        await this.championshipsService.findOwned(
+            championshipId,
+            createdByUserId,
+        );
         await this.assertNameAvailable(championshipId, name);
 
         const robot: Robot = new Robot(
@@ -69,8 +72,8 @@ export class RobotsService {
         return robot;
     }
 
-    async update(id: string, updateRobotDto: UpdateRobotDto) {
-        const robot = await this.findOne(id);
+    async update(id: string, updateRobotDto: UpdateRobotDto, userId: string) {
+        const robot = await this.findOwnedRobot(id, userId);
 
         if (updateRobotDto.name !== undefined) {
             await this.assertNameAvailable(
@@ -95,10 +98,27 @@ export class RobotsService {
         return this.findOne(id);
     }
 
-    async remove(id: string) {
-        await this.findOne(id);
+    async remove(id: string, userId: string) {
+        await this.findOwnedRobot(id, userId);
         // Matches keep pointing at their robots; a soft-deleted robot would orphan them
         this.assertWritten(id, await this.robotsRepository.remove(id));
+    }
+
+    /** A robot in someone else's championship answers exactly like an unknown one */
+    private async findOwnedRobot(id: string, userId: string) {
+        const robot = await this.findOne(id);
+
+        if (
+            !(await this.championshipsService.isOwnedBy(
+                robot.championshipId,
+                userId,
+            ))
+        ) {
+            this.logger.warn('robot_not_found', { id });
+            throw new NotFoundException('robot_not_found');
+        }
+
+        return robot;
     }
 
     /** "O nome do robô não pode se repetir dentro do mesmo campeonato" (Figma 09b), ignoring case */

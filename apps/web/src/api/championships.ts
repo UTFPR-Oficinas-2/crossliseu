@@ -38,6 +38,11 @@ export function listChampionships(): Promise<ApiChampionship[]> {
   return apiRequest('/championships')
 }
 
+/** GET /championships/mine (JWT): the signed-in account's championships, same shape as the list */
+export function listMyChampionships(token: string): Promise<ApiChampionship[]> {
+  return apiRequest('/championships/mine', { token })
+}
+
 /** GET /championships/:id (public). 404 `championship_not_found`, 400 for a non-uuid id. */
 export function getChampionship(id: string): Promise<ApiChampionship> {
   return apiRequest(`/championships/${encodeURIComponent(id)}`)

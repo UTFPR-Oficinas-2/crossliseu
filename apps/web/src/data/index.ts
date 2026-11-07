@@ -6,13 +6,23 @@ import {
   createChampionship as postChampionship,
   getChampionship as fetchChampionship,
   listChampionships,
+  listMyChampionships,
   updateChampionship as patchChampionship,
   type ApiChampionship,
 } from '@/api/championships'
+import {
+  createArena,
+  deleteArena,
+  listArenas,
+  renameArena as patchArena,
+  rotateArenaToken,
+  type ApiArena,
+} from '@/api/arenas'
 import { login } from '@/api/auth'
 import {
   createMatch as postMatch,
   deleteMatch as removeMatch,
+  getMatchById,
   listMatches,
   updateMatch as patchMatch,
   type ApiMatch,
@@ -27,6 +37,8 @@ import {
 import type {
   Arena,
   Championship,
+  DeviceCredentials,
+  ManagedArena,
   Match,
   MatchSummary,
   RefereeAccess,
@@ -76,12 +88,24 @@ export async function getChampionship(id: string): Promise<Championship | null> 
   }
 }
 
-/**
- * Championships the signed-in organizer can manage. The API has no roles yet, so this is every
- * championship.
- */
-export async function getManagedChampionships(): Promise<Championship[]> {
-  return (await listChampionships()).map(toChampionship)
+/** GET /championships/mine (JWT): the championships the signed-in account owns */
+export async function getManagedChampionships(token: string): Promise<Championship[]> {
+  return (await listMyChampionships(token)).map(toChampionship)
+}
+
+/** Whether the signed-in account owns the championship. Unknown or malformed ids are not owned. */
+export async function ownsChampionship(championshipId: string, token: string): Promise<boolean> {
+  return (await listMyChampionships(token)).some((c) => c.id === championshipId)
+}
+
+/** Championship of a match (GET /matches/:id). Unknown or malformed ids resolve to `null`. */
+export async function matchChampionshipId(matchId: string): Promise<string | null> {
+  try {
+    return (await getMatchById(matchId)).championshipId
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return null
+    throw error
+  }
 }
 
 /** POST /championships (JWT) */
@@ -198,7 +222,48 @@ export async function deleteMatch(id: string, token: string): Promise<void> {
 // error instead of inventing endpoints; replace each with a request once the API provides it.
 const notImplemented = () => new ApiError(501, 'not_implemented', ['not_implemented'])
 
-/** Arenas are global, one ESP32 box each. No API yet. */
+function toManagedArena(api: ApiArena): ManagedArena {
+  return {
+    id: api.id,
+    name: api.name,
+    deviceId: api.deviceId,
+    currentMatch: api.currentMatch && {
+      robotAName: api.currentMatch.robotAName,
+      robotBName: api.currentMatch.robotBName,
+    },
+  }
+}
+
+/** GET /arenas (JWT). The account's own arenas. */
+export async function getMyArenas(token: string): Promise<ManagedArena[]> {
+  return (await listArenas(token)).map(toManagedArena)
+}
+
+/** POST /arenas (JWT). The credentials (with the plain token) come only in this response. */
+export async function addArena(
+  name: string,
+  token: string,
+): Promise<{ arena: ManagedArena; credentials: DeviceCredentials }> {
+  const { arena, credentials } = await createArena(name, token)
+  return { arena: toManagedArena(arena), credentials }
+}
+
+/** PATCH /arenas/:id (JWT). The device id does not change. */
+export async function renameArena(id: string, name: string, token: string): Promise<ManagedArena> {
+  return toManagedArena(await patchArena(id, name, token))
+}
+
+/** POST /arenas/:id/token (JWT). The old token stops working; refused while a match is live. */
+export async function newArenaToken(id: string, token: string): Promise<DeviceCredentials> {
+  return rotateArenaToken(id, token)
+}
+
+/** DELETE /arenas/:id (JWT). Refused while a match is live. */
+export async function removeArena(id: string, token: string): Promise<void> {
+  return deleteArena(id, token)
+}
+
+/** Arenas belong to an account, one ESP32 box each. No operator API yet (see getMyArenas for the owner's list). */
 export const getArenas: (championshipId: string) => Promise<Arena[]> = async () => {
   throw notImplemented()
 }
