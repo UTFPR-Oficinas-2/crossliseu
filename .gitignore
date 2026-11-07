@@ -150,4 +150,4 @@ __pycache__/
 venv/
 
 # firmware config file that is pasted from the web app
-firmware/config.h
+apps/firmware/config.h

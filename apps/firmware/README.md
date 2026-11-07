@@ -1,8 +1,8 @@
 # Firmware
 
-Experimental ESP32 sketch: a countdown timer driving an RGB LED strip, with a physical stop button. Part of the [Crossliseu](../README.md) monorepo. Code comments are in Portuguese.
+Experimental ESP32 sketch: a countdown timer driving an RGB LED strip, with a physical stop button. Part of the [Crossliseu](../../README.md) monorepo. Code comments are in Portuguese.
 
-The box talks to the API over the [`/arena` WebSocket protocol](../docs/arena-protocol.md), which also defines the LED colors and the module functions (`showTime`, `showMessage`, `setLedState`, `pollButtons`).
+The box talks to the API over the [`/arena` WebSocket protocol](../../docs/arena-protocol.md), which also defines the LED colors and the module functions (`showTime`, `showMessage`, `setLedState`, `pollButtons`).
 
 ## Usage
 
@@ -21,7 +21,7 @@ Each box needs its own `config.h` next to the sketch. Get it from the web app: *
 
 No code reads these defines yet; the connection to the API is tracked in #19.
 
-To test the arena flow without the hardware, the simulator in [`tools/arena-sim`](../tools/arena-sim/arena-sim.mjs) logs in with the same `config.h`: `node tools/arena-sim/arena-sim.mjs --config firmware/config.h`.
+To test the arena flow without the hardware, the simulator in [`tools/arena-sim`](../../tools/arena-sim/arena-sim.mjs) logs in with the same `config.h`: `node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h`.
 
 ## Strip states
 
