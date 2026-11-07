@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppNav from '@/components/ui/AppNav.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
 import { getArenas, getChampionship, getMatchSummary, getRobots } from '@/data'
+import { useSignOut } from '@/composables/useSignOut'
 import { useAuthStore } from '@/stores/auth'
 import type { Arena, Championship, MatchState, MatchSummary, Robot } from '@/types'
 
@@ -37,7 +38,8 @@ const robots = ref<Robot[]>([])
 
 // Data loading lives here. A failed load leaves the layout empty (every step reads as upcoming)
 // instead of throwing into the router. The fight's arena is the one whose current match it is:
-// the server keeps that link, so a reload finds the same arena again.
+// the server keeps that link, so a reload finds the same arena again. Arenas load on their own:
+// failing them only loses the arena badge, not the fight.
 let loadId = 0
 async function load(matchId: string) {
   const current = ++loadId
@@ -50,7 +52,10 @@ async function load(matchId: string) {
           loadedMatch,
           ...(await Promise.all([
             getChampionship(loadedMatch.championshipId),
-            getArenas(auth.token ?? ''),
+            getArenas(auth.token ?? '').catch((error: unknown) => {
+              console.error('Could not load the arenas', error)
+              return []
+            }),
             getRobots(loadedMatch.championshipId),
           ])),
         ]
@@ -106,11 +111,7 @@ function exitOperation() {
 // The picker (`/operator`, Figma OPE-01) has no fight yet and uses the app navigation
 const onPicker = computed(() => !route.params.matchId)
 
-async function handleSignOut() {
-  // Sign out only once we actually left
-  const failure = await router.push({ name: 'home' })
-  if (!failure) auth.signOut()
-}
+const handleSignOut = useSignOut()
 </script>
 
 <template>

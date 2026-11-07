@@ -86,9 +86,12 @@ export function actionHint(arena: Arena | null): string {
   return `A luta fica na ${arena.name} até você fechá-la. A caixa da arena passa a mostrar os nomes e o tempo.`
 }
 
-/** A fight already current on another arena can't be picked (409 `match_already_current`) */
-export function fightDisabled(option: FightOption, selectedArenaId: string | null): boolean {
-  return option.heldBy !== null && option.heldBy.id !== selectedArenaId
+/**
+ * A fight already current on an arena can't be picked (409 `match_already_current`). That arena
+ * is busy and can't be chosen either; its "Ir para a luta" link leads back to the fight.
+ */
+export function fightDisabled(option: FightOption): boolean {
+  return option.heldBy !== null
 }
 
 const NOT_FOUND = 'Arena ou luta não encontrada. Atualize a página.'

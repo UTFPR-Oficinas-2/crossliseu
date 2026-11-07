@@ -115,6 +115,21 @@ describe('OperatorLayout', () => {
     expect(wrapper.findComponent(OperatorNav).props('arenaConnected')).toBe(true)
   })
 
+  it('keeps the fight when only the arenas fail to load', async () => {
+    vi.mocked(getArenas).mockRejectedValue(new Error('network'))
+
+    const wrapper = await mountAt('/operator/m1')
+
+    expect(wrapper.findComponent(OperatorNav).props()).toMatchObject({
+      arena: '',
+      championship: 'Copa',
+      robotA: 'Titã',
+      robotB: 'Marte',
+      arenaConnected: false,
+    })
+    expect(wrapper.find('[aria-current="step"]').text()).toBe('1 · Preparação')
+  })
+
   it('loads nothing on the picker route', async () => {
     const wrapper = await mountAt('/operator')
 

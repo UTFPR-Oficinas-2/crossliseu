@@ -87,18 +87,12 @@ describe('fightDisabled', () => {
   const [held] = fightOptions([match('m1', 'scheduled', at)], robots, [arena('a2', 'm1')])
   const [free] = fightOptions([match('m1', 'scheduled', at)], robots, [])
 
-  it('allows a fight held by the selected arena', () => {
-    expect(fightDisabled(held!, 'a2')).toBe(false)
-  })
-
-  it('blocks a fight held by another arena, or when no arena is selected', () => {
-    expect(fightDisabled(held!, 'a1')).toBe(true)
-    expect(fightDisabled(held!, null)).toBe(true)
+  it('blocks a fight an arena already holds', () => {
+    expect(fightDisabled(held!)).toBe(true)
   })
 
   it('allows a fight no arena holds', () => {
-    expect(fightDisabled(free!, null)).toBe(false)
-    expect(fightDisabled(free!, 'a1')).toBe(false)
+    expect(fightDisabled(free!)).toBe(false)
   })
 })
 

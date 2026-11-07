@@ -4,7 +4,7 @@
 // (PUT /arenas/:id/current-match) and opens /operator/:matchId. The championship, arena and fight
 // live in the URL query, and the server keeps the pick, so a reload restores both screens.
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { isNavigationFailure, useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import ChoiceItem from '@/components/ui/ChoiceItem.vue'
 import SelectField from '@/components/ui/SelectField.vue'
@@ -59,10 +59,9 @@ const isPickable = (id: string) => arenas.value.some((a) => a.id === id && !aren
 
 const fights = computed(() => fightOptions(matches.value, robots.value, arenas.value))
 
-// The chosen fight only counts while it is still listed and pickable for the chosen arena
+// The chosen fight only counts while it is still listed and pickable
 const findPickableFight = (id: string | null) =>
-  fights.value.find((fight) => fight.match.id === id && !fightDisabled(fight, arenaId.value)) ??
-  null
+  fights.value.find((fight) => fight.match.id === id && !fightDisabled(fight)) ?? null
 
 /** The query the current choice should have */
 function stateQuery(): Record<string, string> {
@@ -101,7 +100,8 @@ function applyQuery() {
   const arenaFromQuery = queryId('arenaId')
   arenaId.value = isPickable(arenaFromQuery) ? arenaFromQuery : null
   matchId.value = null
-  pendingMatchId.value = queryId('matchId')
+  // Without a championship no fight list loads to check it against, so it is dropped
+  pendingMatchId.value = championship ? queryId('matchId') : ''
   // A new championship loads its fights first (see the watcher); the same one has them already
   if (sameChampionship) adoptPendingFight()
   syncQuery()
@@ -146,7 +146,7 @@ async function loadFights(id: string, { quiet = false } = {}) {
   } catch (error) {
     if (current !== fightsLoadId) return
     console.error('Could not load the fights', error)
-    fightsStatus.value = 'error'
+    if (!quiet) fightsStatus.value = 'error'
   }
 }
 
@@ -188,25 +188,43 @@ const canOpen = computed(
   () => !opening.value && selectedArena.value !== null && selectedFight.value !== null,
 )
 
+const RUN_VIEW_REFUSED = 'A luta foi aberta na arena, mas a tela dela não abriu. Use “Ir para a luta”.'
+
+/** Shows the current arenas and fights, dropping a choice that is no longer usable */
+async function refreshAfterPick() {
+  try {
+    arenas.value = await getArenas(token())
+    if (arenaId.value && !isPickable(arenaId.value)) arenaId.value = null
+  } catch (reloadError) {
+    console.error('Could not reload the arenas', reloadError)
+  }
+  await loadFights(championshipId.value, { quiet: true })
+  // Drop a fight the server refused: it left the list or is open on another arena now
+  if (!selectedFight.value) matchId.value = null
+}
+
 async function openFight() {
   if (!canOpen.value || !arenaId.value || !matchId.value) return
+  // The choice is locked while saving; these keep the pick sent to the server the one opened
+  const arena = arenaId.value
+  const fight = matchId.value
   opening.value = true
   pickError.value = ''
   try {
-    await selectArenaMatch(arenaId.value, matchId.value, token())
-    await router.push({ name: 'match-operation', params: { matchId: matchId.value } })
-  } catch (error) {
-    pickError.value = pickErrorMessage(error)
-    // Someone else may have changed the arenas or the fight: show the current state
     try {
-      arenas.value = await getArenas(token())
-      if (arenaId.value && !isPickable(arenaId.value)) arenaId.value = null
-    } catch (reloadError) {
-      console.error('Could not reload the arenas', reloadError)
+      await selectArenaMatch(arena, fight, token())
+    } catch (error) {
+      pickError.value = pickErrorMessage(error)
+      // Someone else may have changed the arenas or the fight
+      await refreshAfterPick()
+      return
     }
-    await loadFights(championshipId.value, { quiet: true })
-    // Drop a fight the server refused: it left the list or is open on another arena now
-    if (!selectedFight.value) matchId.value = null
+    const failure = await router.push({ name: 'match-operation', params: { matchId: fight } })
+    if (isNavigationFailure(failure)) {
+      // The arena holds the fight now: the refreshed list links to it
+      pickError.value = RUN_VIEW_REFUSED
+      await refreshAfterPick()
+    }
   } finally {
     opening.value = false
   }
@@ -233,7 +251,7 @@ async function openFight() {
     <template v-else>
       <div class="operator-home__columns">
         <section class="operator-home__card">
-          <fieldset class="operator-home__group">
+          <fieldset class="operator-home__group" :disabled="opening">
             <legend class="operator-home__card-title text-heading-m">1 · Arena</legend>
             <p class="operator-home__muted text-body-s">Cada arena roda uma luta por vez.</p>
             <template v-for="{ arena, meta, pill, disabled } in arenaRows" :key="arena.id">
@@ -266,7 +284,7 @@ async function openFight() {
         </section>
 
         <section class="operator-home__card">
-          <fieldset class="operator-home__group">
+          <fieldset class="operator-home__group" :disabled="opening">
             <legend class="operator-home__card-title text-heading-m">2 · Luta</legend>
             <p class="operator-home__muted text-body-s">
               Só aparecem lutas programadas do campeonato escolhido.
@@ -302,7 +320,7 @@ async function openFight() {
                 :value="fight.match.id"
                 :title="`${fight.robotA} × ${fight.robotB}`"
                 :meta="fightMeta(fight)"
-                :disabled="fightDisabled(fight, arenaId)"
+                :disabled="fightDisabled(fight)"
               >
                 <template #status>
                   <StatusPill
