@@ -11,6 +11,10 @@ class VideoCapture():
         if not self.capture.isOpened():
             raise RuntimeError(f"Couldn't open the video: {video_source}")
 
+        # Frames per second, used for timestamp = frame_index / fps.
+        # Some files report 0; fall back to 30 so the division never breaks.
+        self.fps = self.capture.get(cv2.CAP_PROP_FPS) or 30.0
+
     def read_frame(self):
         ret, frame = self.capture.read()
         #print(frame.shape)
