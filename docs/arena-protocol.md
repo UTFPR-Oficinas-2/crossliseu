@@ -1,6 +1,6 @@
 # `/arena` WebSocket protocol
 
-The contract between an arena's ESP32 box and the API. The firmware (`firmware/`) and the gateway (`apps/api`) are built against this document, so a change here is a change to both.
+The contract between an arena's ESP32 box and the API. The firmware (`apps/firmware/`) and the gateway (`apps/api`) are built against this document, so a change here is a change to both.
 
 ## Roles
 
@@ -52,7 +52,7 @@ Until `welcome` arrives, the box shows **not connected**, even if the socket is 
 [`tools/arena-sim/arena-sim.mjs`](../tools/arena-sim/arena-sim.mjs) plays the box from a terminal: it sends `hello`, prints every message, sends `surrender` A or B on a key press, and reconnects with the backoff below. It reads the same `config.h` the box is flashed with. See the header of the script for usage.
 
 ```sh
-node tools/arena-sim/arena-sim.mjs --config firmware/config.h --url ws://localhost:3000/arena
+node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h --url ws://localhost:3000/arena
 ```
 
 ## Envelope

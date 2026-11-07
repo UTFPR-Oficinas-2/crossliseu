@@ -36,7 +36,7 @@ Crossliseu lets the public follow championships and fights, organizers manage th
 apps/api           NestJS REST API
 apps/web           Vue single-page app
 apps/cv-worker     Computer-vision worker (planned)
-firmware           ESP32 countdown timer sketch
+apps/firmware      ESP32 arena box firmware
 deploy/nginx       Host NGINX config for production
 compose.yml        Dev stack (api, web, postgres)
 compose.prod.yml   Production stack
@@ -137,7 +137,7 @@ Running it again for an existing username updates that user's email and password
 
 - [API guide](apps/api/README.md)
 - [Web guide](apps/web/README.md)
-- [Firmware](firmware/README.md)
+- [Firmware](apps/firmware/README.md)
 
 ## License
 

@@ -7,7 +7,7 @@
 //
 // Usage
 //   node tools/arena-sim/arena-sim.mjs --url <ws-url> --device-id <id> --token <token>
-//   node tools/arena-sim/arena-sim.mjs --config firmware/config.h
+//   node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h
 //
 // Options (flags beat env vars, env vars beat --config)
 //   --url <ws-url>        ARENA_URL         e.g. ws://localhost:3000/arena
@@ -33,7 +33,7 @@
 // Examples
 //   ARENA_URL=ws://localhost:3000/arena ARENA_DEVICE_ID=arena-01-ab12 ARENA_TOKEN=... \
 //     node tools/arena-sim/arena-sim.mjs
-//   node tools/arena-sim/arena-sim.mjs --config firmware/config.h --url ws://localhost:3000/arena
+//   node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h --url ws://localhost:3000/arena
 //
 // Tests: node --test 'tools/**/*.test.mjs'
 
