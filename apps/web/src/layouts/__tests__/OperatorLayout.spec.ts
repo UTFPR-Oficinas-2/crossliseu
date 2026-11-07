@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import AppNav from '@/components/ui/AppNav.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import { liveToken } from '@/stores/__tests__/token-helpers'
@@ -57,6 +58,8 @@ async function mountAt(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', name: 'home', component: stub },
+      { path: '/manage', name: 'my-championships', component: stub },
       { path: '/manage/:championshipId/matches', name: 'championship-matches', component: stub },
       {
         path: '/operator',
@@ -117,5 +120,18 @@ describe('OperatorLayout', () => {
 
     expect(getMatchSummary).not.toHaveBeenCalled()
     expect(wrapper.findComponent(OperatorNav).exists()).toBe(false)
+  })
+
+  it('shows the app navigation on the picker route, with Operação current', async () => {
+    const wrapper = await mountAt('/operator')
+
+    expect(wrapper.findComponent(AppNav).exists()).toBe(true)
+    expect(wrapper.find('a[aria-current="page"]').text()).toBe('Operação')
+  })
+
+  it('keeps the operator navigation, not the app one, while running a fight', async () => {
+    const wrapper = await mountAt('/operator/m1')
+
+    expect(wrapper.findComponent(AppNav).exists()).toBe(false)
   })
 })
