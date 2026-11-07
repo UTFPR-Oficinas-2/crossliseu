@@ -151,3 +151,6 @@ venv/
 
 # firmware config file that is pasted from the web app
 apps/firmware/config.h
+
+# PlatformIO build output
+apps/firmware/.pio
