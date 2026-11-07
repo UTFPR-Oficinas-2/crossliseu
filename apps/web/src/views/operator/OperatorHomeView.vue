@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Figma: `OPE-01 Escolher arena e luta` (node 152:585), #37. The operator picks an arena, then a
 // scheduled fight of one of their championships; "Abrir luta" makes it the arena's current match
-// (PUT /arenas/:id/current-match) and opens /operator/:matchId. The championship and arena live
-// in the URL query, and the server keeps the pick, so a reload restores both screens.
+// (PUT /arenas/:id/current-match) and opens /operator/:matchId. The championship, arena and fight
+// live in the URL query, and the server keeps the pick, so a reload restores both screens.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -43,8 +43,12 @@ const fightsStatus = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
 const championshipId = ref('')
 const arenaId = ref<string | null>(null)
 const matchId = ref<string | null>(null)
+// A fight id read from the URL, held until its championship's fights load and it can be checked
+const pendingMatchId = ref('')
 const opening = ref(false)
 const pickError = ref('')
+
+const QUERY_KEYS = ['championshipId', 'arenaId', 'matchId'] as const
 
 const queryId = (key: string) => {
   const value = route.query[key]
@@ -52,6 +56,56 @@ const queryId = (key: string) => {
 }
 
 const isPickable = (id: string) => arenas.value.some((a) => a.id === id && !arenaChoice(a).disabled)
+
+const fights = computed(() => fightOptions(matches.value, robots.value, arenas.value))
+
+// The chosen fight only counts while it is still listed and pickable for the chosen arena
+const findPickableFight = (id: string | null) =>
+  fights.value.find((fight) => fight.match.id === id && !fightDisabled(fight, arenaId.value)) ??
+  null
+
+/** The query the current choice should have */
+function stateQuery(): Record<string, string> {
+  const query: Record<string, string> = {}
+  if (championshipId.value) query.championshipId = championshipId.value
+  if (arenaId.value) query.arenaId = arenaId.value
+  const fight = matchId.value ?? pendingMatchId.value
+  if (fight) query.matchId = fight
+  return query
+}
+
+const queryMatchesState = () => {
+  const query = stateQuery()
+  return QUERY_KEYS.every((key) => queryId(key) === (query[key] ?? ''))
+}
+
+// Keep the choice in the URL so a reload restores it
+function syncQuery() {
+  if (route.name !== 'operator' || queryMatchesState()) return
+  router.replace({ query: stateQuery() })
+}
+
+function adoptPendingFight() {
+  if (!pendingMatchId.value || fightsStatus.value !== 'ready') return
+  matchId.value = findPickableFight(pendingMatchId.value)?.match.id ?? null
+  pendingMatchId.value = ''
+}
+
+/** Takes the choice from the URL. Ids count only if they still exist and are usable. */
+function applyQuery() {
+  const fromQuery = queryId('championshipId')
+  const only = championships.value.length === 1 ? championships.value[0]!.id : ''
+  const championship = championships.value.some((c) => c.id === fromQuery) ? fromQuery : only
+  const sameChampionship = championship === championshipId.value
+  championshipId.value = championship
+  const arenaFromQuery = queryId('arenaId')
+  arenaId.value = isPickable(arenaFromQuery) ? arenaFromQuery : null
+  matchId.value = null
+  pendingMatchId.value = queryId('matchId')
+  // A new championship loads its fights first (see the watcher); the same one has them already
+  if (sameChampionship) adoptPendingFight()
+  syncQuery()
+}
 
 async function loadBase() {
   status.value = 'loading'
@@ -67,17 +121,13 @@ async function loadBase() {
     status.value = 'error'
     return
   }
-  // Ids from the URL count only if they still exist and are usable
-  const fromQuery = queryId('championshipId')
-  const only = championships.value.length === 1 ? championships.value[0]!.id : ''
-  championshipId.value = championships.value.some((c) => c.id === fromQuery) ? fromQuery : only
-  const arenaFromQuery = queryId('arenaId')
-  arenaId.value = isPickable(arenaFromQuery) ? arenaFromQuery : null
+  applyQuery()
   status.value = 'ready'
 }
 
 let fightsLoadId = 0
-async function loadFights(id: string) {
+/** `quiet` keeps the current list on screen while it reloads */
+async function loadFights(id: string, { quiet = false } = {}) {
   const current = ++fightsLoadId
   if (!id) {
     matches.value = []
@@ -85,13 +135,14 @@ async function loadFights(id: string) {
     fightsStatus.value = 'idle'
     return
   }
-  fightsStatus.value = 'loading'
+  if (!quiet) fightsStatus.value = 'loading'
   try {
     const [loadedMatches, loadedRobots] = await Promise.all([getMatchSummaries(id), getRobots(id)])
     if (current !== fightsLoadId) return
     matches.value = loadedMatches
     robots.value = loadedRobots
     fightsStatus.value = 'ready'
+    adoptPendingFight()
   } catch (error) {
     if (current !== fightsLoadId) return
     console.error('Could not load the fights', error)
@@ -104,25 +155,24 @@ watch(championshipId, (id) => {
   loadFights(id)
 })
 
-// Keep the choice in the URL so a reload restores it
-watch([championshipId, arenaId], ([championship, arena]) => {
-  const query: Record<string, string> = {}
-  if (championship) query.championshipId = championship
-  if (arena) query.arenaId = arena
-  if (
-    queryId('championshipId') === (query.championshipId ?? '') &&
-    queryId('arenaId') === (query.arenaId ?? '')
-  )
-    return
-  router.replace({ query })
-})
+watch([championshipId, arenaId, matchId, pendingMatchId], syncQuery)
+
+// Following a link to the picker while on it (AppNav "Operação") changes only the query
+watch(
+  () => route.query,
+  () => {
+    if (route.name === 'operator' && status.value === 'ready' && !queryMatchesState()) {
+      applyQuery()
+    }
+  },
+)
 
 loadBase()
 
 const championshipOptions = computed(() =>
   championships.value.map((c) => ({ value: c.id, label: c.name })),
 )
-const fights = computed(() => fightOptions(matches.value, robots.value, arenas.value))
+const arenaRows = computed(() => arenas.value.map((arena) => ({ arena, ...arenaChoice(arena) })))
 const selectedArena = computed(() => arenas.value.find((a) => a.id === arenaId.value) ?? null)
 
 const championshipHint = computed(() => {
@@ -132,13 +182,7 @@ const championshipHint = computed(() => {
   return `${count} ${count === 1 ? 'luta programada' : 'lutas programadas'}`
 })
 
-// The chosen fight only counts while it is still listed and pickable for the chosen arena
-const selectedFight = computed(
-  () =>
-    fights.value.find(
-      (fight) => fight.match.id === matchId.value && !fightDisabled(fight, arenaId.value),
-    ) ?? null,
-)
+const selectedFight = computed(() => findPickableFight(matchId.value))
 
 const canOpen = computed(
   () => !opening.value && selectedArena.value !== null && selectedFight.value !== null,
@@ -160,7 +204,7 @@ async function openFight() {
     } catch (reloadError) {
       console.error('Could not reload the arenas', reloadError)
     }
-    await loadFights(championshipId.value)
+    await loadFights(championshipId.value, { quiet: true })
     // Drop a fight the server refused: it left the list or is open on another arena now
     if (!selectedFight.value) matchId.value = null
   } finally {
@@ -192,20 +236,17 @@ async function openFight() {
           <fieldset class="operator-home__group">
             <legend class="operator-home__card-title text-heading-m">1 · Arena</legend>
             <p class="operator-home__muted text-body-s">Cada arena roda uma luta por vez.</p>
-            <template v-for="arena in arenas" :key="arena.id">
+            <template v-for="{ arena, meta, pill, disabled } in arenaRows" :key="arena.id">
               <ChoiceItem
                 v-model="arenaId"
                 name="arena"
                 :value="arena.id"
                 :title="arena.name"
-                :meta="arenaChoice(arena).meta"
-                :disabled="arenaChoice(arena).disabled"
+                :meta="meta"
+                :disabled="disabled"
               >
                 <template #status>
-                  <StatusPill
-                    :label="arenaChoice(arena).pill.label"
-                    :tone="arenaChoice(arena).pill.tone"
-                  />
+                  <StatusPill :label="pill.label" :tone="pill.tone" />
                 </template>
               </ChoiceItem>
               <!-- Outside the card so it stays disabled: the way back to the arena's open fight -->
@@ -334,6 +375,13 @@ async function openFight() {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
+}
+
+@media (max-width: 767px) {
+  .operator-home__card,
+  .operator-home__action-bar {
+    padding: var(--space-4);
+  }
 }
 
 .operator-home__group {

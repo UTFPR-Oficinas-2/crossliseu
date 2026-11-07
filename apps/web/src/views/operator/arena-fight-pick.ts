@@ -1,4 +1,4 @@
-// Pure rules for ArenaFightPickView: which fights can be picked for an arena, how an arena's
+// Pure rules for OperatorHomeView: which fights can be picked for an arena, how an arena's
 // connection reads, and what to say when the API refuses the pick.
 import { ApiError } from '@/api/client'
 import type { StatusTone } from '@/components/ui/status-pill'

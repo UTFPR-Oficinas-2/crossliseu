@@ -168,6 +168,12 @@ async function handleSignOut() {
   padding: var(--space-7) var(--space-8) var(--space-9);
 }
 
+@media (max-width: 767px) {
+  .operator-layout__content {
+    padding-inline: var(--space-page-x-mobile);
+  }
+}
+
 .operator-steps {
   display: flex;
   align-items: center;

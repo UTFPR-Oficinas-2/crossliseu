@@ -43,6 +43,26 @@ describe('ChoiceItem', () => {
     expect(wrapper.get('label').classes()).toContain('choice-item--disabled')
   })
 
+  it('names the radio by its title and describes it with the meta and status', () => {
+    const wrapper = mount(ChoiceItem, {
+      props,
+      slots: { status: '<span class="pill">Conectado</span>' },
+      attachTo: document.body,
+    })
+    const radio = wrapper.get('input')
+    const textOf = (ids: string) =>
+      ids
+        .split(' ')
+        .map((id) => document.getElementById(id)?.textContent?.trim())
+        .join(' | ')
+
+    expect(textOf(radio.attributes('aria-labelledby')!)).toBe('Arena 01')
+    expect(textOf(radio.attributes('aria-describedby')!)).toBe(
+      'Livre · caixa da arena conectada | Conectado',
+    )
+    wrapper.unmount()
+  })
+
   it('renders the status slot', () => {
     const wrapper = mount(ChoiceItem, {
       props,

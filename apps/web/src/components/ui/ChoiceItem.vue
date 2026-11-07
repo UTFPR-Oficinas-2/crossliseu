@@ -2,6 +2,8 @@
 // Figma: `Choice / Item` (node 152:584), used by OPE-01 (#37). A single-choice card: a native
 // radio, so a group of them sharing `name` inside a <fieldset> behaves as a radio group. Disabled
 // cards stay visible and say why in `meta`.
+import { useId } from 'vue'
+
 const {
   modelValue,
   value,
@@ -21,6 +23,13 @@ const {
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+
+// The radio is named by the title alone and described by the meta and status, so a screen reader
+// doesn't read the whole card as its label
+const id = useId()
+const titleId = `${id}-title`
+const metaId = `${id}-meta`
+const statusId = `${id}-status`
 </script>
 
 <template>
@@ -38,6 +47,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
       :value="value"
       :checked="modelValue === value"
       :disabled="disabled"
+      :aria-labelledby="titleId"
+      :aria-describedby="`${metaId} ${statusId}`"
       @change="emit('update:modelValue', value)"
     />
     <svg
@@ -50,11 +61,14 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
     >
       <circle cx="9" cy="9" r="8" stroke-width="2" />
     </svg>
-    <span class="choice-item__text">
-      <span class="choice-item__title text-heading-s">{{ title }}</span>
-      <span class="choice-item__meta text-body-s">{{ meta }}</span>
+    <!-- Wraps on narrow cards: the status drops under the text instead of squeezing it -->
+    <span class="choice-item__body">
+      <span class="choice-item__text">
+        <span :id="titleId" class="choice-item__title text-heading-s">{{ title }}</span>
+        <span :id="metaId" class="choice-item__meta text-body-s">{{ meta }}</span>
+      </span>
+      <span :id="statusId" class="choice-item__status"><slot name="status" /></span>
     </span>
-    <slot name="status" />
   </label>
 </template>
 
@@ -96,12 +110,26 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
   stroke: var(--color-orange);
 }
 
-.choice-item__text {
+.choice-item__body {
   display: flex;
   flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-14px);
+  min-width: 0;
+}
+
+.choice-item__text {
+  display: flex;
+  flex: 1 1 var(--size-choice-text-min);
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+}
+
+.choice-item__status {
+  display: flex;
+  flex: 0 0 auto;
 }
 
 .choice-item__title {

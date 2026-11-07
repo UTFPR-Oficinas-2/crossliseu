@@ -215,6 +215,78 @@ describe('OperatorHomeView', () => {
     expect(wrapper.text()).toContain('Escolha um campeonato.')
   })
 
+  it('removes the ids it ignored from the URL', async () => {
+    vi.mocked(getManagedChampionships).mockResolvedValue([
+      championship('c1', 'Copa Crossliseu 2026'),
+      championship('c2', 'Copa de Inverno'),
+    ])
+    const { router } = await mountAt('/operator?championshipId=someone-else&arenaId=a3')
+
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
+  it('keeps the chosen fight in the URL so a reload restores it', async () => {
+    const first = await mountAt('/operator')
+    await choose(first.wrapper, '1 · Arena', 'Arena 01')
+    await choose(first.wrapper, '2 · Luta', 'Marte × Cobalto')
+    expect(first.router.currentRoute.value.query).toEqual({
+      championshipId: 'c1',
+      arenaId: 'a1',
+      matchId: 'm1',
+    })
+    first.wrapper.unmount()
+
+    const { wrapper, router } = await mountAt('/operator?championshipId=c1&arenaId=a1&matchId=m1')
+
+    const fight = card(wrapper, '2 · Luta', 'Marte × Cobalto')
+    expect((fight.get('input').element as HTMLInputElement).checked).toBe(true)
+    expect(openButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(router.currentRoute.value.query.matchId).toBe('m1')
+  })
+
+  it('ignores a fight in the URL that can no longer be picked', async () => {
+    const { wrapper, router } = await mountAt('/operator?championshipId=c1&arenaId=a1&matchId=m2')
+
+    expect(wrapper.findAll('input[name="fight"]:checked')).toHaveLength(0)
+    expect(router.currentRoute.value.query).toEqual({ championshipId: 'c1', arenaId: 'a1' })
+  })
+
+  it('starts over when the Operação link is followed from the picker', async () => {
+    vi.mocked(getManagedChampionships).mockResolvedValue([
+      championship('c1', 'Copa Crossliseu 2026'),
+      championship('c2', 'Copa de Inverno'),
+    ])
+    const { wrapper, router } = await mountAt('/operator?championshipId=c1&arenaId=a2')
+    await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
+
+    await router.push('/operator')
+    await flushPromises()
+
+    expect(wrapper.findAll('input:checked')).toHaveLength(0)
+    expect(wrapper.text()).toContain('Escolha um campeonato.')
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
+  it('keeps the fights listed while it rechecks them after a refused pick', async () => {
+    vi.mocked(selectArenaMatch).mockRejectedValue(
+      new ApiError(409, 'arena_match_started', ['arena_match_started']),
+    )
+    const { wrapper } = await mountAt('/operator')
+    await choose(wrapper, '1 · Arena', 'Arena 01')
+    await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
+    let release!: (value: MatchSummary[]) => void
+    vi.mocked(getMatchSummaries).mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+
+    await openButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Carregando lutas…')
+    expect(cards(wrapper, '2 · Luta')).toHaveLength(2)
+    release([match('m1', 'scheduled')])
+    await flushPromises()
+    expect(cards(wrapper, '2 · Luta')).toHaveLength(1)
+  })
+
   it('marks a fight already open on another arena and blocks it', async () => {
     vi.mocked(getArenas).mockResolvedValue([
       freeArena('a1', 'Arena 01'),
