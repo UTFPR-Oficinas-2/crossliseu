@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import type { DataSource } from 'typeorm';
+import { User } from '../src/modules/users/entities/user.entity.js';
 import {
     createTestApp,
     createUser,
@@ -77,6 +78,29 @@ describe('auth, guards and validation (e2e)', () => {
             .post('/championships')
             .set('Authorization', `Bearer ${forged}`)
             .send({})
+            .expect(401);
+    });
+
+    // A token outlives its user when the database is reset or reseeded; the request must be
+    // refused up front, not fail later on a foreign key with a 500
+    it('rejects a valid token whose user no longer exists', async () => {
+        const token = await loginToken(app, 'admin', 'right-password');
+        await ds.getRepository(User).delete({ username: 'admin' });
+
+        await http()
+            .post('/arenas')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ name: 'Arena 01' })
+            .expect(401);
+    });
+
+    it('rejects a valid token whose user was soft-deleted', async () => {
+        const token = await loginToken(app, 'admin', 'right-password');
+        await ds.getRepository(User).softDelete({ username: 'admin' });
+
+        await http()
+            .get('/arenas')
+            .set('Authorization', `Bearer ${token}`)
             .expect(401);
     });
 

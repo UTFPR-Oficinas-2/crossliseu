@@ -18,6 +18,7 @@ vi.mock('@/api/arenas', () => ({
   renameArena: vi.fn<typeof arenasApi.renameArena>(),
   rotateArenaToken: vi.fn<typeof arenasApi.rotateArenaToken>(),
   deleteArena: vi.fn<typeof arenasApi.deleteArena>(),
+  setArenaCurrentMatch: vi.fn<typeof arenasApi.setArenaCurrentMatch>(),
 }))
 vi.mock('@/api/robots', () => ({
   listRobots: vi.fn<typeof robotsApi.listRobots>(),
@@ -39,6 +40,7 @@ import {
   listArenas,
   renameArena as patchArena,
   rotateArenaToken,
+  setArenaCurrentMatch,
   type ApiArena,
 } from '@/api/arenas'
 import {
@@ -61,7 +63,9 @@ import {
   getMatch,
   getManagedChampionships,
   getMatchSummaries,
+  getMatchSummary,
   matchChampionshipId,
+  selectArenaMatch,
   ownsChampionship,
   getRefereeAccess,
   getRobots,
@@ -239,7 +243,6 @@ describe('@/data', () => {
   })
 
   it('rejects data the API does not provide yet instead of serving demo data', async () => {
-    await expect(getArenas('c1')).rejects.toMatchObject({ status: 501, message: 'not_implemented' })
     await expect(getMatch('m1')).rejects.toMatchObject({ status: 501 })
     await expect(getRefereeAccess('token')).rejects.toMatchObject({ status: 501 })
   })
@@ -298,5 +301,76 @@ describe('@/data', () => {
     vi.mocked(deleteArena).mockRejectedValue(new ApiError(409, 'arena_match_live'))
 
     await expect(removeArena('a1', 't')).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('maps API arenas to the operator Arena with the online flag and current match', async () => {
+    vi.mocked(listArenas).mockResolvedValue([
+      apiArena,
+      { ...apiArena, id: 'a2', online: true, currentMatchId: null, currentMatch: null },
+    ])
+
+    const list = await getArenas('t')
+
+    expect(listArenas).toHaveBeenCalledWith('t')
+    expect(list).toEqual([
+      {
+        id: 'a1',
+        name: 'Arena da garagem',
+        online: false,
+        currentMatchId: 'm1',
+        currentMatch: { robotAName: 'Titã', robotBName: 'Volt' },
+      },
+      {
+        id: 'a2',
+        name: 'Arena da garagem',
+        online: true,
+        currentMatchId: null,
+        currentMatch: null,
+      },
+    ])
+  })
+
+  it('picks the arena match and maps the updated arena', async () => {
+    vi.mocked(setArenaCurrentMatch).mockResolvedValueOnce(apiArena)
+
+    expect(await selectArenaMatch('a1', 'm1', 't')).toEqual({
+      id: 'a1',
+      name: 'Arena da garagem',
+      online: false,
+      currentMatchId: 'm1',
+      currentMatch: { robotAName: 'Titã', robotBName: 'Volt' },
+    })
+    expect(setArenaCurrentMatch).toHaveBeenCalledWith('a1', 'm1', 't')
+  })
+
+  it('lets a refused pick through as ApiError', async () => {
+    vi.mocked(setArenaCurrentMatch).mockRejectedValueOnce(new ApiError(409, 'arena_match_started'))
+
+    await expect(selectArenaMatch('a1', 'm1', 't')).rejects.toMatchObject({
+      status: 409,
+      message: 'arena_match_started',
+    })
+  })
+
+  it('loads one match summary, or null for unknown or malformed ids', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(apiMatch)
+    vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(404, 'match_not_found'))
+    vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(400, 'bad uuid'))
+    vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(500, 'boom'))
+
+    expect(await getMatchSummary('m1')).toEqual({
+      id: 'm1',
+      championshipId: 'c1',
+      weightClass: 'beetleweight',
+      robotAId: 'r1',
+      robotBId: 'r2',
+      state: 'paused',
+      scheduledAt: '2026-12-09T13:00:00.000Z',
+      createdAt,
+      modifiedAt,
+    })
+    expect(await getMatchSummary('missing')).toBeNull()
+    expect(await getMatchSummary('not-a-uuid')).toBeNull()
+    await expect(getMatchSummary('m1')).rejects.toMatchObject({ status: 500 })
   })
 })

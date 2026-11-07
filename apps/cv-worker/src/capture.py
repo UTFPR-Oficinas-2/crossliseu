@@ -15,6 +15,10 @@ class VideoCapture():
         # Some files report 0; fall back to 30 so the division never breaks.
         self.fps = self.capture.get(cv2.CAP_PROP_FPS) or 30.0
 
+        # Frame size in pixels, used to validate that positions are inside the image
+        self.width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
     def read_frame(self):
         ret, frame = self.capture.read()
         #print(frame.shape)

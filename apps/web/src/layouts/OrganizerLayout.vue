@@ -2,22 +2,18 @@
 // Figma: `Navigation / App` + `Organizer / Shell` (from the former overview frame, node 2:15)
 // (sidebar 21:305, main 21:333). Only the frame is built here; page content goes in <RouterView />.
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter, type RouteRecordName } from 'vue-router'
+import { useRoute, type RouteRecordName } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppNav from '@/components/ui/AppNav.vue'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
 import { getChampionship } from '@/data'
+import { useSignOut } from '@/composables/useSignOut'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
-const router = useRouter()
 const auth = useAuthStore()
 
-async function handleSignOut() {
-  // Sign out only once we actually left (a form may block navigation with a confirmation)
-  const failure = await router.push({ name: 'home' })
-  if (!failure) auth.signOut()
-}
+const handleSignOut = useSignOut()
 
 /** Present only on the per-championship routes; `/manage` and `/manage/new` have no sidebar */
 const championshipId = computed(() => {

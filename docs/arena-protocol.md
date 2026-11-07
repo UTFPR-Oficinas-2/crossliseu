@@ -47,6 +47,14 @@ A second `hello` on a socket that already got `welcome` is answered with `error`
 
 Until `welcome` arrives, the box shows **not connected**, even if the socket is open.
 
+### Testing without a box
+
+[`tools/arena-sim/arena-sim.mjs`](../tools/arena-sim/arena-sim.mjs) plays the box from a terminal: it sends `hello`, prints every message, sends `surrender` A or B on a key press, and reconnects with the backoff below. It reads the same `config.h` the box is flashed with. See the header of the script for usage.
+
+```sh
+node tools/arena-sim/arena-sim.mjs --config firmware/config.h --url ws://localhost:3000/arena
+```
+
 ## Envelope
 
 Every message, in both directions:
