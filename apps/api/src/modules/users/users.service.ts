@@ -16,4 +16,9 @@ export class UsersService {
     findByUsername(username: string): Promise<User | null> {
         return this.usersRepository.findOneByUsername(username);
     }
+
+    /** Null when no live user has this id */
+    findById(id: string): Promise<User | null> {
+        return this.usersRepository.findOneById(id);
+    }
 }

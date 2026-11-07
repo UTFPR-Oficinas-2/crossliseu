@@ -14,4 +14,9 @@ export class UsersRepository {
     findOneByUsername(username: string): Promise<User | null> {
         return this.repository.findOneBy({ username });
     }
+
+    /** The live (not soft-deleted) user with this id */
+    findOneById(id: string): Promise<User | null> {
+        return this.repository.findOneBy({ id });
+    }
 }
