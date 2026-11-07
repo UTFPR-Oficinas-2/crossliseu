@@ -245,6 +245,54 @@ describe('OperatorHomeView', () => {
     expect(getArenas).toHaveBeenCalledTimes(2)
   })
 
+  it('drops a fight the server refused once it is no longer scheduled', async () => {
+    vi.mocked(selectArenaMatch).mockRejectedValue(
+      new ApiError(409, 'match_not_scheduled', ['match_not_scheduled']),
+    )
+    const { wrapper } = await mountAt('/operator')
+
+    await choose(wrapper, '1 · Arena', 'Arena 01')
+    await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
+    vi.mocked(getMatchSummaries).mockResolvedValue([
+      match('m1', 'ongoing'),
+      match('m5', 'scheduled'),
+    ])
+    await openButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('input[name="fight"]:checked')).toHaveLength(0)
+    expect(openButton(wrapper).attributes('disabled')).toBeDefined()
+  })
+
+  it('drops a fight the server says is already open on another arena', async () => {
+    vi.mocked(selectArenaMatch).mockRejectedValue(
+      new ApiError(409, 'match_already_current', ['match_already_current']),
+    )
+    const { wrapper } = await mountAt('/operator')
+
+    await choose(wrapper, '1 · Arena', 'Arena 01')
+    await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
+    vi.mocked(getArenas).mockResolvedValue([
+      ...arenas,
+      { ...freeArena('a4', 'Arena 04'), currentMatchId: 'm1' },
+    ])
+    await openButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(card(wrapper, '2 · Luta', 'Marte × Cobalto').text()).toContain('Aberta na Arena 04')
+    expect(wrapper.findAll('input[name="fight"]:checked')).toHaveLength(0)
+    expect(openButton(wrapper).attributes('disabled')).toBeDefined()
+  })
+
+  it("links a busy arena to its open fight's run view", async () => {
+    const { wrapper } = await mountAt('/operator')
+
+    const link = group(wrapper, '1 · Arena')
+      .findAll('a')
+      .find((a) => a.text() === 'Ir para a luta')!
+    expect(link.attributes('href')).toBe('/operator/m3')
+  })
+
   it('points to the Arenas page when the account has no arena', async () => {
     vi.mocked(getArenas).mockResolvedValue([])
     const { wrapper } = await mountAt('/operator')

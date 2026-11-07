@@ -132,8 +132,16 @@ const championshipHint = computed(() => {
   return `${count} ${count === 1 ? 'luta programada' : 'lutas programadas'}`
 })
 
+// The chosen fight only counts while it is still listed and pickable for the chosen arena
+const selectedFight = computed(
+  () =>
+    fights.value.find(
+      (fight) => fight.match.id === matchId.value && !fightDisabled(fight, arenaId.value),
+    ) ?? null,
+)
+
 const canOpen = computed(
-  () => !opening.value && selectedArena.value !== null && matchId.value !== null,
+  () => !opening.value && selectedArena.value !== null && selectedFight.value !== null,
 )
 
 async function openFight() {
@@ -153,6 +161,8 @@ async function openFight() {
       console.error('Could not reload the arenas', reloadError)
     }
     await loadFights(championshipId.value)
+    // Drop a fight the server refused: it left the list or is open on another arena now
+    if (!selectedFight.value) matchId.value = null
   } finally {
     opening.value = false
   }
@@ -182,23 +192,31 @@ async function openFight() {
           <fieldset class="operator-home__group">
             <legend class="operator-home__card-title text-heading-m">1 · Arena</legend>
             <p class="operator-home__muted text-body-s">Cada arena roda uma luta por vez.</p>
-            <ChoiceItem
-              v-for="arena in arenas"
-              :key="arena.id"
-              v-model="arenaId"
-              name="arena"
-              :value="arena.id"
-              :title="arena.name"
-              :meta="arenaChoice(arena).meta"
-              :disabled="arenaChoice(arena).disabled"
-            >
-              <template #status>
-                <StatusPill
-                  :label="arenaChoice(arena).pill.label"
-                  :tone="arenaChoice(arena).pill.tone"
-                />
-              </template>
-            </ChoiceItem>
+            <template v-for="arena in arenas" :key="arena.id">
+              <ChoiceItem
+                v-model="arenaId"
+                name="arena"
+                :value="arena.id"
+                :title="arena.name"
+                :meta="arenaChoice(arena).meta"
+                :disabled="arenaChoice(arena).disabled"
+              >
+                <template #status>
+                  <StatusPill
+                    :label="arenaChoice(arena).pill.label"
+                    :tone="arenaChoice(arena).pill.tone"
+                  />
+                </template>
+              </ChoiceItem>
+              <!-- Outside the card so it stays disabled: the way back to the arena's open fight -->
+              <RouterLink
+                v-if="arena.currentMatchId"
+                class="operator-home__resume text-label-s"
+                :to="{ name: 'match-operation', params: { matchId: arena.currentMatchId } }"
+              >
+                Ir para a luta
+              </RouterLink>
+            </template>
             <template v-if="arenas.length === 0">
               <p class="operator-home__muted text-body-s">Nenhuma arena cadastrada.</p>
               <AppButton variant="secondary" :to="{ name: 'arenas' }">Cadastrar arena</AppButton>
@@ -354,6 +372,17 @@ async function openFight() {
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+}
+
+.operator-home__resume {
+  align-self: flex-end;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--color-orange);
+}
+
+.operator-home__resume:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-orange);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .operator-home__pick-error {
