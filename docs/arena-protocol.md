@@ -305,12 +305,39 @@ void setLedState(LedState state);       // sets the color/blink from the table a
 // Buttons (#41)
 enum class Press { None, A, B };
 Press pollButtons();                    // debounced; returns each press once
+
+// Connection (#97): src/arena.h; the only code that touches Wi-Fi and the socket
+void arenaBegin();                                 // Wi-Fi + socket, from config.h; once in setup()
+void arenaLoop();                                  // every loop: Wi-Fi, reconnect, liveness, incoming frames
+bool arenaConnected();                             // true between welcome and close
+void onArenaState(void (*cb)(const ArenaState&));  // called on every valid `state`
+bool arenaSendSurrender(char side);                // 'A' or 'B', with the last state's matchId; false if not connected
 ```
 
-The display only draws what it is given; it keeps no timer. The network module (#42) owns the socket and the countdown:
+`ArenaState` (in `lib/ArenaLogic/src/arena_logic.h`) is one parsed `state`:
+
+```cpp
+enum class ArenaStatus : uint8_t { Idle, Ready, Running, Paused, Ended };
+enum class EndReason   : uint8_t { None, TimeOut, OperatorEnded, SurrenderA, SurrenderB };
+struct ArenaState {
+  ArenaStatus status;
+  char matchId[37];        // "" when null
+  bool hasRemaining;       // false when remainingMs is null
+  int32_t remainingMs;
+  EndReason endReason;
+  char robotA[33];         // "" when robots is null; longer names are cut on a UTF-8 boundary
+  char robotB[33];
+  uint32_t receivedAtMs;   // millis() when it arrived, the start point for the local countdown
+};
+```
+
+The connection layer follows the [Handshake](#handshake), [Close codes](#close-codes) and [Disconnects](#disconnects) rules above, and ignores (and logs) malformed frames and unknown events. Each connect attempt blocks `arenaLoop()` for a few seconds during TCP and TLS; that happens only while the box is already not connected.
+
+The display only draws what it is given; it keeps no timer. The integration (#42) owns the countdown and joins the modules:
 
 - On `state` it maps `status` / `endReason` to `setLedState` and `showMessage`, and resets the local countdown from `remainingMs`.
 - Every loop while `running`, it computes the time left (`remainingMs` minus the time since that `state` arrived) and passes it to `showTime`.
-- On a press from `pollButtons()` it sends `surrender` if connected and drops it otherwise.
+- On a press from `pollButtons()` it calls `arenaSendSurrender`, which drops the press when not connected.
+- While `arenaConnected()` is false, it shows **not connected**.
 
 How the text and time are laid out on the LCDs depends on the displays and is left to the firmware.
