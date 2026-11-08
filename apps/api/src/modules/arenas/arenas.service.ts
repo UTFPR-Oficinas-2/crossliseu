@@ -9,8 +9,11 @@ import {
     type LockedArenaResult,
     type SetCurrentMatchResult,
 } from './arenas.repository.js';
-import * as bcrypt from 'bcrypt';
-import { generateDeviceToken, hashDeviceToken } from './device-token.js';
+import {
+    generateDeviceToken,
+    hashDeviceToken,
+    verifyDeviceToken,
+} from './device-token.js';
 import { generateDeviceId } from './device-id.js';
 import { arenaServerUrl } from './server-url.js';
 import { ArenaNameDto } from './dto/arena-name.dto.js';
@@ -207,7 +210,8 @@ export class ArenasService {
         token: string,
     ): Promise<AuthenticatedArena | null> {
         const arena = await this.arenasRepository.findLiveByDeviceId(deviceId);
-        if (!arena || !(await bcrypt.compare(token, arena.tokenHash))) {
+        const valid = await verifyDeviceToken(token, arena?.tokenHash ?? null);
+        if (!arena || !valid) {
             this.logger.warn('device_auth_failed', { deviceId });
             return null;
         }
