@@ -6,6 +6,7 @@ import {
     type DeviceSocket,
 } from './arena-connections.js';
 import {
+    CHECK_TIMEOUT_MS,
     CloseCode,
     errorFrame,
     HELLO_TIMEOUT_MS,
@@ -35,6 +36,7 @@ export class ArenaSession {
     private state: State = 'awaiting_hello';
     private alive = true;
     private helloTimer: ReturnType<typeof setTimeout> | undefined;
+    private checkTimer: ReturnType<typeof setTimeout> | undefined;
     private readonly heartbeat: ReturnType<typeof setInterval>;
     private arena: AuthenticatedArena | null = null;
 
@@ -124,12 +126,20 @@ export class ArenaSession {
         const revision = this.deps.connections.revision();
         let arena: AuthenticatedArena | null;
         try {
-            arena = await this.deps.authenticate(hello.deviceId, hello.token);
+            arena = await this.withCheckTimeout(
+                this.deps.authenticate(hello.deviceId, hello.token),
+            );
         } catch (error) {
-            this.deps.logger.error('device_auth_error', {
+            const details = {
                 deviceId: hello.deviceId,
                 message: error instanceof Error ? error.message : String(error),
-            });
+            };
+            // Already gone (e.g. the app is shutting down): nothing to tell the box
+            if (this.isClosed()) {
+                this.deps.logger.warn('device_auth_error', details);
+                return;
+            }
+            this.deps.logger.error('device_auth_error', details);
             this.close(CloseCode.InternalError, 'internal_error');
             return;
         }
@@ -182,8 +192,23 @@ export class ArenaSession {
         this.socket.close(code, reason);
     }
 
+    /** Rejects if the check takes longer than CHECK_TIMEOUT_MS, so a hung database can't park the socket */
+    private withCheckTimeout<T>(check: Promise<T>): Promise<T> {
+        const timeout = new Promise<never>((_, reject) => {
+            this.checkTimer = setTimeout(
+                () => reject(new Error('credential check timed out')),
+                CHECK_TIMEOUT_MS,
+            );
+        });
+        return Promise.race([check, timeout]).finally(() => {
+            clearTimeout(this.checkTimer);
+            this.checkTimer = undefined;
+        });
+    }
+
     private stopTimers(): void {
         clearTimeout(this.helloTimer);
+        clearTimeout(this.checkTimer);
         clearInterval(this.heartbeat);
     }
 }

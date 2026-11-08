@@ -2,6 +2,8 @@
 
 export const PROTOCOL_VERSION = 1;
 export const HELLO_TIMEOUT_MS = 5_000;
+/** How long the credential check of a hello may take before the socket closes with 1011 */
+export const CHECK_TIMEOUT_MS = 5_000;
 export const PING_INTERVAL_MS = 10_000;
 export const MAX_FRAME_BYTES = 4096;
 

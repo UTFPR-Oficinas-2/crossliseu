@@ -273,6 +273,55 @@ describe('ArenaSession', () => {
             expect(connections.isOnline('arena-1')).toBe(false);
         });
 
+        it('closes with 1011 when the credential check takes longer than 5 s', async () => {
+            deps.authenticate.mockReturnValueOnce(new Promise(() => {}));
+            const { socket, session } = open();
+
+            const handled = session.onMessage(hello());
+            await vi.advanceTimersByTimeAsync(4_999);
+            expect(socket.closed).toBeNull();
+            await vi.advanceTimersByTimeAsync(1);
+            await handled;
+
+            expect(socket.closed).toEqual({
+                code: 1011,
+                reason: 'internal_error',
+            });
+            expect(connections.isOnline('arena-1')).toBe(false);
+        });
+
+        it('ignores a credential check that finishes after the timeout', async () => {
+            const check = deferred<AuthenticatedArena | null>();
+            deps.authenticate.mockReturnValueOnce(check.promise);
+            const { socket, session } = open();
+
+            const handled = session.onMessage(hello());
+            await vi.advanceTimersByTimeAsync(5_000);
+            await handled;
+            check.resolve(ARENA);
+            await Promise.resolve();
+
+            expect(socket.sent).toEqual([]);
+            expect(connections.isOnline('arena-1')).toBe(false);
+        });
+
+        it('only warns when the credential check fails after the socket closed', async () => {
+            const check = deferred<AuthenticatedArena | null>();
+            deps.authenticate.mockReturnValueOnce(
+                check.promise.then(() => Promise.reject(new Error('db gone'))),
+            );
+            const { socket, session } = open();
+
+            const handled = session.onMessage(hello());
+            session.onClose();
+            check.resolve(null);
+            await handled;
+
+            expect(deps.logger.error).not.toHaveBeenCalled();
+            expect(deps.logger.warn).toHaveBeenCalled();
+            expect(socket.closed).toBeNull();
+        });
+
         it('closes with 1011 when the credential check throws', async () => {
             deps.authenticate.mockRejectedValueOnce(new Error('db down'));
             const { socket, session } = open();
