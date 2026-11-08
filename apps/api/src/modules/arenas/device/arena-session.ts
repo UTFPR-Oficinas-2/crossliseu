@@ -203,7 +203,7 @@ export class ArenaSession {
 
     /**
      * Rejects if the check takes longer than CHECK_TIMEOUT_MS, so a hung database can't park the
-     * socket, and gives the check slot back either way
+     * socket. The check slot is given back when the check settles, whatever the socket does.
      */
     private withCheckTimeout<T>(check: Promise<T>): Promise<T> {
         const timeout = new Promise<never>((_, reject) => {
@@ -212,11 +212,13 @@ export class ArenaSession {
                 CHECK_TIMEOUT_MS,
             );
         });
-        // Settles once, on the result or the timeout: the slot is released exactly once
+        // The slot counts real work: it is freed when the check itself settles (once), not on the
+        // timeout, and not when the socket closes while the check still runs
+        const release = () => this.deps.checks.release();
+        check.then(release, release);
         return Promise.race([check, timeout]).finally(() => {
             clearTimeout(this.checkTimer);
             this.checkTimer = undefined;
-            this.deps.checks.release();
         });
     }
 

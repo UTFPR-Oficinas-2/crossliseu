@@ -355,13 +355,33 @@ describe('ArenaSession', () => {
             expect(deps.checks.release).toHaveBeenCalledTimes(1);
         });
 
-        it('releases the check slot when the check times out', async () => {
-            deps.authenticate.mockReturnValueOnce(new Promise(() => {}));
-            const { session } = open();
+        it('keeps the check slot until a timed-out check really settles', async () => {
+            const check = deferred<AuthenticatedArena | null>();
+            deps.authenticate.mockReturnValueOnce(check.promise);
+            const { socket, session } = open();
 
             const handled = session.onMessage(hello());
             await vi.advanceTimersByTimeAsync(5_000);
             await handled;
+            expect(socket.closed?.code).toBe(1011);
+            // bcrypt / the query is still running: the slot stays taken
+            expect(deps.checks.release).not.toHaveBeenCalled();
+
+            check.resolve(ARENA);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(deps.checks.release).toHaveBeenCalledTimes(1);
+        });
+
+        it('releases the check slot once when the socket closes mid-check', async () => {
+            const check = deferred<AuthenticatedArena | null>();
+            deps.authenticate.mockReturnValueOnce(check.promise);
+            const { session } = open();
+
+            const handled = session.onMessage(hello());
+            session.onClose();
+            check.resolve(ARENA);
+            await handled;
+            await vi.advanceTimersByTimeAsync(10_000);
 
             expect(deps.checks.release).toHaveBeenCalledTimes(1);
         });
