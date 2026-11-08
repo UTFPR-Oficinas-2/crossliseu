@@ -23,6 +23,8 @@ export type ArenaSessionDeps = {
         token: string,
     ): Promise<AuthenticatedArena | null>;
     connections: ArenaConnections;
+    /** Slots for running credential checks; acquire() is false when all are taken */
+    checks: { acquire(): boolean; release(): void };
     logger: Pick<Logger, 'warn' | 'error'>;
 };
 
@@ -122,6 +124,13 @@ export class ArenaSession {
             return;
         }
 
+        if (!this.deps.checks.acquire()) {
+            this.deps.logger.warn('device_checks_busy', {
+                deviceId: hello.deviceId,
+            });
+            this.close(CloseCode.ServerBusy, 'server_busy');
+            return;
+        }
         this.state = 'checking';
         const revision = this.deps.connections.revision();
         let arena: AuthenticatedArena | null;
@@ -192,7 +201,10 @@ export class ArenaSession {
         this.socket.close(code, reason);
     }
 
-    /** Rejects if the check takes longer than CHECK_TIMEOUT_MS, so a hung database can't park the socket */
+    /**
+     * Rejects if the check takes longer than CHECK_TIMEOUT_MS, so a hung database can't park the
+     * socket, and gives the check slot back either way
+     */
     private withCheckTimeout<T>(check: Promise<T>): Promise<T> {
         const timeout = new Promise<never>((_, reject) => {
             this.checkTimer = setTimeout(
@@ -200,9 +212,11 @@ export class ArenaSession {
                 CHECK_TIMEOUT_MS,
             );
         });
+        // Settles once, on the result or the timeout: the slot is released exactly once
         return Promise.race([check, timeout]).finally(() => {
             clearTimeout(this.checkTimer);
             this.checkTimer = undefined;
+            this.deps.checks.release();
         });
     }
 

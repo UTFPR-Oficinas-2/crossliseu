@@ -15,6 +15,10 @@ export interface DeviceSocket {
 /**
  * The authenticated socket of each arena box, in memory: an arena is online while it has one.
  * At most one socket per arena; a newer login takes the place of the older one.
+ *
+ * Assumes one API process (compose.prod.yml runs one api container). A restart resets it, which
+ * is right: every box socket drops with the process and logs in again. Running several replicas
+ * would need this state shared (and boxes routed to a single instance).
  */
 @Injectable()
 export class ArenaConnections {

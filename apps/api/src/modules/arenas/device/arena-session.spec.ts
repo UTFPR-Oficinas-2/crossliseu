@@ -55,6 +55,7 @@ describe('ArenaSession', () => {
     let deps: {
         authenticate: Mock<ArenaSessionDeps['authenticate']>;
         connections: ArenaConnections;
+        checks: { acquire: Mock<() => boolean>; release: Mock<() => void> };
         logger: { warn: Mock<() => void>; error: Mock<() => void> };
     };
 
@@ -84,6 +85,10 @@ describe('ArenaSession', () => {
                     ),
             ),
             connections,
+            checks: {
+                acquire: vi.fn<() => boolean>(() => true),
+                release: vi.fn<() => void>(),
+            },
             logger: { warn: vi.fn<() => void>(), error: vi.fn<() => void>() },
         };
     });
@@ -320,6 +325,45 @@ describe('ArenaSession', () => {
             expect(deps.logger.error).not.toHaveBeenCalled();
             expect(deps.logger.warn).toHaveBeenCalled();
             expect(socket.closed).toBeNull();
+        });
+
+        it('closes with 1013 when no credential check slot is free', async () => {
+            deps.checks.acquire.mockReturnValueOnce(false);
+            const { socket, session } = open();
+
+            await session.onMessage(hello());
+
+            expect(socket.closed).toEqual({
+                code: 1013,
+                reason: 'server_busy',
+            });
+            expect(deps.authenticate).not.toHaveBeenCalled();
+            expect(deps.checks.release).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['succeeds', () => Promise.resolve(ARENA)],
+            ['fails', () => Promise.resolve(null)],
+            ['throws', () => Promise.reject(new Error('db down'))],
+        ])('releases the check slot when the check %s', async (_l, result) => {
+            deps.authenticate.mockImplementationOnce(result);
+            const { session } = open();
+
+            await session.onMessage(hello());
+
+            expect(deps.checks.acquire).toHaveBeenCalledTimes(1);
+            expect(deps.checks.release).toHaveBeenCalledTimes(1);
+        });
+
+        it('releases the check slot when the check times out', async () => {
+            deps.authenticate.mockReturnValueOnce(new Promise(() => {}));
+            const { session } = open();
+
+            const handled = session.onMessage(hello());
+            await vi.advanceTimersByTimeAsync(5_000);
+            await handled;
+
+            expect(deps.checks.release).toHaveBeenCalledTimes(1);
         });
 
         it('closes with 1011 when the credential check throws', async () => {

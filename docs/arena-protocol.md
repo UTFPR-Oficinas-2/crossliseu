@@ -260,6 +260,8 @@ WebSocket close codes 4000–4999 are reserved for applications; these are ours.
 
 Any other close (network loss, server restart, close code `1001`, `1006`, ...) is handled with normal backoff.
 
+The server can also close with `1001` (it is shutting down), `1011` (it could not check the credentials, for example the database is down or slower than 5 s) or `1013` (too many logins are being checked at once). All of them mean: retry with normal backoff.
+
 ## Disconnects
 
 - **Server-side detection.** The server sends a WebSocket ping every 10 s and drops a box that does not answer within 10 s. The arena is shown offline in the web app as soon as its socket closes, except when the socket was replaced (`4003`): the new connection keeps it online.

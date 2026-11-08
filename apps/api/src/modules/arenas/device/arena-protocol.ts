@@ -6,6 +6,11 @@ export const HELLO_TIMEOUT_MS = 5_000;
 export const CHECK_TIMEOUT_MS = 5_000;
 export const PING_INTERVAL_MS = 10_000;
 export const MAX_FRAME_BYTES = 4096;
+/**
+ * Credential checks (bcrypt) that may run at once; a hello beyond that closes with 1013, so
+ * unauthenticated clients can't queue unbounded bcrypt work ahead of real logins
+ */
+export const MAX_CONCURRENT_CHECKS = 8;
 
 export const CloseCode = {
     BadCredentials: 4001,
@@ -14,6 +19,7 @@ export const CloseCode = {
     UnsupportedProtocol: 4004,
     InternalError: 1011,
     ServerShutdown: 1001,
+    ServerBusy: 1013,
 } as const;
 
 export type ErrorCode =

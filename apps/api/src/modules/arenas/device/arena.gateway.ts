@@ -4,7 +4,11 @@ import type { WebSocket } from 'ws';
 import { Public } from '../../auth/public-decorator.js';
 import { ArenasService } from '../arenas.service.js';
 import { ArenaConnections } from './arena-connections.js';
-import { CloseCode, MAX_FRAME_BYTES } from './arena-protocol.js';
+import {
+    CloseCode,
+    MAX_FRAME_BYTES,
+    MAX_CONCURRENT_CHECKS,
+} from './arena-protocol.js';
 import { ArenaSession } from './arena-session.js';
 
 /** How long shutdown waits for boxes to acknowledge the 1001 close before ws terminates them */
@@ -22,6 +26,8 @@ export class ArenaGateway
 {
     private readonly logger = new Logger(ArenaGateway.name);
     private readonly sockets = new Set<WebSocket>();
+    private shuttingDown = false;
+    private checksRunning = 0;
 
     constructor(
         private readonly arenasService: ArenasService,
@@ -29,10 +35,28 @@ export class ArenaGateway
     ) {}
 
     handleConnection(client: WebSocket): void {
+        // The HTTP server still accepts upgrades while the app shuts down
+        if (this.shuttingDown) {
+            client.close(CloseCode.ServerShutdown, 'server_shutdown');
+            return;
+        }
+
         const session = new ArenaSession(client, {
             authenticate: (deviceId, token) =>
                 this.arenasService.authenticateDevice(deviceId, token),
             connections: this.connections,
+            checks: {
+                acquire: () => {
+                    if (this.checksRunning >= MAX_CONCURRENT_CHECKS) {
+                        return false;
+                    }
+                    this.checksRunning++;
+                    return true;
+                },
+                release: () => {
+                    this.checksRunning--;
+                },
+            },
             logger: this.logger,
         });
         this.sockets.add(client);
@@ -54,6 +78,7 @@ export class ArenaGateway
 
     /** Closes every box with 1001 (reconnect with backoff) and waits briefly for them to go */
     async beforeApplicationShutdown(): Promise<void> {
+        this.shuttingDown = true;
         const closing = [...this.sockets].map(
             (client) =>
                 new Promise<void>((resolve) => {
@@ -64,9 +89,13 @@ export class ArenaGateway
         if (closing.length === 0) {
             return;
         }
+        let grace: ReturnType<typeof setTimeout> | undefined;
         await Promise.race([
             Promise.all(closing),
-            new Promise((resolve) => setTimeout(resolve, SHUTDOWN_GRACE_MS)),
+            new Promise((resolve) => {
+                grace = setTimeout(resolve, SHUTDOWN_GRACE_MS);
+            }),
         ]);
+        clearTimeout(grace);
     }
 }
