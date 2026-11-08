@@ -195,8 +195,36 @@ void arenaBegin() {
   enter(Phase::WifiDown);
 }
 
+namespace {
+
+// Registra cada mudança de status do Wi-Fi com o motivo, para diagnosticar uma caixa
+// que não conecta (rede de 5 GHz, senha errada...).
+// WL_DISCONNECTED aparece entre cada nova tentativa e não diz nada, então fica de
+// fora; cada motivo é registrado uma vez até o Wi-Fi conectar de novo.
+void logWifiStatus(wl_status_t status) {
+  static int lastShown = -1;
+  if (status == WL_CONNECTED) {
+    lastShown = -1;  // "wifi up" já é registrado
+    return;
+  }
+  if (status == WL_DISCONNECTED || status == WL_IDLE_STATUS || status == lastShown) return;
+  lastShown = status;
+  const char* text;
+  switch (status) {
+    case WL_NO_SSID_AVAIL: text = "network not found (check WIFI_SSID, case-sensitive; the ESP32 only sees 2.4 GHz)"; break;
+    case WL_CONNECT_FAILED: text = "connect failed (check WIFI_PASSWORD)"; break;
+    case WL_CONNECTION_LOST: text = "connection lost"; break;
+    default: text = "not connected"; break;
+  }
+  Serial.printf("arena: wifi status %d: %s\n", (int)status, text);
+}
+
+}  // namespace
+
 void arenaLoop() {
-  const bool wifiUp = WiFi.status() == WL_CONNECTED;
+  const wl_status_t wifiStatus = WiFi.status();
+  const bool wifiUp = wifiStatus == WL_CONNECTED;
+  logWifiStatus(wifiStatus);
 
   switch (phase) {
     case Phase::Stopped:
