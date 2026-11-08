@@ -56,6 +56,10 @@ void dropAndBackoff(const char* reason) {
 }
 
 void startAttempt() {
+  // Limpa o socket da tentativa anterior antes de entrar em Connecting: senão o
+  // ws.loop() faz essa limpeza e dispara um DISCONNECTED (com o close code velho)
+  // como se fosse desta tentativa. A fase ainda não é de socket, então ele é ignorado.
+  ws.disconnect();
   Serial.printf("arena: connecting %s:%u\n", url.host, url.port);
   enter(Phase::Connecting);
 }
@@ -151,6 +155,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t len) {
         uint32_t ms = backoff.next();
         Serial.printf("arena: connect failed, retry in %lu s\n", (unsigned long)(ms / 1000));
         waitThenRetry(ms);
+        ws.disconnect();  // libera o socket que falhou; sem isso o resto do ws.loop() já abre outro
       }
       break;
     case WStype_DISCONNECTED:
@@ -168,6 +173,10 @@ void arenaBegin() {
     Serial.println("arena: invalid ARENA_SERVER_URL, stopped");
     enter(Phase::Stopped);
     return;
+  }
+
+  if (WIFI_SSID[0] == '\0') {
+    Serial.println("arena: WIFI_SSID is empty in config.h, fill in WIFI_SSID / WIFI_PASSWORD and flash again");
   }
 
   WiFi.persistent(false);  // não gravar a rede na flash a cada boot

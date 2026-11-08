@@ -261,6 +261,11 @@ void WebSocketsClient::loop(void) {
             }
             _client.ssl = new WEBSOCKETS_NETWORK_SSL_CLASS();
             _client.tcp = _client.ssl;
+#if defined(ESP32)
+            // crossliseu: the connect timeout covers only TCP; without this a stalled TLS
+            // handshake blocks loop() for the core's default 120 s
+            _client.ssl->setHandshakeTimeout(WEBSOCKETS_TLS_HANDSHAKE_TIMEOUT_S);
+#endif
             if(_CA_cert) {
                 DEBUG_WEBSOCKETS("[WS-Client] setting CA certificate\n");
 #if defined(ESP32)
@@ -988,6 +993,7 @@ void WebSocketsClient::connectedCb() {
 
 void WebSocketsClient::connectFailedCb() {
     DEBUG_WEBSOCKETS("[WS-Client] connection to %s:%u Failed\n", _host.c_str(), _port);
+    _client.closeCode = 0;                // crossliseu: a failed attempt has no close code
     runCbEvent(WStype_ERROR, NULL, 0);    // crossliseu: let the app see a failed TCP/TLS connect
 }
 

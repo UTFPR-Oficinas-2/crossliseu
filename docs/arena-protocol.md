@@ -331,7 +331,7 @@ struct ArenaState {
 };
 ```
 
-The connection layer follows the [Handshake](#handshake), [Close codes](#close-codes) and [Disconnects](#disconnects) rules above, and ignores (and logs) malformed frames and unknown events. Each connect attempt blocks `arenaLoop()` for a few seconds during TCP and TLS; that happens only while the box is already not connected.
+The connection layer follows the [Handshake](#handshake), [Close codes](#close-codes) and [Disconnects](#disconnects) rules above, and ignores (and logs) malformed frames and unknown events. Each connect attempt blocks `arenaLoop()` while TCP and TLS are set up: normally under a second, at worst about 15 s (5 s TCP connect timeout plus 10 s TLS handshake timeout). That happens only while the box is already not connected.
 
 The display only draws what it is given; it keeps no timer. The integration (#42) owns the countdown and joins the modules:
 

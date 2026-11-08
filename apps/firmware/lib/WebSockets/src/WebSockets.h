@@ -125,6 +125,11 @@
 #define WEBSOCKETS_TCP_TIMEOUT (5000)
 #endif
 
+// crossliseu: TLS handshake timeout in seconds (ESP32 NetworkClientSecure::setHandshakeTimeout)
+#ifndef WEBSOCKETS_TLS_HANDSHAKE_TIMEOUT_S
+#define WEBSOCKETS_TLS_HANDSHAKE_TIMEOUT_S (10)
+#endif
+
 #define NETWORK_ESP8266_ASYNC (0)
 #define NETWORK_ESP8266 (1)
 #define NETWORK_W5100 (2)
