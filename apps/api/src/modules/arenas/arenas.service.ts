@@ -9,6 +9,7 @@ import {
     type LockedArenaResult,
     type SetCurrentMatchResult,
 } from './arenas.repository.js';
+import * as bcrypt from 'bcrypt';
 import { generateDeviceToken, hashDeviceToken } from './device-token.js';
 import { generateDeviceId } from './device-id.js';
 import { arenaServerUrl } from './server-url.js';
@@ -20,6 +21,9 @@ import { Arena } from './entities/arena.entity.js';
 import { ArenaConnections } from './device/arena-connections.js';
 
 const MAX_DEVICE_ID_ATTEMPTS = 5;
+
+/** The arena a box logged in as on /arena */
+export type AuthenticatedArena = { id: string; name: string };
 
 @Injectable()
 export class ArenasService {
@@ -188,6 +192,22 @@ export class ArenasService {
             throw new NotFoundException('arena_not_found');
         }
         return this.toResponse(arena);
+    }
+
+    /**
+     * Checks a box's credentials from its `hello`. Null when the device id is unknown or deleted,
+     * or the token doesn't match the stored hash. Never logs the token.
+     */
+    async authenticateDevice(
+        deviceId: string,
+        token: string,
+    ): Promise<AuthenticatedArena | null> {
+        const arena = await this.arenasRepository.findLiveByDeviceId(deviceId);
+        if (!arena || !(await bcrypt.compare(token, arena.tokenHash))) {
+            this.logger.warn('device_auth_failed', { deviceId });
+            return null;
+        }
+        return { id: arena.id, name: arena.name };
     }
 
     /** Same as clearCurrentMatch, without an account check: for the arena device link (#19) */

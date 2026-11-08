@@ -65,6 +65,12 @@ export class ArenasRepository {
         });
     }
 
+    /** The live arena flashed with this device id; null when unknown or soft-deleted */
+    findLiveByDeviceId(deviceId: string): Promise<Arena | null> {
+        // findOne skips soft-deleted rows
+        return this.repository.findOne({ where: { deviceId } });
+    }
+
     /** Saves the arena (id and timestamps are filled in on success) */
     async create(arena: Arena): Promise<CreateArenaResult> {
         try {

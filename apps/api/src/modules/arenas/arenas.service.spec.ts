@@ -93,6 +93,11 @@ function setup(
             Promise.resolve(lockedResult),
         ),
         findByOwner: vi.fn((_ownerUserId: string) => Promise.resolve(arenas)),
+        findLiveByDeviceId: vi.fn((deviceId: string) =>
+            Promise.resolve(
+                arenas.find((entity) => entity.deviceId === deviceId) ?? null,
+            ),
+        ),
         findOwned: vi.fn((id: string, _ownerUserId: string) =>
             Promise.resolve(arenas.find((entity) => entity.id === id) ?? null),
         ),
@@ -469,5 +474,55 @@ describe('ArenasService.remove', () => {
 
         await expect(call).rejects.toThrow(exception);
         await expect(call).rejects.toThrow(lockedResult);
+    });
+});
+
+describe('ArenasService.authenticateDevice', () => {
+    async function deviceArena() {
+        const entity = arena(ARENA_1_ID, 'Arena 01', null);
+        entity.tokenHash = await bcrypt.hash('right-token', 4);
+        return entity;
+    }
+
+    it('returns id and name for the right token', async () => {
+        const { service } = setup([await deviceArena()]);
+
+        expect(
+            await service.authenticateDevice('Arena 01-device', 'right-token'),
+        ).toEqual({ id: ARENA_1_ID, name: 'Arena 01' });
+    });
+
+    it('returns null for a wrong token', async () => {
+        const { service } = setup([await deviceArena()]);
+
+        expect(
+            await service.authenticateDevice('Arena 01-device', 'wrong-token'),
+        ).toBeNull();
+    });
+
+    it('returns null for an unknown device id', async () => {
+        const { service, arenasRepository } = setup([await deviceArena()]);
+
+        expect(
+            await service.authenticateDevice('ghost-device', 'right-token'),
+        ).toBeNull();
+        expect(arenasRepository.findLiveByDeviceId).toHaveBeenCalledWith(
+            'ghost-device',
+        );
+    });
+
+    it('logs the device id, never the token', async () => {
+        const { service } = setup([await deviceArena()]);
+        const warn = vi
+            .spyOn(service.logger, 'warn')
+            .mockImplementation(() => {});
+
+        await service.authenticateDevice('Arena 01-device', 'wrong-token');
+
+        const logged = warn.mock.calls.map((args) => JSON.stringify(args));
+        expect(logged.some((line) => line.includes('Arena 01-device'))).toBe(
+            true,
+        );
+        expect(logged.some((line) => line.includes('wrong-token'))).toBe(false);
     });
 });
