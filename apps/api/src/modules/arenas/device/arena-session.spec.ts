@@ -4,6 +4,8 @@ import { ArenaSession, type ArenaSessionDeps } from './arena-session.js';
 import type { AuthenticatedArena } from '../arenas.service.js';
 
 class FakeSocket implements DeviceSocket {
+    /** ws readyState: 1 OPEN, 2 CLOSING, 3 CLOSED */
+    readyState = 1;
     sent: unknown[] = [];
     closed: { code: number; reason: string } | null = null;
     pings = 0;
@@ -221,6 +223,35 @@ describe('ArenaSession', () => {
             // A still holds the arena: B never claimed it
             a.session.onClose();
             expect(connections.isOnline('arena-1')).toBe(false);
+        });
+
+        it('does nothing when the socket starts closing during the credential check', async () => {
+            const a = await welcomed();
+            const check = deferred<AuthenticatedArena | null>();
+            deps.authenticate.mockReturnValueOnce(check.promise);
+            const b = open();
+
+            const handled = b.session.onMessage(hello());
+            // the peer sent a close frame; ws's 'close' event (onClose) comes later
+            b.socket.readyState = 2;
+            check.resolve(ARENA);
+            await handled;
+
+            expect(b.socket.sent).toEqual([]);
+            expect(a.socket.closed).toBeNull();
+            // A still holds the arena: B never claimed it
+            a.session.onClose();
+            expect(connections.isOnline('arena-1')).toBe(false);
+        });
+
+        it('ignores frames on a socket that is closing', async () => {
+            const { socket, session } = await welcomed();
+            socket.readyState = 2;
+
+            await session.onMessage(hello());
+            await session.onMessage('not json');
+
+            expect(socket.sent).toEqual([]);
         });
 
         it('closes with 1011 when the credential check throws', async () => {

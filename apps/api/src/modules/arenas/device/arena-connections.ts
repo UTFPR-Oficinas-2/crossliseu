@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
+/** ws's readyState for an open socket (CLOSING is 2, CLOSED is 3) */
+export const SOCKET_OPEN = 1;
+
 /** What the registry and the session need from a ws socket; `ws`'s WebSocket satisfies it */
 export interface DeviceSocket {
+    readonly readyState: number;
     send(text: string): void;
     close(code: number, reason: string): void;
     ping(): void;
@@ -27,6 +31,15 @@ export class ArenaConnections {
     release(arenaId: string, socket: DeviceSocket): void {
         if (this.sockets.get(arenaId) === socket) {
             this.sockets.delete(arenaId);
+        }
+    }
+
+    /** Closes the arena's live socket, if any, and forgets it (its credentials were revoked) */
+    drop(arenaId: string, code: number, reason: string): void {
+        const socket = this.sockets.get(arenaId);
+        if (socket) {
+            this.sockets.delete(arenaId);
+            socket.close(code, reason);
         }
     }
 

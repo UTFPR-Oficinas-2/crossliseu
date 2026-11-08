@@ -1,6 +1,10 @@
 import type { Logger } from '@nestjs/common';
 import type { AuthenticatedArena } from '../arenas.service.js';
-import type { ArenaConnections, DeviceSocket } from './arena-connections.js';
+import {
+    SOCKET_OPEN,
+    type ArenaConnections,
+    type DeviceSocket,
+} from './arena-connections.js';
 import {
     CloseCode,
     errorFrame,
@@ -61,7 +65,7 @@ export class ArenaSession {
 
     /** `text` is null for a binary frame; resolves once the frame is fully handled, never rejects */
     async onMessage(text: string | null): Promise<void> {
-        if (this.state === 'closed') {
+        if (this.isClosed()) {
             return;
         }
         const frame = text === null ? null : parseFrame(text);
@@ -152,9 +156,15 @@ export class ArenaSession {
         this.socket.send(welcomeFrame(arena.name));
     }
 
-    // A method, so TypeScript doesn't narrow `state` across the await in login()
+    /**
+     * Closed, or closing: ws only emits 'close' (onClose) once the close handshake ends, which
+     * can take up to 30 s, so a socket that is CLOSING must already count as gone. A method, so
+     * TypeScript doesn't narrow `state` across the await in login().
+     */
     private isClosed(): boolean {
-        return this.state === 'closed';
+        return (
+            this.state === 'closed' || this.socket.readyState !== SOCKET_OPEN
+        );
     }
 
     private sendError(

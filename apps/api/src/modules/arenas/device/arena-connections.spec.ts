@@ -2,6 +2,7 @@ import { ArenaConnections, type DeviceSocket } from './arena-connections.js';
 
 function socket(): DeviceSocket {
     return {
+        readyState: 1,
         send: vi.fn(),
         close: vi.fn(),
         ping: vi.fn(),
@@ -60,5 +61,25 @@ describe('ArenaConnections', () => {
         connections.release('a2', live);
         expect(connections.isOnline('a2')).toBe(true);
         expect(connections.isOnline('a1')).toBe(true);
+    });
+
+    it('drop closes the live socket and marks the arena offline', () => {
+        const connections = new ArenaConnections();
+        const close = vi.fn();
+        connections.claim('a1', { ...socket(), close });
+
+        connections.drop('a1', 4001, 'bad_credentials');
+
+        expect(close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(connections.isOnline('a1')).toBe(false);
+    });
+
+    it('drop without a connection does nothing', () => {
+        const connections = new ArenaConnections();
+
+        expect(() =>
+            connections.drop('a1', 4001, 'bad_credentials'),
+        ).not.toThrow();
+        expect(connections.isOnline('a1')).toBe(false);
     });
 });

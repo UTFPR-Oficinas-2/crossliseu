@@ -19,6 +19,7 @@ import type { DeviceCredentials } from './dto/device-credentials.dto.js';
 import { SetCurrentMatchDto } from './dto/set-current-match.dto.js';
 import { Arena } from './entities/arena.entity.js';
 import { ArenaConnections } from './device/arena-connections.js';
+import { CloseCode } from './device/arena-protocol.js';
 
 const MAX_DEVICE_ID_ATTEMPTS = 5;
 
@@ -117,6 +118,8 @@ export class ArenasService {
             this.logger.warn(result, { arenaId: id });
             throw lockedException(result);
         }
+        // The box logged in with the old token: it reconnects and gets 4001 until reflashed
+        this.revokeBox(id);
 
         const arena = await this.arenasRepository.findOwned(id, userId);
         if (!arena) {
@@ -138,6 +141,7 @@ export class ArenasService {
             this.logger.warn(result, { arenaId: id });
             throw lockedException(result);
         }
+        this.revokeBox(id);
     }
 
     /**
@@ -220,6 +224,15 @@ export class ArenasService {
             this.logger.warn(result, { arenaId });
             throw lockedException(result);
         }
+    }
+
+    /** Closes the box connected with now-invalid credentials, as a fresh login would be refused */
+    private revokeBox(arenaId: string): void {
+        this.connections.drop(
+            arenaId,
+            CloseCode.BadCredentials,
+            'bad_credentials',
+        );
     }
 
     private toResponse(arena: Arena): ArenaResponse {

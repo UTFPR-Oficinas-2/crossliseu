@@ -526,3 +526,58 @@ describe('ArenasService.authenticateDevice', () => {
         expect(logged.some((line) => line.includes('wrong-token'))).toBe(false);
     });
 });
+
+describe('ArenasService revokes a connected box', () => {
+    function connectedBox() {
+        const box = {
+            readyState: 1,
+            send: vi.fn(),
+            close: vi.fn(),
+            ping: vi.fn(),
+            terminate: vi.fn(),
+        };
+        return box;
+    }
+
+    it('rotateToken closes the connected box with 4001 and marks it offline', async () => {
+        const { service, connections } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+        const box = connectedBox();
+        connections.claim(ARENA_1_ID, box);
+
+        await service.rotateToken(ARENA_1_ID, 'user-a');
+
+        expect(box.close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(connections.isOnline(ARENA_1_ID)).toBe(false);
+    });
+
+    it('remove closes the connected box with 4001 and marks it offline', async () => {
+        const { service, connections } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+        const box = connectedBox();
+        connections.claim(ARENA_1_ID, box);
+
+        await service.remove(ARENA_1_ID, 'user-a');
+
+        expect(box.close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(connections.isOnline(ARENA_1_ID)).toBe(false);
+    });
+
+    it('a refused rotateToken keeps the box connected', async () => {
+        const { service, connections } = setup(
+            [arena(ARENA_1_ID, 'Arena 1', null)],
+            { lockedResult: 'arena_match_live' },
+        );
+        const box = connectedBox();
+        connections.claim(ARENA_1_ID, box);
+
+        await expect(
+            service.rotateToken(ARENA_1_ID, 'user-a'),
+        ).rejects.toThrow();
+
+        expect(box.close).not.toHaveBeenCalled();
+        expect(connections.isOnline(ARENA_1_ID)).toBe(true);
+    });
+});

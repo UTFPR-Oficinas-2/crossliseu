@@ -252,6 +252,29 @@ describe('/arena gateway (db)', () => {
         expect(opened.ws.readyState).toBe(WebSocket.OPEN);
     });
 
+    it('closes a connected box with 4001 when its token is rotated', async () => {
+        const opened = await welcomedBox();
+
+        await request(app.getHttpServer())
+            .post(`/arenas/${arena.id}/token`)
+            .set('Authorization', `Bearer ${jwt}`)
+            .expect(200);
+
+        expect((await opened.closed).code).toBe(4001);
+        expect(await onlineOf(arena.id)).toBe(false);
+    });
+
+    it('closes a connected box with 4001 when its arena is deleted', async () => {
+        const opened = await welcomedBox();
+
+        await request(app.getHttpServer())
+            .delete(`/arenas/${arena.id}`)
+            .set('Authorization', `Bearer ${jwt}`)
+            .expect(204);
+
+        expect((await opened.closed).code).toBe(4001);
+    });
+
     it('closes an oversized frame with 1009', async () => {
         const opened = await box();
 
