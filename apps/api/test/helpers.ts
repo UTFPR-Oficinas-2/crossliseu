@@ -7,6 +7,7 @@ import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { Arena } from '../src/modules/arenas/entities/arena.entity.js';
+import { generateDeviceToken } from '../src/modules/arenas/device-token.js';
 import { Championship } from '../src/modules/championships/entities/championship.entity.js';
 import { Match } from '../src/modules/matches/entities/match.entity.js';
 import { Robot } from '../src/modules/robots/entities/robot.entity.js';
@@ -139,6 +140,25 @@ export async function seedArena(
                 ownerUserId ?? (await seedCreatorId(ds)),
             ),
         );
+}
+
+/** An arena with a real device token (bcrypt cost 4), owned by the oldest user */
+export async function seedDeviceArena(
+    ds: DataSource,
+    name: string,
+): Promise<{ arena: Arena; token: string }> {
+    const token = generateDeviceToken();
+    const arena = await ds
+        .getRepository(Arena)
+        .save(
+            new Arena(
+                name,
+                `${name.toLowerCase().replace(/\W+/g, '-')}-dev`,
+                await bcrypt.hash(token, 4),
+                await seedCreatorId(ds),
+            ),
+        );
+    return { arena, token };
 }
 
 /** A promise the test resolves by hand, to hold a transaction open */
