@@ -17,6 +17,7 @@ import { ArenaResponse } from './dto/arena-response.dto.js';
 import type { DeviceCredentials } from './dto/device-credentials.dto.js';
 import { SetCurrentMatchDto } from './dto/set-current-match.dto.js';
 import { Arena } from './entities/arena.entity.js';
+import { ArenaConnections } from './device/arena-connections.js';
 
 const MAX_DEVICE_ID_ATTEMPTS = 5;
 
@@ -24,7 +25,10 @@ const MAX_DEVICE_ID_ATTEMPTS = 5;
 export class ArenasService {
     logger: Logger = new Logger(ArenasService.name);
 
-    constructor(private readonly arenasRepository: ArenasRepository) {}
+    constructor(
+        private readonly arenasRepository: ArenasRepository,
+        private readonly connections: ArenaConnections,
+    ) {}
 
     async findAll(userId: string): Promise<ArenaResponse[]> {
         const arenas = await this.arenasRepository.findByOwner(userId);
@@ -204,8 +208,7 @@ export class ArenasService {
             id: arena.id,
             name: arena.name,
             deviceId: arena.deviceId,
-            // Becomes real once arena devices connect (#19)
-            online: false,
+            online: this.connections.isOnline(arena.id),
             currentMatchId: arena.currentMatchId,
             currentMatch:
                 match?.robotA && match.robotB

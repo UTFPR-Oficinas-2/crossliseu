@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ArenasService } from './arenas.service.js';
 import { Arena } from './entities/arena.entity.js';
+import { ArenaConnections } from './device/arena-connections.js';
+import type { DeviceSocket } from './device/arena-connections.js';
 import type { Match } from '../matches/entities/match.entity.js';
 import * as bcrypt from 'bcrypt';
 import type {
@@ -95,10 +97,12 @@ function setup(
             Promise.resolve(arenas.find((entity) => entity.id === id) ?? null),
         ),
     };
+    const connections = new ArenaConnections();
     const service = new ArenasService(
         arenasRepository as unknown as ArenasRepository,
+        connections,
     );
-    return { service, arenasRepository };
+    return { service, arenasRepository, connections };
 }
 
 describe('ArenasService.findAll', () => {
@@ -131,6 +135,21 @@ describe('ArenasService.findAll', () => {
             },
         ]);
         expect(arenasRepository.findByOwner).toHaveBeenCalledWith('user-a');
+    });
+
+    it('reports online for an arena with a live connection', async () => {
+        const { service, connections } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+            arena(ARENA_2_ID, 'Arena 2', null),
+        ]);
+        connections.claim(ARENA_1_ID, {} as DeviceSocket);
+
+        const result = await service.findAll('user-a');
+
+        expect(result.map(({ id, online }) => ({ id, online }))).toEqual([
+            { id: ARENA_1_ID, online: true },
+            { id: ARENA_2_ID, online: false },
+        ]);
     });
 
     it('never exposes the token hash', async () => {
