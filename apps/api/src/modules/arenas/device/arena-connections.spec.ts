@@ -82,4 +82,17 @@ describe('ArenaConnections', () => {
         ).not.toThrow();
         expect(connections.isOnline('a1')).toBe(false);
     });
+
+    it('reports a drop that happened after a revision was read', () => {
+        const connections = new ArenaConnections();
+        const seen = connections.revision();
+
+        connections.drop('a1', 4001, 'bad_credentials');
+
+        expect(connections.revokedSince('a1', seen)).toBe(true);
+        expect(connections.revokedSince('a2', seen)).toBe(false);
+        expect(connections.revokedSince('a1', connections.revision())).toBe(
+            false,
+        );
+    });
 });

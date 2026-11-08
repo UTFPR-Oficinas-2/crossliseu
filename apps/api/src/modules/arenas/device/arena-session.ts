@@ -121,6 +121,7 @@ export class ArenaSession {
         }
 
         this.state = 'checking';
+        const revision = this.deps.connections.revision();
         let arena: AuthenticatedArena | null;
         try {
             arena = await this.deps.authenticate(hello.deviceId, hello.token);
@@ -136,7 +137,8 @@ export class ArenaSession {
         if (this.isClosed()) {
             return;
         }
-        if (!arena) {
+        // A token rotated (or arena deleted) while bcrypt ran must not let the old token in
+        if (!arena || this.deps.connections.revokedSince(arena.id, revision)) {
             this.close(CloseCode.BadCredentials, 'bad_credentials');
             return;
         }

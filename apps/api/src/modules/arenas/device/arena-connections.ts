@@ -19,6 +19,19 @@ export interface DeviceSocket {
 @Injectable()
 export class ArenaConnections {
     private readonly sockets = new Map<string, DeviceSocket>();
+    // Revocations, so a login whose credential check overlapped one can be refused
+    private revisionCounter = 0;
+    private readonly revokedAt = new Map<string, number>();
+
+    /** A marker to read before checking credentials, for revokedSince() */
+    revision(): number {
+        return this.revisionCounter;
+    }
+
+    /** Whether the arena's credentials were revoked (drop()) after `revision` was read */
+    revokedSince(arenaId: string, revision: number): boolean {
+        return (this.revokedAt.get(arenaId) ?? 0) > revision;
+    }
 
     /** Makes `socket` the arena's live connection; returns the one it replaces, if any */
     claim(arenaId: string, socket: DeviceSocket): DeviceSocket | undefined {
@@ -34,8 +47,12 @@ export class ArenaConnections {
         }
     }
 
-    /** Closes the arena's live socket, if any, and forgets it (its credentials were revoked) */
+    /**
+     * Its credentials were revoked: closes the arena's live socket, if any, and forgets it. Logins
+     * still being checked for the arena are refused through revokedSince().
+     */
     drop(arenaId: string, code: number, reason: string): void {
+        this.revokedAt.set(arenaId, ++this.revisionCounter);
         const socket = this.sockets.get(arenaId);
         if (socket) {
             this.sockets.delete(arenaId);

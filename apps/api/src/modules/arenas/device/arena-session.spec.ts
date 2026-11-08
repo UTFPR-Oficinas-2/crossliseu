@@ -254,6 +254,25 @@ describe('ArenaSession', () => {
             expect(socket.sent).toEqual([]);
         });
 
+        it('refuses a login whose credentials were revoked during the check', async () => {
+            const check = deferred<AuthenticatedArena | null>();
+            deps.authenticate.mockReturnValueOnce(check.promise);
+            const { socket, session } = open();
+
+            const handled = session.onMessage(hello());
+            // the operator rotates the token (or deletes the arena) while bcrypt runs
+            connections.drop('arena-1', 4001, 'bad_credentials');
+            check.resolve(ARENA);
+            await handled;
+
+            expect(socket.closed).toEqual({
+                code: 4001,
+                reason: 'bad_credentials',
+            });
+            expect(socket.sent).toEqual([]);
+            expect(connections.isOnline('arena-1')).toBe(false);
+        });
+
         it('closes with 1011 when the credential check throws', async () => {
             deps.authenticate.mockRejectedValueOnce(new Error('db down'));
             const { socket, session } = open();
