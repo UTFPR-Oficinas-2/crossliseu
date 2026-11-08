@@ -499,12 +499,12 @@ void WebSockets::handleWebsocketPayloadCb(WSclient_t * client, bool ok, uint8_t 
                 messageReceived(client, header->opCode, payload, header->payloadLen, header->fin);
                 break;
             case WSop_close: {
-#ifndef NODEBUG_WEBSOCKETS
+                // crossliseu: read the code outside NODEBUG_WEBSOCKETS and keep it for the client
                 uint16_t reasonCode = 1000;
                 if(header->payloadLen >= 2) {
                     reasonCode = payload[0] << 8 | payload[1];
                 }
-#endif
+                client->closeCode = reasonCode;
                 DEBUG_WEBSOCKETS("[WS][%d][handleWebsocket] get ask for close. Code: %d\n", client->num, reasonCode);
                 if(header->payloadLen > 2) {
                     DEBUG_WEBSOCKETS(" (%s)\n", (payload + 2));

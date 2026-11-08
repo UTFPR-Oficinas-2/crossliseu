@@ -115,6 +115,12 @@ class WebSocketsClient : protected WebSockets {
     bool isConnected(void);
     String getUrl(void);
 
+    // crossliseu: close code sent by the server, valid inside the WStype_DISCONNECTED
+    // callback; 0 when the connection ended without a close frame (network loss, failed upgrade)
+    uint16_t lastCloseCode() const {
+        return _client.closeCode;
+    }
+
   protected:
     String _host;
     uint16_t _port;

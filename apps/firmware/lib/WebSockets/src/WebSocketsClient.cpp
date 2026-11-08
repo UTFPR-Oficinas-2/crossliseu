@@ -937,6 +937,7 @@ void WebSocketsClient::handleHeader(WSclient_t * client, String * headerLine) {
 
 void WebSocketsClient::connectedCb() {
     DEBUG_WEBSOCKETS("[WS-Client] connected to %s:%u.\n", _host.c_str(), _port);
+    _client.closeCode = 0;    // crossliseu: forget the previous connection's close code
 
 #if (WEBSOCKETS_NETWORK_TYPE == NETWORK_ESP8266_ASYNC)
     _client.tcp->onDisconnect(std::bind([](WebSocketsClient * c, AsyncTCPbuffer * obj, WSclient_t * client) -> bool {
@@ -987,6 +988,7 @@ void WebSocketsClient::connectedCb() {
 
 void WebSocketsClient::connectFailedCb() {
     DEBUG_WEBSOCKETS("[WS-Client] connection to %s:%u Failed\n", _host.c_str(), _port);
+    runCbEvent(WStype_ERROR, NULL, 0);    // crossliseu: let the app see a failed TCP/TLS connect
 }
 
 #if (WEBSOCKETS_NETWORK_TYPE == NETWORK_ESP8266_ASYNC)

@@ -413,6 +413,8 @@ typedef struct {
     uint8_t disconnectTimeoutCount = 0;    // after how many subsequent pong timeouts discconnect will happen, 0 means "do not disconnect"
     uint8_t pongTimeoutCount       = 0;    // current pong timeout count
 
+    uint16_t closeCode = 0;    // crossliseu: close code from the server's close frame, 0 when none arrived
+
 #if (WEBSOCKETS_NETWORK_TYPE == NETWORK_ESP8266_ASYNC)
     String cHttpLine;    ///< HTTP header lines
 #endif
