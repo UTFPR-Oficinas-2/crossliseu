@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { Arena } from '../src/modules/arenas/entities/arena.entity.js';
 import { generateDeviceToken } from '../src/modules/arenas/device-token.js';
+import { generateDeviceId } from '../src/modules/arenas/device-id.js';
 import { Championship } from '../src/modules/championships/entities/championship.entity.js';
 import { Match } from '../src/modules/matches/entities/match.entity.js';
 import { Robot } from '../src/modules/robots/entities/robot.entity.js';
@@ -153,7 +154,7 @@ export async function seedDeviceArena(
         .save(
             new Arena(
                 name,
-                `${name.toLowerCase().replace(/\W+/g, '-')}-dev`,
+                generateDeviceId(name),
                 await bcrypt.hash(token, 4),
                 await seedCreatorId(ds),
             ),
