@@ -26,6 +26,7 @@ Before Start, the operator can change the selection (for example, after picking 
 | Who connects | Always the box. The server never dials out. |
 | Frames | Text frames, one JSON object each |
 | Protocol version | `1` |
+| Max frame size | 4 KiB; larger frames close the socket with `1009` |
 
 Connecting happens in two layers. First the box's WebSocket library opens the socket (an HTTP request with `Upgrade: websocket`, answered with `101 Switching Protocols`); no protocol data is exchanged yet. Then, on the open socket, the box logs in with [`hello`](#hello). Credentials travel in `hello`, not in the URL or headers, so that a refusal arrives as one of our [close codes](#close-codes) and the token never shows up in proxy logs.
 
@@ -258,6 +259,8 @@ WebSocket close codes 4000–4999 are reserved for applications; these are ours.
 | `4004` | `protocol` version is not supported | Show "not connected" (update firmware) and retry every 60 s |
 
 Any other close (network loss, server restart, close code `1001`, `1006`, ...) is handled with normal backoff.
+
+The server can also close with `1001` (it is shutting down), `1011` (it could not check the credentials, for example the database is down or slower than 5 s) or `1013` (too many logins are being checked at once). All of them mean: retry with normal backoff.
 
 ## Disconnects
 

@@ -9,7 +9,7 @@ export class ArenaResponse {
     id: string;
     name: string;
     deviceId: string;
-    /** Whether the arena device is connected (always false until the device link exists) */
+    /** Whether the arena box is logged in on /arena right now */
     online: boolean;
     currentMatchId: string | null;
     currentMatch: CurrentMatchSummary | null;

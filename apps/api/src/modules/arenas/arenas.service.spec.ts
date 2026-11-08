@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ArenasService } from './arenas.service.js';
 import { Arena } from './entities/arena.entity.js';
+import { ArenaConnections } from './device/arena-connections.js';
+import type { DeviceSocket } from './device/arena-connections.js';
 import type { Match } from '../matches/entities/match.entity.js';
 import * as bcrypt from 'bcrypt';
 import type {
@@ -91,14 +93,21 @@ function setup(
             Promise.resolve(lockedResult),
         ),
         findByOwner: vi.fn((_ownerUserId: string) => Promise.resolve(arenas)),
+        findLiveByDeviceId: vi.fn((deviceId: string) =>
+            Promise.resolve(
+                arenas.find((entity) => entity.deviceId === deviceId) ?? null,
+            ),
+        ),
         findOwned: vi.fn((id: string, _ownerUserId: string) =>
             Promise.resolve(arenas.find((entity) => entity.id === id) ?? null),
         ),
     };
+    const connections = new ArenaConnections();
     const service = new ArenasService(
         arenasRepository as unknown as ArenasRepository,
+        connections,
     );
-    return { service, arenasRepository };
+    return { service, arenasRepository, connections };
 }
 
 describe('ArenasService.findAll', () => {
@@ -131,6 +140,21 @@ describe('ArenasService.findAll', () => {
             },
         ]);
         expect(arenasRepository.findByOwner).toHaveBeenCalledWith('user-a');
+    });
+
+    it('reports online for an arena with a live connection', async () => {
+        const { service, connections } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+            arena(ARENA_2_ID, 'Arena 2', null),
+        ]);
+        connections.claim(ARENA_1_ID, {} as DeviceSocket);
+
+        const result = await service.findAll('user-a');
+
+        expect(result.map(({ id, online }) => ({ id, online }))).toEqual([
+            { id: ARENA_1_ID, online: true },
+            { id: ARENA_2_ID, online: false },
+        ]);
     });
 
     it('never exposes the token hash', async () => {
@@ -450,5 +474,110 @@ describe('ArenasService.remove', () => {
 
         await expect(call).rejects.toThrow(exception);
         await expect(call).rejects.toThrow(lockedResult);
+    });
+});
+
+describe('ArenasService.authenticateDevice', () => {
+    async function deviceArena() {
+        const entity = arena(ARENA_1_ID, 'Arena 01', null);
+        entity.tokenHash = await bcrypt.hash('right-token', 4);
+        return entity;
+    }
+
+    it('returns id and name for the right token', async () => {
+        const { service } = setup([await deviceArena()]);
+
+        expect(
+            await service.authenticateDevice('Arena 01-device', 'right-token'),
+        ).toEqual({ id: ARENA_1_ID, name: 'Arena 01' });
+    });
+
+    it('returns null for a wrong token', async () => {
+        const { service } = setup([await deviceArena()]);
+
+        expect(
+            await service.authenticateDevice('Arena 01-device', 'wrong-token'),
+        ).toBeNull();
+    });
+
+    it('returns null for an unknown device id', async () => {
+        const { service, arenasRepository } = setup([await deviceArena()]);
+
+        expect(
+            await service.authenticateDevice('ghost-device', 'right-token'),
+        ).toBeNull();
+        expect(arenasRepository.findLiveByDeviceId).toHaveBeenCalledWith(
+            'ghost-device',
+        );
+    });
+
+    it('logs the device id, never the token', async () => {
+        const { service } = setup([await deviceArena()]);
+        const warn = vi
+            .spyOn(service.logger, 'warn')
+            .mockImplementation(() => {});
+
+        await service.authenticateDevice('Arena 01-device', 'wrong-token');
+
+        const logged = warn.mock.calls.map((args) => JSON.stringify(args));
+        expect(logged.some((line) => line.includes('Arena 01-device'))).toBe(
+            true,
+        );
+        expect(logged.some((line) => line.includes('wrong-token'))).toBe(false);
+    });
+});
+
+describe('ArenasService revokes a connected box', () => {
+    function connectedBox() {
+        const box = {
+            readyState: 1,
+            send: vi.fn(),
+            close: vi.fn(),
+            ping: vi.fn(),
+            terminate: vi.fn(),
+        };
+        return box;
+    }
+
+    it('rotateToken closes the connected box with 4001 and marks it offline', async () => {
+        const { service, connections } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+        const box = connectedBox();
+        connections.claim(ARENA_1_ID, box);
+
+        await service.rotateToken(ARENA_1_ID, 'user-a');
+
+        expect(box.close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(connections.isOnline(ARENA_1_ID)).toBe(false);
+    });
+
+    it('remove closes the connected box with 4001 and marks it offline', async () => {
+        const { service, connections } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+        const box = connectedBox();
+        connections.claim(ARENA_1_ID, box);
+
+        await service.remove(ARENA_1_ID, 'user-a');
+
+        expect(box.close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(connections.isOnline(ARENA_1_ID)).toBe(false);
+    });
+
+    it('a refused rotateToken keeps the box connected', async () => {
+        const { service, connections } = setup(
+            [arena(ARENA_1_ID, 'Arena 1', null)],
+            { lockedResult: 'arena_match_live' },
+        );
+        const box = connectedBox();
+        connections.claim(ARENA_1_ID, box);
+
+        await expect(
+            service.rotateToken(ARENA_1_ID, 'user-a'),
+        ).rejects.toThrow();
+
+        expect(box.close).not.toHaveBeenCalled();
+        expect(connections.isOnline(ARENA_1_ID)).toBe(true);
     });
 });
