@@ -131,7 +131,20 @@ A press counts once, after the reading stays the same for 30 ms; holding the but
 
 ### Other boards
 
-To use a board wired differently, add an env to [`platformio.ini`](platformio.ini) that extends `esp32dev` and changes only the pins that differ (the names in the table above, as `-D` flags):
+The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, the Heltec WiFi LoRa 32 V2's onboard LED is on GPIO 25:
+
+```sh
+PLATFORMIO_BUILD_FLAGS="-DPIN_ONBOARD_LED=25" pio run -t upload
+```
+
+In PowerShell, set it first; it lasts until the terminal is closed (or `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`):
+
+```powershell
+$env:PLATFORMIO_BUILD_FLAGS = "-DPIN_ONBOARD_LED=25"
+pio run -t upload
+```
+
+To keep the pins for a board (or to build from the VS Code toolbar), add an env to [`platformio.ini`](platformio.ini) that extends `esp32dev` and changes only the pins that differ:
 
 ```ini
 [env:my_board]
@@ -143,7 +156,7 @@ Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick t
 
 Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
 
-On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them.
+On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo (onboard LED and buttons), `-DPIN_ONBOARD_LED=25` is enough: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`.
 
 For the old `main.cpp` / `Definitions.h`:
 
