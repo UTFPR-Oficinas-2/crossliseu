@@ -125,6 +125,13 @@ const appRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       {
+        // Pick an arena and a scheduled fight (#37). Lists only the account's own data, so it
+        // needs no ownership check.
+        path: '',
+        name: 'operator',
+        component: () => import('../views/operator/OperatorHomeView.vue'),
+      },
+      {
         // One view with three states: preparation, running, closing
         path: ':matchId',
         name: 'match-operation',

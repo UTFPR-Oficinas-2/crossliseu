@@ -50,6 +50,7 @@
   --size-control-lg: 48px; /* large page action buttons */
   --size-field: 48px; /* input height */
   --size-button-min: 120px;
+  --size-choice-text-min: 160px; /* Choice / Item: below this the status pill wraps under the text */
   --size-tab-min: 110px;
   --size-indicator-width: 3px; /* sidebar active bar */
   --size-indicator-height: 18px;

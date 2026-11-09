@@ -16,6 +16,7 @@ import {
   listArenas,
   renameArena as patchArena,
   rotateArenaToken,
+  setArenaCurrentMatch,
   type ApiArena,
 } from '@/api/arenas'
 import { login } from '@/api/auth'
@@ -182,6 +183,16 @@ function toMatchSummary(api: ApiMatch): MatchSummary {
   }
 }
 
+/** GET /matches/:id. Unknown or malformed ids resolve to `null`. */
+export async function getMatchSummary(id: string): Promise<MatchSummary | null> {
+  try {
+    return toMatchSummary(await getMatchById(id))
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return null
+    throw error
+  }
+}
+
 /** GET /matches of a championship for the organizer screens */
 export async function getMatchSummaries(championshipId: string): Promise<MatchSummary[]> {
   return (await listMatches(championshipId)).map(toMatchSummary)
@@ -218,19 +229,26 @@ export async function deleteMatch(id: string, token: string): Promise<void> {
   return removeMatch(id, token)
 }
 
-// apps/api has no arenas, operator match data or referee access yet. These reject with a clear
+// apps/api has no operator match data or referee access yet. These reject with a clear
 // error instead of inventing endpoints; replace each with a request once the API provides it.
 const notImplemented = () => new ApiError(501, 'not_implemented', ['not_implemented'])
+
+// Shared by both arena views; the match id already comes as `currentMatchId`
+function toCurrentMatch(api: ApiArena): Arena['currentMatch'] {
+  return (
+    api.currentMatch && {
+      robotAName: api.currentMatch.robotAName,
+      robotBName: api.currentMatch.robotBName,
+    }
+  )
+}
 
 function toManagedArena(api: ApiArena): ManagedArena {
   return {
     id: api.id,
     name: api.name,
     deviceId: api.deviceId,
-    currentMatch: api.currentMatch && {
-      robotAName: api.currentMatch.robotAName,
-      robotBName: api.currentMatch.robotBName,
-    },
+    currentMatch: toCurrentMatch(api),
   }
 }
 
@@ -263,9 +281,28 @@ export async function removeArena(id: string, token: string): Promise<void> {
   return deleteArena(id, token)
 }
 
-/** Arenas belong to an account, one ESP32 box each. No operator API yet (see getMyArenas for the owner's list). */
-export const getArenas: (championshipId: string) => Promise<Arena[]> = async () => {
-  throw notImplemented()
+function toArena(api: ApiArena): Arena {
+  return {
+    id: api.id,
+    name: api.name,
+    online: api.online,
+    currentMatchId: api.currentMatchId,
+    currentMatch: toCurrentMatch(api),
+  }
+}
+
+/** GET /arenas (JWT). The account's arenas for the operator: online flag and current match. */
+export async function getArenas(token: string): Promise<Arena[]> {
+  return (await listArenas(token)).map(toArena)
+}
+
+/** PUT /arenas/:id/current-match (JWT). The operator's pick; refusals come through as ApiError. */
+export async function selectArenaMatch(
+  arenaId: string,
+  matchId: string,
+  token: string,
+): Promise<Arena> {
+  return toArena(await setArenaCurrentMatch(arenaId, matchId, token))
 }
 
 /** A match with its operator data (fights, end reason). The API only has `MatchSummary`. */
