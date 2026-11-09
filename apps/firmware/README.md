@@ -40,7 +40,12 @@ To remove everything later: `uv tool uninstall platformio`, `rm -rf ~/.platformi
 
 ## Setup (Windows)
 
-Same steps as macOS (`uv tool install platformio`, then `pio run` from `apps/firmware`), in PowerShell. Two extra fixes:
+Install [Git for Windows](https://git-scm.com/download/win) first; PlatformIO needs it. Then install PlatformIO in one of two ways:
+
+- **uv**, as on macOS: `uv tool install platformio`, then run the same `pio` commands from `apps/firmware` in PowerShell.
+- **VS Code**: install the [PlatformIO IDE extension](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) and open `apps/firmware` as the project; build, upload and the serial monitor are in the PlatformIO toolbar.
+
+Two extra fixes:
 
 1. **Long paths.** Unpacking `esp32-arduino-libs` on the first build fails unless Windows allows paths over 260 characters. Turn them on once, in PowerShell **as administrator**, then restart the terminal:
 
@@ -48,13 +53,19 @@ Same steps as macOS (`uv tool install platformio`, then `pio run` from `apps/fir
    New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force
    ```
 
-2. **`pioarduino` version.** The pinned platform installs `pioarduino==6.2.0.post1` into `~\.platformio\penv`, and on Windows it then rejects its own platform (`6.2.0.post1` is read as a pre-release of 6.2.0, so `>=6.2.0` fails). If the build stops with that version error, pin it:
+2. **`pioarduino` version.** The pinned platform installs `pioarduino==6.2.0.post1` into `~\.platformio\penv`, and on Windows it then rejects its own platform (`6.2.0.post1` is read as a pre-release of 6.2.0, so `>=6.2.0` fails). If the build stops with that version error, pin it. With the VS Code extension (its penv has `pip`):
 
    ```powershell
-   uv pip install --python "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" "pioarduino==6.2.0"
+   & "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" -m pip install --force-reinstall --no-deps "pioarduino==6.2.0"
    ```
 
-To remove everything later: `uv tool uninstall platformio`, then delete `%USERPROFILE%\.platformio` and `apps\firmware\.pio`.
+   With uv (its penv has no `pip`):
+
+   ```powershell
+   uv pip install --python "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" --reinstall --no-deps "pioarduino==6.2.0"
+   ```
+
+To remove everything later: `uv tool uninstall platformio` (or uninstall the VS Code extension), then delete `%USERPROFILE%\.platformio` and `apps\firmware\.pio`.
 
 ## Old countdown sketch
 
