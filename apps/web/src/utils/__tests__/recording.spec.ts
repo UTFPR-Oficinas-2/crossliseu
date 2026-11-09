@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeCameraError,
   fileExtension,
   formatBytes,
   formatElapsed,
@@ -47,6 +48,23 @@ describe('formatElapsed', () => {
 
   it('never shows a negative time', () => {
     expect(formatElapsed(-3)).toBe('00:00')
+  })
+})
+
+describe('describeCameraError', () => {
+  // getUserMedia rejects with a DOMException; its `name` is what matters
+  const cameraError = (name: string) => Object.assign(new Error('camera'), { name })
+
+  it('explains the common getUserMedia failures', () => {
+    expect(describeCameraError(cameraError('NotAllowedError'))).toMatch(/Permissão/)
+    expect(describeCameraError(cameraError('NotFoundError'))).toMatch(/Nenhuma câmera/)
+    expect(describeCameraError(cameraError('NotReadableError'))).toMatch(/em uso/)
+    expect(describeCameraError(cameraError('OverconstrainedError'))).toMatch(/outra câmera/)
+  })
+
+  it('falls back to a generic message', () => {
+    expect(describeCameraError(cameraError('SomethingElse'))).toBe('Não foi possível abrir a câmera.')
+    expect(describeCameraError('not an error')).toBe('Não foi possível abrir a câmera.')
   })
 })
 

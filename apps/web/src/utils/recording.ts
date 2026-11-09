@@ -54,6 +54,26 @@ export function formatElapsed(totalSeconds: number): string {
   return hours > 0 ? `${hours}:${mmss}` : mmss
 }
 
+/**
+ * Operator-facing message for a camera error. `getUserMedia` rejects with a DOMException whose
+ * `name` says what went wrong; anything unknown gets a generic message.
+ */
+export function describeCameraError(error: unknown): string {
+  const name = error instanceof Error ? error.name : ''
+  switch (name) {
+    case 'NotAllowedError':
+      return 'Permissão da câmera negada. Libere o acesso no cadeado ao lado do endereço e tente de novo.'
+    case 'NotFoundError':
+      return 'Nenhuma câmera encontrada. Conecte a câmera da arena e tente de novo.'
+    case 'NotReadableError':
+      return 'A câmera está em uso por outro programa. Feche-o e tente de novo.'
+    case 'OverconstrainedError':
+      return 'Esta câmera não aceita as configurações de gravação. Escolha outra câmera.'
+    default:
+      return 'Não foi possível abrir a câmera.'
+  }
+}
+
 /** 1536 -> "1,5 KB", 73400320 -> "70,0 MB" (one decimal, Brazilian comma) */
 export function formatBytes(bytes: number): string {
   const megabytes = bytes / 1024 / 1024
