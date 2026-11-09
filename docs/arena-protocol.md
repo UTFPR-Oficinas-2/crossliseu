@@ -304,6 +304,7 @@ void setLedState(LedState state);       // sets the color/blink from the table a
 
 // Buttons (#41)
 enum class Press { None, A, B };
+void buttonsBegin();                    // sets up the pins; once in setup()
 Press pollButtons();                    // debounced; returns each press once
 
 // Connection (#97): src/arena.h; the only code that touches Wi-Fi and the socket

@@ -10,6 +10,8 @@ The box talks to the API over the [`/arena` WebSocket protocol](../../docs/arena
 
 Pins already taken on the board: onboard LED 25, OLED SDA 4 / SCL 15 / RST 16, Vext (OLED power) 21, PRG button 0, LoRa radio 5, 14, 18, 19, 26, 27 (plus 34, 35 as inputs).
 
+**ESP32 DevKit** (ESP32-WROOM-32, 4 MB flash): the box PCB with the surrender buttons, the two LCDs and the strip. Same chip as the V2, so the code is the same; build it with the `esp32dev` env (`pio run -e esp32dev`, `pio run -e esp32dev -t upload`). Its onboard LED is on GPIO 2. The pins in [Pins](#pins) are for this board; several of them are taken on the V2.
+
 ## Setup (macOS)
 
 Built with [PlatformIO](https://platformio.org) on the Arduino framework. The platform is [pioarduino](https://github.com/pioarduino/platform-espressif32) (Arduino core 3.x), pinned in [`platformio.ini`](platformio.ini).
@@ -28,9 +30,6 @@ pio device monitor           # serial monitor at 115200; Ctrl+C to quit
 
 `src/` is the code that gets built; it needs a `config.h` (see [Configuration](#configuration)). Build output goes to `.pio/` (git-ignored).
 
-The protocol logic (`lib/ArenaLogic`) has unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
-
-```sh
 pio test -e native
 ```
 
@@ -55,8 +54,9 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 
 `src/arena.cpp` connects the box to the API's [`/arena` WebSocket](../../docs/arena-protocol.md); other modules use only the functions in `src/arena.h` (listed under "Firmware modules" in the protocol doc). Until the display and strip exist (#42), `src/main.cpp` is a demo:
 
-- The onboard LED (GPIO 25) is on while the box is connected (after `welcome`).
+- The onboard LED (GPIO 25 on the V2, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
+- Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |
@@ -80,7 +80,16 @@ To test the arena flow without the hardware, the simulator in [`tools/arena-sim`
 
 ## Pins
 
-For `main.cpp` / `Definitions.h`:
+Surrender buttons (`src/buttons.cpp`, ESP32 DevKit). Both use the internal pull-up; the other contact terminal goes to GND.
+
+| Signal | GPIO | Contact | Pressed reads |
+| --- | --- | --- | --- |
+| Surrender, side A | 27 | NO (normally open) | LOW |
+| Surrender, side B | 32 | NC (normally closed) | HIGH |
+
+A press counts once, after the reading stays the same for 30 ms; holding the button counts nothing more. A button already pressed at boot (or an NC button with a loose wire) is not a press.
+
+For the old `main.cpp` / `Definitions.h`:
 
 | Signal | GPIO |
 | --- | --- |
@@ -92,12 +101,15 @@ For `main.cpp` / `Definitions.h`:
 ## Files
 
 - `platformio.ini`: board, platform version and build settings
-- `src/main.cpp`: demo of the connection layer (LED 25, serial `a`/`b`) until #42
+- `src/main.cpp`: demo of the connection layer and the buttons (onboard LED, serial `a`/`b`, `button: A`/`B`) until #42
 - `src/arena.h`, `src/arena.cpp`: connection layer (Wi-Fi, WebSocket, handshake, retries)
 - `src/arena_ca.h`: root certificates for `wss://`
+- `src/buttons.h`, `src/buttons.cpp`: surrender buttons (`buttonsBegin`, `pollButtons`)
+- `lib/Buttons/`: debounce logic with no Arduino dependency
 - `lib/ArenaLogic/`: protocol logic with no Arduino dependency (URL, retry policy, JSON frames)
 - `lib/WebSockets/`: patched arduinoWebSockets 2.7.2
 - `test/test_arena_logic/`: unit tests for `lib/ArenaLogic` (`pio test -e native`)
+- `test/test_buttons/`: unit tests for the debounce in `lib/Buttons` (`pio test -e native`)
 - `main.cpp`: old sketch: setup, serial commands and state machine
 - `Definitions.h`: pin numbers and the state enum
 - `config.example.h`: template for the git-ignored `config.h` (server address, device id and token, Wi-Fi)
