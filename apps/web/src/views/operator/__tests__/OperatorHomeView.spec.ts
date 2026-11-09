@@ -80,7 +80,7 @@ async function mountAt(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/manage/arenas', name: 'arenas', component: stub },
+      { path: '/arenas', name: 'arenas', component: stub },
       { path: '/operator', name: 'operator', component: OperatorHomeView },
       { path: '/operator/:matchId', name: 'match-operation', component: stub },
     ],
@@ -444,7 +444,7 @@ describe('OperatorHomeView', () => {
     const { wrapper } = await mountAt('/operator')
 
     expect(group(wrapper, '1 · Arena').text()).toContain('Nenhuma arena cadastrada.')
-    expect(wrapper.find('a[href="/manage/arenas"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/arenas"]').exists()).toBe(true)
   })
 
   it('says when the championship has no scheduled fight', async () => {

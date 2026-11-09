@@ -47,10 +47,10 @@ const appRoutes: RouteRecordRaw[] = [
         props: { mode: 'create' },
       },
       {
-        // Declared before `:championshipId`, which would otherwise read "arenas" as an id
+        // Arenas moved to `/arenas`; keeps old links working. Declared before `:championshipId`,
+        // which would otherwise read "arenas" as an id.
         path: 'arenas',
-        name: 'arenas',
-        component: () => import('../views/organizer/ArenasView.vue'),
+        redirect: { name: 'arenas' },
       },
       {
         // There is no overview page: managing a championship opens its participants
@@ -116,6 +116,19 @@ const appRoutes: RouteRecordRaw[] = [
         meta: { ownership: 'championship' },
         component: () => import('../views/organizer/ChampionshipFormView.vue'),
         props: (route) => ({ mode: 'edit', championshipId: route.params.championshipId }),
+      },
+    ],
+  },
+  {
+    // Arena management has its own top bar item; it reuses the organizer frame without a sidebar
+    path: '/arenas',
+    component: () => import('../layouts/OrganizerLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'arenas',
+        component: () => import('../views/organizer/ArenasView.vue'),
       },
     ],
   },

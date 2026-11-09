@@ -34,6 +34,21 @@ describe('organizer form routes', () => {
   })
 })
 
+describe('arenas route', () => {
+  it('lives at /arenas and requires sign-in', () => {
+    const resolved = router.resolve({ name: 'arenas' })
+
+    expect(resolved.path).toBe('/arenas')
+    expect(resolved.meta.requiresAuth).toBe(true)
+  })
+
+  it('sends the old /manage/arenas address to /arenas', () => {
+    const resolved = router.resolve('/manage/arenas')
+
+    expect(resolved.matched.at(-1)?.redirect).toEqual({ name: 'arenas' })
+  })
+})
+
 describe('championship management entry', () => {
   it('sends /manage/:id to the participants list', () => {
     // resolve() doesn't follow redirects (push does, but the auth guard would intercept it)
