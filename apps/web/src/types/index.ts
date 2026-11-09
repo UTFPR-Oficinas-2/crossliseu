@@ -150,7 +150,6 @@ export interface Match extends MatchSummary {
   arenaId: string
   roundDurationSeconds: number
   elapsedSeconds: number
-  startedAt: string | null
   operatorName: string | null
   /** "Logitech C920 · 1080p" */
   camera: string | null
