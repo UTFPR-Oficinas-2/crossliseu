@@ -69,7 +69,11 @@ async function load(matchId: string) {
   const [loadedMatch, loadedChampionship, arenas, loadedRobots] = loaded
   match.value = loadedMatch
   championship.value = loadedChampionship
-  arena.value = arenas.find((a) => a.currentMatchId === loadedMatch?.id) ?? null
+  // Close clears the arena's currentMatchId, so prefer the arena the fight ran on
+  arena.value =
+    (loadedMatch?.arenaId
+      ? arenas.find((a) => a.id === loadedMatch.arenaId)
+      : arenas.find((a) => a.currentMatchId === loadedMatch?.id)) ?? null
   robots.value = loadedRobots
 }
 
