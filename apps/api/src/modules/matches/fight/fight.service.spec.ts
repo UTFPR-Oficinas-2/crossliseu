@@ -1,0 +1,346 @@
+import 'reflect-metadata';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { FightService } from './fight.service.js';
+import type {
+    FightRepository,
+    FightWrites,
+    LockedFight,
+} from './fight.repository.js';
+import { Clock } from './clock.js';
+import { Match } from '../entities/match.entity.js';
+import type { MatchState } from '../entities/match.entity.js';
+import { MatchEvent } from '../entities/match-event.entity.js';
+import type { MatchEventType } from '../entities/match-event.entity.js';
+import { Robot } from '../../robots/entities/robot.entity.js';
+import type { ChampionshipsService } from '../../championships/championships.service.js';
+
+const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
+const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const ARENA_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const T0 = new Date('2026-11-10T14:00:00Z');
+const at = (ms: number) => new Date(T0.getTime() + ms);
+
+class FixedClock extends Clock {
+    constructor(private current: Date) {
+        super();
+    }
+    now() {
+        return this.current;
+    }
+}
+
+function event(type: MatchEventType, occurredAt: Date): MatchEvent {
+    const entity = new MatchEvent();
+    entity.matchId = MATCH_ID;
+    entity.type = type;
+    entity.occurredAt = occurredAt;
+    entity.actorUserId = USER_ID;
+    return entity;
+}
+
+interface Options {
+    state?: MatchState;
+    events?: MatchEvent[];
+    arenaId?: string | null;
+    owner?: boolean;
+    now?: Date;
+    missing?: boolean;
+}
+
+function setup({
+    state = 'scheduled',
+    events = [],
+    arenaId = null,
+    owner = true,
+    now = T0,
+    missing = false,
+}: Options = {}) {
+    const match = new Match(
+        'lightweight',
+        CHAMPIONSHIP_ID,
+        'a',
+        'b',
+        USER_ID,
+        T0,
+    );
+    match.id = MATCH_ID;
+    match.state = state;
+    match.endReason = null;
+    match.robotA = new Robot(
+        'Tritura',
+        'lightweight',
+        't',
+        CHAMPIONSHIP_ID,
+        USER_ID,
+    );
+    match.robotB = new Robot(
+        'Ferrugem',
+        'lightweight',
+        't',
+        CHAMPIONSHIP_ID,
+        USER_ID,
+    );
+    const store = {
+        match,
+        events: [...events],
+        arenaPointer: arenaId,
+        written: [] as MatchEvent[],
+    };
+
+    const repo = {
+        findWithRobots: vi.fn(() =>
+            Promise.resolve(missing ? null : store.match),
+        ),
+        findEvents: vi.fn(() => Promise.resolve([...store.events])),
+        withLockedFight: vi.fn(
+            async (
+                _id: string,
+                work: (f: LockedFight, w: FightWrites) => Promise<unknown>,
+            ) => {
+                if (missing) {
+                    return null;
+                }
+                const writes: FightWrites = {
+                    appendEvent: (type, occurredAt, actorUserId) => {
+                        const written = event(type, occurredAt);
+                        written.actorUserId = actorUserId;
+                        store.events.push(written);
+                        store.written.push(written);
+                        return Promise.resolve();
+                    },
+                    updateMatch: (patch) => {
+                        Object.assign(store.match, patch);
+                        return Promise.resolve();
+                    },
+                    clearArenaPointer: () => {
+                        store.arenaPointer = null;
+                        return Promise.resolve();
+                    },
+                };
+                return work(
+                    {
+                        match: store.match,
+                        events: [...store.events],
+                        arenaId: store.arenaPointer,
+                    },
+                    writes,
+                );
+            },
+        ),
+    };
+    const championships = {
+        isOwnedBy: vi.fn(() => Promise.resolve(owner)),
+    };
+    const service = new FightService(
+        repo as unknown as FightRepository,
+        championships as unknown as ChampionshipsService,
+        new FixedClock(now),
+    );
+    return { service, repo, store, championships };
+}
+
+describe('FightService', () => {
+    it('start writes started at now with the operator, sets ongoing and the picked arena', async () => {
+        const { service, store } = setup({ arenaId: ARENA_ID, now: at(1000) });
+
+        const state = await service.command(MATCH_ID, 'start', USER_ID);
+
+        expect(store.match.state).toBe('ongoing');
+        expect(store.match.arenaId).toBe(ARENA_ID);
+        expect(store.written).toHaveLength(1);
+        expect(store.written[0]).toMatchObject({
+            type: 'started',
+            occurredAt: at(1000),
+            actorUserId: USER_ID,
+        });
+        expect(state.status).toBe('ongoing');
+    });
+
+    it('start with no picked arena leaves arenaId null and still succeeds', async () => {
+        const { service, store } = setup();
+
+        await service.command(MATCH_ID, 'start', USER_ID);
+
+        expect(store.match.state).toBe('ongoing');
+        expect(store.match.arenaId).toBeNull();
+    });
+
+    it('pause, resume and finish write their event and state; finish sets end reason manual', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+
+        await service.command(MATCH_ID, 'pause', USER_ID);
+        expect(store.match.state).toBe('paused');
+        expect(store.written.at(-1)?.type).toBe('paused');
+
+        await service.command(MATCH_ID, 'resume', USER_ID);
+        expect(store.match.state).toBe('ongoing');
+        expect(store.written.at(-1)?.type).toBe('resumed');
+
+        const state = await service.command(MATCH_ID, 'finish', USER_ID);
+        expect(store.match.state).toBe('finished');
+        expect(store.match.endReason).toBe('manual');
+        expect(store.written.at(-1)?.type).toBe('finished');
+        expect(state.endReason).toBe('manual');
+    });
+
+    it('close writes closed and clears the arena pointer; a second close is 409', async () => {
+        const { service, store } = setup({
+            state: 'finished',
+            events: [event('started', T0), event('finished', at(1000))],
+            arenaId: ARENA_ID,
+            now: at(2000),
+        });
+
+        await service.command(MATCH_ID, 'close', USER_ID);
+
+        expect(store.written.map((e) => e.type)).toEqual(['closed']);
+        expect(store.arenaPointer).toBeNull();
+        await expect(
+            service.command(MATCH_ID, 'close', USER_ID),
+        ).rejects.toThrow(new ConflictException('match_invalid_transition'));
+    });
+
+    it('close without an arena writes closed', async () => {
+        const { service, store } = setup({
+            state: 'finished',
+            events: [event('started', T0), event('finished', at(1000))],
+            now: at(2000),
+        });
+
+        await service.command(MATCH_ID, 'close', USER_ID);
+
+        expect(store.written.map((e) => e.type)).toEqual(['closed']);
+    });
+
+    it('every disallowed command is 409 match_invalid_transition', async () => {
+        const cases: [MatchState, 'pause' | 'resume' | 'start'][] = [
+            ['scheduled', 'pause'],
+            ['ongoing', 'resume'],
+            ['finished', 'start'],
+        ];
+        for (const [state, command] of cases) {
+            const { service } = setup({
+                state,
+                events: state === 'scheduled' ? [] : [event('started', T0)],
+                now: at(1000),
+            });
+            await expect(
+                service.command(MATCH_ID, command, USER_ID),
+            ).rejects.toThrow(
+                new ConflictException('match_invalid_transition'),
+            );
+        }
+    });
+
+    it('a non-owner gets 404 match_not_found and nothing is written', async () => {
+        const { service, store, repo } = setup({ owner: false });
+
+        await expect(
+            service.command(MATCH_ID, 'start', USER_ID),
+        ).rejects.toThrow(new NotFoundException('match_not_found'));
+        expect(store.written).toHaveLength(0);
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
+    it('an unknown match gets 404 match_not_found', async () => {
+        const { service } = setup({ missing: true });
+
+        await expect(
+            service.command(MATCH_ID, 'start', USER_ID),
+        ).rejects.toThrow(new NotFoundException('match_not_found'));
+    });
+
+    it('settles an expired ongoing fight: finished, time_out, finished event at the instant time ran out', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(300_000),
+        });
+
+        const state = await service.state(MATCH_ID);
+
+        expect(store.match.state).toBe('finished');
+        expect(store.match.endReason).toBe('time_out');
+        expect(store.written).toHaveLength(1);
+        expect(store.written[0]).toMatchObject({
+            type: 'finished',
+            occurredAt: at(180_000),
+            actorUserId: null,
+        });
+        expect(state).toMatchObject({
+            status: 'finished',
+            remainingMs: 0,
+            endReason: 'time_out',
+        });
+    });
+
+    it('settles when time left is exactly 0', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(180_000),
+        });
+
+        expect(await service.settle(MATCH_ID)).toBe(true);
+        expect(store.match.state).toBe('finished');
+        expect(store.written[0].occurredAt).toEqual(at(180_000));
+    });
+
+    it('commits the time-out even when the command is refused', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(300_000),
+        });
+
+        await expect(
+            service.command(MATCH_ID, 'pause', USER_ID),
+        ).rejects.toThrow(new ConflictException('match_invalid_transition'));
+
+        expect(store.match.state).toBe('finished');
+        expect(store.events.map((e) => e.type)).toEqual([
+            'started',
+            'finished',
+        ]);
+    });
+
+    it('state() returns status, remainingMs, endReason and robot names', async () => {
+        const { service } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(60_000),
+        });
+
+        expect(await service.state(MATCH_ID)).toEqual({
+            status: 'ongoing',
+            matchId: MATCH_ID,
+            remainingMs: 120_000,
+            endReason: null,
+            robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+        });
+    });
+
+    it('state() of an unknown match is 404 match_not_found', async () => {
+        const { service } = setup({ missing: true });
+
+        await expect(service.state(MATCH_ID)).rejects.toThrow(
+            new NotFoundException('match_not_found'),
+        );
+    });
+
+    it('settle() returns false and writes nothing for a fight with time left', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+
+        expect(await service.settle(MATCH_ID)).toBe(false);
+        expect(store.written).toHaveLength(0);
+    });
+});
