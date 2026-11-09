@@ -98,10 +98,10 @@ export class FightService {
     }
 
     /**
-     * Settles a time-out if the match is ongoing and out of time. True when the fight had run out
-     * and is no longer `ongoing` as a result, whichever call wrote the time-out (this one, or a
-     * concurrent one that got to the lock first). False for a fight with time left, one that is
-     * not `ongoing`, and an unknown match.
+     * Settles a time-out if the match is ongoing and out of time. True means the caller's
+     * `ongoing` row may be stale and should be re-read: this call wrote the time-out, or the
+     * match was no longer `ongoing` when looked at (a concurrent settle, pause or finish got
+     * there first). False for a fight with time left and for an unknown match.
      *
      * The first look takes no locks, so public reads of a fight with time left never wait for the
      * operator's commands. Only an expired-looking fight opens the locking transaction, which
@@ -109,8 +109,11 @@ export class FightService {
      */
     async settle(matchId: string): Promise<boolean> {
         const match = await this.repo.findWithRobots(matchId);
-        if (!match || match.state !== 'ongoing') {
+        if (!match) {
             return false;
+        }
+        if (match.state !== 'ongoing') {
+            return true;
         }
         const events = await this.repo.findEvents(matchId);
         if (remainingMs(match.state, events, this.clock.now()) !== 0) {

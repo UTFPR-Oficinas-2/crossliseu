@@ -374,18 +374,24 @@ describe('FightService', () => {
         expect(repo.withLockedFight).not.toHaveBeenCalled();
     });
 
-    it('settle() takes no lock for a fight that is not ongoing, or unknown', async () => {
-        const paused = setup({
-            state: 'paused',
-            events: [event('started', T0)],
-            now: at(500_000),
+    it('settle() returns true without locking when the first look already finds the fight finished', async () => {
+        const { service, repo, store } = setup({
+            state: 'finished',
+            events: [event('started', T0), event('finished', at(180_000))],
+            now: at(300_000),
         });
-        expect(await paused.service.settle(MATCH_ID)).toBe(false);
-        expect(paused.repo.withLockedFight).not.toHaveBeenCalled();
+        store.match.endReason = 'time_out';
 
-        const missing = setup({ missing: true });
-        expect(await missing.service.settle(MATCH_ID)).toBe(false);
-        expect(missing.repo.withLockedFight).not.toHaveBeenCalled();
+        expect(await service.settle(MATCH_ID)).toBe(true);
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+        expect(store.written).toHaveLength(0);
+    });
+
+    it('settle() returns false without locking for an unknown match', async () => {
+        const { service, repo } = setup({ missing: true });
+
+        expect(await service.settle(MATCH_ID)).toBe(false);
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
     });
 
     it('settle() returns true when a concurrent call settled the fight first', async () => {

@@ -336,6 +336,20 @@ describe('MatchesService.findAll', () => {
         expect(maxRunning).toBe(1);
     });
 
+    it('re-reads when another reader already settled the listed ongoing match', async () => {
+        const { service, matchesRepository, fightService } = setup([], []);
+        matchesRepository.findAll
+            .mockResolvedValueOnce([match('ongoing')])
+            .mockResolvedValueOnce([match('finished')]);
+        // settle found the row already finished by someone else, so the listing was stale
+        fightService.settle.mockResolvedValue(true);
+
+        const result = await service.findAll();
+
+        expect(matchesRepository.findAll).toHaveBeenCalledTimes(2);
+        expect(result[0].state).toBe('finished');
+    });
+
     it('reads once when nothing was settled', async () => {
         const { service, matchesRepository } = setup([], [match('scheduled')]);
         matchesRepository.findAll.mockResolvedValue([match('ongoing')]);
