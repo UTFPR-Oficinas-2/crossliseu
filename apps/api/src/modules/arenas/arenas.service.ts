@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
     ArenasRepository,
+    type ClearCurrentMatchResult,
     type LockedArenaResult,
     type SetCurrentMatchResult,
 } from './arenas.repository.js';
@@ -176,8 +177,9 @@ export class ArenasService {
     }
 
     /**
-     * Closes the arena's match or undoes a pick before Start, leaving the arena without a current
-     * match; refused while the match is live. Without a current match it changes nothing.
+     * Undoes a pick before Start, leaving the arena without a current match; refused once the
+     * match has started or finished (closing a finished fight is `POST /matches/:id/close`).
+     * Without a current match it changes nothing.
      */
     async clearCurrentMatch(
         arenaId: string,
@@ -274,7 +276,7 @@ function toException(
 }
 
 function lockedException(
-    result: Exclude<LockedArenaResult, 'done'>,
+    result: Exclude<LockedArenaResult | ClearCurrentMatchResult, 'done'>,
 ): NotFoundException | ConflictException {
     return result === 'arena_not_found'
         ? new NotFoundException(result)

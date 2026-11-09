@@ -176,6 +176,7 @@ function toMatchSummary(api: ApiMatch): MatchSummary {
     weightClass: api.weightClass,
     robotAId: api.robotAId,
     robotBId: api.robotBId,
+    arenaId: api.arenaId,
     state: api.state,
     scheduledAt: api.scheduledAt,
     createdAt: api.createdAt,

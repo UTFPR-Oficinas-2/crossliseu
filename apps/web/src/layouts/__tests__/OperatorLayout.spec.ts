@@ -28,6 +28,7 @@ const match: MatchSummary = {
   weightClass: 'beetleweight',
   robotAId: 'r1',
   robotBId: 'r2',
+  arenaId: null,
   state: 'scheduled',
   scheduledAt: at,
   createdAt: at,
@@ -105,6 +106,32 @@ describe('OperatorLayout', () => {
       arenaConnected: false,
     })
     expect(wrapper.find('[aria-current="step"]').text()).toBe('1 · Preparação')
+  })
+
+  it('finds the arena by arenaId after Close cleared its current match', async () => {
+    vi.mocked(getMatchSummary).mockResolvedValue({ ...match, state: 'finished', arenaId: 'a1' })
+    vi.mocked(getArenas).mockResolvedValue([
+      arenas[0]!,
+      { ...arenas[1]!, currentMatchId: null, currentMatch: null },
+    ])
+
+    const wrapper = await mountAt('/operator/m1')
+
+    expect(wrapper.findComponent(OperatorNav).props('arena')).toBe('Arena 1')
+  })
+
+  it('falls back to currentMatchId before Start', async () => {
+    const wrapper = await mountAt('/operator/m1')
+
+    expect(wrapper.findComponent(OperatorNav).props('arena')).toBe('Arena 1')
+  })
+
+  it('shows no arena when arenaId is null and no arena points at the match', async () => {
+    vi.mocked(getArenas).mockResolvedValue([arenas[0]!])
+
+    const wrapper = await mountAt('/operator/m1')
+
+    expect(wrapper.findComponent(OperatorNav).props('arena')).toBe('')
   })
 
   it('reports the arena as connected when its box is online', async () => {

@@ -50,7 +50,7 @@ export function deleteArena(id: string, token: string): Promise<void> {
   return apiRequest(`/arenas/${encodeURIComponent(id)}`, { method: 'DELETE', token })
 }
 
-/** DELETE /arenas/:id/current-match (JWT). Closes the arena's match or undoes a pick. 404 `arena_not_found`, 409 `arena_match_live`. */
+/** DELETE /arenas/:id/current-match (JWT). Undoes a pick before Start. 404 `arena_not_found`, 409 `arena_match_started`. */
 export function clearArenaCurrentMatch(id: string, token: string): Promise<ApiArena> {
   return apiRequest(`/arenas/${encodeURIComponent(id)}/current-match`, {
     method: 'DELETE',

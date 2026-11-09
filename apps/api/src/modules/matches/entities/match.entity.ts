@@ -68,12 +68,6 @@ export class Match extends BaseEntity {
     @Column({ name: 'scheduled_at', type: 'timestamptz', nullable: false })
     scheduledAt: Date;
 
-    @Column({ name: 'started_at', type: 'timestamptz', nullable: true })
-    startedAt: Date | null;
-
-    @Column({ name: 'finished_at', type: 'timestamptz', nullable: true })
-    finishedAt: Date | null;
-
     @Column({ name: 'championship_id', type: 'uuid', nullable: false })
     championshipId: string;
 

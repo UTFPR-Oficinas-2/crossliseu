@@ -50,6 +50,7 @@ const match = (id: string, state: MatchState, robotAId = 'r1', robotBId = 'r2'):
   weightClass: 'beetleweight',
   robotAId,
   robotBId,
+  arenaId: null,
   state,
   scheduledAt: at,
   createdAt: at,
