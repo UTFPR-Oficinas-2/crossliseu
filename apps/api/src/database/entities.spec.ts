@@ -4,23 +4,14 @@ import type { EntityTarget, ObjectLiteral } from 'typeorm';
 import { Arena } from '../modules/arenas/entities/arena.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
 import { Match } from '../modules/matches/entities/match.entity.js';
-import { MatchPause } from '../modules/matches/entities/match-pause.entity.js';
-import { MatchScoreEvent } from '../modules/matches/entities/match-score-event.entity.js';
+import { MatchEvent } from '../modules/matches/entities/match-event.entity.js';
 import { Robot } from '../modules/robots/entities/robot.entity.js';
 import { User } from '../modules/users/entities/user.entity.js';
 
 async function buildDataSource(): Promise<DataSource> {
     const dataSource = new DataSource({
         type: 'postgres',
-        entities: [
-            Arena,
-            Championship,
-            Match,
-            MatchPause,
-            MatchScoreEvent,
-            Robot,
-            User,
-        ],
+        entities: [Arena, Championship, Match, MatchEvent, Robot, User],
     });
     // buildMetadatas is protected; it only reads decorators and never connects
     await (
@@ -94,13 +85,11 @@ describe('entity metadata', () => {
             'created_by_user_id',
             'deleted_at',
             'end_reason',
-            'finished_at',
             'id',
             'modified_at',
             'robot_a_id',
             'robot_b_id',
             'scheduled_at',
-            'started_at',
             'state',
             'weight_class',
             'winner_robot_id',
@@ -112,8 +101,6 @@ describe('entity metadata', () => {
             'arena_id',
             'deleted_at',
             'end_reason',
-            'finished_at',
-            'started_at',
             'winner_robot_id',
         ]);
     });
@@ -167,39 +154,33 @@ describe('entity metadata', () => {
         ).not.toContain('UQ_arenas_name');
     });
 
-    it('score event references its match and robot', async () => {
-        expect(await foreignKeys(MatchScoreEvent)).toEqual([
+    it('match event references its match, actor and robot', async () => {
+        expect(await foreignKeys(MatchEvent)).toEqual([
+            'actor_user_id → users',
             'match_id → matches',
             'robot_id → robots',
         ]);
     });
 
-    it('score event has no soft delete or modified_at', async () => {
-        expect(await columnNames(MatchScoreEvent)).toEqual([
+    it('only the actor and score fields of a match event are nullable', async () => {
+        expect(await nullableColumns(MatchEvent)).toEqual([
             'action',
-            'created_at',
-            'id',
+            'actor_user_id',
             'judge_seat',
-            'match_id',
             'robot_id',
         ]);
     });
 
-    it('pause references its match and the user who paused', async () => {
-        expect(await foreignKeys(MatchPause)).toEqual([
-            'match_id → matches',
-            'paused_by_user_id → users',
-        ]);
-    });
-
-    it('only resumed_at of a pause is nullable', async () => {
-        expect(await nullableColumns(MatchPause)).toEqual(['resumed_at']);
-        expect(await columnNames(MatchPause)).toEqual([
+    it('match event has no soft delete or modified_at', async () => {
+        expect(await columnNames(MatchEvent)).toEqual([
+            'action',
+            'actor_user_id',
             'id',
+            'judge_seat',
             'match_id',
-            'paused_at',
-            'paused_by_user_id',
-            'resumed_at',
+            'occurred_at',
+            'robot_id',
+            'type',
         ]);
     });
 
@@ -208,7 +189,7 @@ describe('entity metadata', () => {
         [User, 'UQ_users_lower_email'],
         [Robot, 'UQ_robots_championship_id_lower_name'],
         [Arena, 'UQ_arenas_owner_user_id_lower_name'],
-        [MatchPause, 'UQ_match_pauses_open'],
+        [MatchEvent, 'UQ_match_events_once'],
     ] as const)(
         'keeps the migration-managed index %#, %s, out of synchronization',
         async (entity, name) => {
@@ -239,8 +220,10 @@ describe('entity metadata', () => {
         [Match, 'CHK_matches_weight_class'],
         [Match, 'CHK_matches_state'],
         [Match, 'CHK_matches_end_reason'],
-        [MatchScoreEvent, 'CHK_match_score_events_judge_seat'],
-        [MatchScoreEvent, 'CHK_match_score_events_action'],
+        [MatchEvent, 'CHK_match_events_type'],
+        [MatchEvent, 'CHK_match_events_score_fields'],
+        [MatchEvent, 'CHK_match_events_judge_seat'],
+        [MatchEvent, 'CHK_match_events_action'],
     ] as const)('%o declares %s', async (entity, name) => {
         const dataSource = await buildDataSource();
 
