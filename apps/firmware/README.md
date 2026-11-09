@@ -30,6 +30,9 @@ pio device monitor           # serial monitor at 115200; Ctrl+C to quit
 
 `src/` is the code that gets built; it needs a `config.h` (see [Configuration](#configuration)). Build output goes to `.pio/` (git-ignored).
 
+The protocol logic (`lib/ArenaLogic`) and the button debounce (`lib/Buttons`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
+
+```sh
 pio test -e native
 ```
 
