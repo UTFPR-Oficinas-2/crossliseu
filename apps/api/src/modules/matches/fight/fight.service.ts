@@ -45,10 +45,11 @@ export class FightService {
             throw this.notFound(matchId);
         }
 
-        const now = this.clock.now();
         const result = await this.repo.withLockedFight(
             matchId,
             async (fight, writes) => {
+                // Read after the locks, so events are written in lock order
+                const now = this.clock.now();
                 const settled = await this.settleLocked(fight, writes, now);
                 const transition = transitionFor(
                     command,
@@ -98,11 +99,12 @@ export class FightService {
 
     /** Settles a time-out if the match is ongoing and out of time; true when it wrote one */
     async settle(matchId: string): Promise<boolean> {
-        const now = this.clock.now();
         const wrote = await this.repo.withLockedFight(
             matchId,
             async (fight, writes) =>
-                (await this.settleLocked(fight, writes, now)).wrote,
+                // `now` is read after the locks, so events are written in lock order
+                (await this.settleLocked(fight, writes, this.clock.now()))
+                    .wrote,
         );
         return wrote ?? false;
     }

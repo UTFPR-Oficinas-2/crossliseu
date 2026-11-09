@@ -22,7 +22,7 @@ const T0 = new Date('2026-11-10T14:00:00Z');
 const at = (ms: number) => new Date(T0.getTime() + ms);
 
 class FixedClock extends Clock {
-    constructor(private current: Date) {
+    constructor(public current: Date) {
         super();
     }
     now() {
@@ -46,6 +46,15 @@ interface Options {
     owner?: boolean;
     now?: Date;
     missing?: boolean;
+    /** The clock moves to this instant once the locks are taken */
+    lockedNow?: Date;
+}
+
+function cloneMatch(source: Match): Match {
+    return Object.assign(
+        Object.create(Object.getPrototypeOf(source) as object) as Match,
+        source,
+    );
 }
 
 function setup({
@@ -55,6 +64,7 @@ function setup({
     owner = true,
     now = T0,
     missing = false,
+    lockedNow,
 }: Options = {}) {
     const match = new Match(
         'lightweight',
@@ -88,6 +98,7 @@ function setup({
         written: [] as MatchEvent[],
     };
 
+    const clock = new FixedClock(now);
     const repo = {
         findWithRobots: vi.fn(() =>
             Promise.resolve(missing ? null : store.match),
@@ -101,6 +112,16 @@ function setup({
                 if (missing) {
                     return null;
                 }
+                if (lockedNow) {
+                    clock.current = lockedNow;
+                }
+                // Like manager.transaction: a rejected `work` rolls everything back
+                const snapshot = {
+                    match: cloneMatch(store.match),
+                    events: [...store.events],
+                    written: [...store.written],
+                    arenaPointer: store.arenaPointer,
+                };
                 const writes: FightWrites = {
                     appendEvent: (type, occurredAt, actorUserId) => {
                         const written = event(type, occurredAt);
@@ -118,14 +139,23 @@ function setup({
                         return Promise.resolve();
                     },
                 };
-                return work(
-                    {
-                        match: store.match,
-                        events: [...store.events],
-                        arenaId: store.arenaPointer,
-                    },
-                    writes,
-                );
+                try {
+                    return await work(
+                        {
+                            // A copy: the real repository never mutates it
+                            match: cloneMatch(store.match),
+                            events: [...store.events],
+                            arenaId: store.arenaPointer,
+                        },
+                        writes,
+                    );
+                } catch (error) {
+                    store.match = snapshot.match;
+                    store.events = snapshot.events;
+                    store.written = snapshot.written;
+                    store.arenaPointer = snapshot.arenaPointer;
+                    throw error;
+                }
             },
         ),
     };
@@ -135,7 +165,7 @@ function setup({
     const service = new FightService(
         repo as unknown as FightRepository,
         championships as unknown as ChampionshipsService,
-        new FixedClock(now),
+        clock,
     );
     return { service, repo, store, championships };
 }
@@ -307,6 +337,29 @@ describe('FightService', () => {
             'started',
             'finished',
         ]);
+    });
+
+    it('reads the clock after the locks are taken', async () => {
+        const { service, store } = setup({
+            now: at(1000),
+            lockedNow: at(5000),
+        });
+
+        await service.command(MATCH_ID, 'start', USER_ID);
+
+        expect(store.written[0].occurredAt).toEqual(at(5000));
+    });
+
+    it('settle() reads the clock after the locks are taken', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+            lockedNow: at(200_000),
+        });
+
+        expect(await service.settle(MATCH_ID)).toBe(true);
+        expect(store.match.state).toBe('finished');
     });
 
     it('state() returns status, remainingMs, endReason and robot names', async () => {
