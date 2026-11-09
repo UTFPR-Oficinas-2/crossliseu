@@ -38,6 +38,24 @@ pio test -e native
 
 To remove everything later: `uv tool uninstall platformio`, `rm -rf ~/.platformio` and `rm -rf apps/firmware/.pio`.
 
+## Setup (Windows)
+
+Same steps as macOS (`uv tool install platformio`, then `pio run` from `apps/firmware`), in PowerShell. Two extra fixes:
+
+1. **Long paths.** Unpacking `esp32-arduino-libs` on the first build fails unless Windows allows paths over 260 characters. Turn them on once, in PowerShell **as administrator**, then restart the terminal:
+
+   ```powershell
+   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force
+   ```
+
+2. **`pioarduino` version.** The pinned platform installs `pioarduino==6.2.0.post1` into `~\.platformio\penv`, and on Windows it then rejects its own platform (`6.2.0.post1` is read as a pre-release of 6.2.0, so `>=6.2.0` fails). If the build stops with that version error, pin it:
+
+   ```powershell
+   uv pip install --python "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" "pioarduino==6.2.0"
+   ```
+
+To remove everything later: `uv tool uninstall platformio`, then delete `%USERPROFILE%\.platformio` and `apps\firmware\.pio`.
+
 ## Old countdown sketch
 
 `main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). Their pins clash with the V2's OLED and LoRa pins (see [Board](#board)). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
