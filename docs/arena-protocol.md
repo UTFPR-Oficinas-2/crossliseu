@@ -293,6 +293,7 @@ The firmware is split so the display, LED, button and network parts can be built
 
 ```cpp
 // Display (#39): both competitor LCDs
+void displayBegin();                    // sets up both LCDs; once in setup()
 void showTime(long ms);                 // draws ms as mm:ss, rounded up; ms <= 0 shows 00:00
 void showMessage(const char* text);     // status text, e.g. "Not connected", "Ready", "Time out"
 
