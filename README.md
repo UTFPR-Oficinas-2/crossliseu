@@ -20,7 +20,7 @@ Crossliseu lets the public follow championships and fights, organizers manage th
 | Homepage, sign-in (JWT) | Available |
 | Championships and matches API, Swagger docs | Available |
 | Organizer screens (championships, participants, matches) | Available, backed by the API |
-| Arenas (create, rename, new token, delete, `config.h` download) | Available at Meus campeonatos → Arenas, backed by the API |
+| Arenas (create, rename, new token, delete, `config.h` download) | Available at Arenas in the top bar (`/arenas`), backed by the API |
 | Operator, referee and match detail screens | Built to the Figma specs, but the API has no operator or referee endpoints yet, so they show errors |
 | Computer-vision worker, ESP32 firmware | Planned / experimental |
 

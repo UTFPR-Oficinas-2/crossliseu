@@ -87,9 +87,6 @@ const subtitle = computed(() => {
         </p>
       </div>
       <div class="my-championships__header-actions">
-        <AppButton variant="secondary" class="my-championships__create" :to="{ name: 'arenas' }">
-          Arenas
-        </AppButton>
         <AppButton class="my-championships__create" :to="{ name: 'championship-create' }">
           Criar campeonato
         </AppButton>

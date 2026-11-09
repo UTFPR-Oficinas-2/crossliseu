@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Figma: `Navigation / App` + `Organizer / Shell` (from the former overview frame, node 2:15)
 // (sidebar 21:305, main 21:333). Only the frame is built here; page content goes in <RouterView />.
+// Also frames the Arenas page (`/arenas`), which has no championship and so no sidebar.
 import { computed, ref, watch } from 'vue'
 import { useRoute, type RouteRecordName } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -45,13 +46,16 @@ const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
   { routeName: 'championship-settings', label: 'Configurações' },
 ]
 
+/** The Arenas page shares this frame but has its own top bar item */
+const activeNavItem = computed(() => (route.name === 'arenas' ? 'arenas' : 'my-championships'))
+
 /** Form pages set `meta.sidebar` to the list they belong to */
 const activeSidebarItem = computed(() => route.meta.sidebar ?? route.name)
 </script>
 
 <template>
   <div class="organizer-layout">
-    <AppNav :user-name="auth.username ?? ''" active="my-championships" @sign-out="handleSignOut" />
+    <AppNav :user-name="auth.username ?? ''" :active="activeNavItem" @sign-out="handleSignOut" />
 
     <div class="organizer-layout__shell">
       <aside v-if="championshipId" class="organizer-layout__sidebar">

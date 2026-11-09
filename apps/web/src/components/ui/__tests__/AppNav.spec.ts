@@ -35,6 +35,28 @@ describe('AppNav', () => {
     expect(link?.attributes('href')).toBe('/operator')
   })
 
+  it('lists Campeonatos, Meus campeonatos, Arenas and Operação in order', () => {
+    const wrapper = mountNav([
+      { path: '/manage', name: 'my-championships', component: stub },
+      { path: '/arenas', name: 'arenas', component: stub },
+      { path: '/operator', name: 'operator', component: stub },
+    ])
+
+    expect(wrapper.findAll('nav a').map((a) => a.text())).toEqual([
+      'Campeonatos',
+      'Meus campeonatos',
+      'Arenas',
+      'Operação',
+    ])
+  })
+
+  it('links Arenas to /arenas', () => {
+    const wrapper = mountNav([{ path: '/arenas', name: 'arenas', component: stub }])
+
+    const link = wrapper.findAll('a').find((a) => a.text() === 'Arenas')
+    expect(link?.attributes('href')).toBe('/arenas')
+  })
+
   it('emits signOut when "Sair" is clicked', async () => {
     const wrapper = mountNav()
 
