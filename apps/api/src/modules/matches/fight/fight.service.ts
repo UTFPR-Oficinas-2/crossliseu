@@ -21,6 +21,19 @@ interface Settled {
     wrote: boolean;
 }
 
+/**
+ * When a new event is stamped: `wanted`, but strictly after the latest event. The clock's order
+ * is by `occurredAt`, so events sharing an instant (two commands a millisecond apart, a clock
+ * stepped back) would otherwise be ordered at random.
+ */
+function eventTime(wanted: Date, events: readonly MatchEvent[]): Date {
+    const last = events.reduce(
+        (max, e) => Math.max(max, e.occurredAt.getTime()),
+        -Infinity,
+    );
+    return new Date(Math.max(wanted.getTime(), last + 1));
+}
+
 @Injectable()
 export class FightService {
     logger: Logger = new Logger(FightService.name);
@@ -49,8 +62,12 @@ export class FightService {
             matchId,
             async (fight, writes) => {
                 // Read after the locks, so events are written in lock order
-                const now = this.clock.now();
-                const settled = await this.settleLocked(fight, writes, now);
+                const settled = await this.settleLocked(
+                    fight,
+                    writes,
+                    this.clock.now(),
+                );
+                const now = eventTime(this.clock.now(), settled.events);
                 const transition = transitionFor(
                     command,
                     settled.state,
@@ -108,7 +125,7 @@ export class FightService {
      * checks again.
      */
     async settle(matchId: string): Promise<boolean> {
-        const match = await this.repo.findWithRobots(matchId);
+        const match = await this.repo.findMatch(matchId);
         if (!match) {
             return false;
         }
@@ -149,7 +166,10 @@ export class FightService {
             return { state: match.state, events, wrote: false };
         }
         // The instant time ran out, not the instant somebody noticed
-        const occurredAt = timeOutAt(match.state, events) ?? now;
+        const occurredAt = eventTime(
+            timeOutAt(match.state, events) ?? now,
+            events,
+        );
         await writes.updateMatch({ state: 'finished', endReason: 'time_out' });
         await writes.appendEvent('finished', occurredAt, null);
         return {

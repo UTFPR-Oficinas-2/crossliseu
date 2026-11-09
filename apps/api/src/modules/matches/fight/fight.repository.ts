@@ -102,6 +102,11 @@ export class FightRepository {
         });
     }
 
+    /** The match row alone, no relations */
+    findMatch(matchId: string): Promise<Match | null> {
+        return this.repository.findOne({ where: { id: matchId } });
+    }
+
     /** Match with robotA / robotB, for building FightState */
     findWithRobots(matchId: string): Promise<Match | null> {
         return this.repository.findOne({

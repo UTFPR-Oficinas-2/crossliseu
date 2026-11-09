@@ -105,6 +105,14 @@ describe('remainingMs', () => {
     });
 });
 
+describe('remainingMs with a clock behind the start', () => {
+    it('never exceeds the match duration', () => {
+        expect(remainingMs('ongoing', [ev('started', 10_000)], at(5_000))).toBe(
+            MATCH_DURATION_MS,
+        );
+    });
+});
+
 describe('timeOutAt', () => {
     it('adds the paused time to the duration', () => {
         const events = [

@@ -56,8 +56,11 @@ export function remainingMs(
         end = finished ? finished.occurredAt.getTime() : end;
     }
 
-    const elapsed =
-        end - started.occurredAt.getTime() - pausedTotalMs(sorted, end);
+    // A clock stepped back can put `end` before the start: never more than the full duration
+    const elapsed = Math.max(
+        0,
+        end - started.occurredAt.getTime() - pausedTotalMs(sorted, end),
+    );
     return Math.max(0, MATCH_DURATION_MS - elapsed);
 }
 

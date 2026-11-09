@@ -7,6 +7,7 @@ import type {
     LockedFight,
 } from './fight.repository.js';
 import { Clock } from './clock.js';
+import { remainingMs, timeOutAt } from './fight-clock.js';
 import { Match } from '../entities/match.entity.js';
 import type { MatchState } from '../entities/match.entity.js';
 import { MatchEvent } from '../entities/match-event.entity.js';
@@ -100,6 +101,7 @@ function setup({
 
     const clock = new FixedClock(now);
     const repo = {
+        findMatch: vi.fn(() => Promise.resolve(missing ? null : store.match)),
         findWithRobots: vi.fn(() =>
             Promise.resolve(missing ? null : store.match),
         ),
@@ -405,7 +407,7 @@ describe('FightService', () => {
         const stale = cloneMatch(store.match);
         stale.state = 'ongoing';
         stale.endReason = null;
-        repo.findWithRobots.mockResolvedValueOnce(stale);
+        repo.findMatch.mockResolvedValueOnce(stale);
         repo.findEvents.mockResolvedValueOnce([event('started', T0)]);
 
         expect(await service.settle(MATCH_ID)).toBe(true);
@@ -445,5 +447,73 @@ describe('FightService', () => {
 
         expect(await service.settle(MATCH_ID)).toBe(false);
         expect(store.written).toHaveLength(0);
+    });
+});
+
+describe('FightService event order', () => {
+    it('stamps resume strictly after pause when the clock does not advance', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(10_000),
+        });
+
+        await service.command(MATCH_ID, 'pause', USER_ID);
+        await service.command(MATCH_ID, 'resume', USER_ID);
+
+        const [paused, resumed] = store.written;
+        expect(paused.occurredAt).toEqual(at(10_000));
+        expect(resumed.occurredAt.getTime()).toBeGreaterThan(
+            paused.occurredAt.getTime(),
+        );
+        const mid = at(20_000);
+        expect(remainingMs('ongoing', store.events, mid)).toBe(
+            180_000 - 20_000 + 1,
+        );
+        const end = timeOutAt('ongoing', store.events);
+        expect(end).toEqual(at(180_001));
+        expect(remainingMs('ongoing', store.events, end as Date)).toBe(0);
+        expect(
+            remainingMs('ongoing', store.events, new Date(end!.getTime() - 1)),
+        ).toBe(1);
+    });
+
+    it('keeps the new event after the last one when the clock steps back', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [
+                event('started', T0),
+                event('paused', at(10_000)),
+                event('resumed', at(12_000)),
+            ],
+            now: at(7_000),
+        });
+
+        await service.command(MATCH_ID, 'pause', USER_ID);
+
+        expect(store.written[0].occurredAt.getTime()).toBeGreaterThan(
+            12_000 + T0.getTime(),
+        );
+    });
+
+    it('a time-out finished is after the previous event', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [
+                event('started', T0),
+                event('paused', at(0)),
+                event('resumed', at(0)),
+            ],
+            now: at(500_000),
+        });
+
+        await service.command(MATCH_ID, 'close', USER_ID);
+
+        const finished = store.written.find((e) => e.type === 'finished');
+        const closed = store.written.find((e) => e.type === 'closed');
+        expect(finished!.occurredAt.getTime()).toBeGreaterThan(T0.getTime());
+        expect(closed!.occurredAt.getTime()).toBeGreaterThan(
+            finished!.occurredAt.getTime(),
+        );
     });
 });

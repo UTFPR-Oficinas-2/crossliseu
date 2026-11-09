@@ -119,8 +119,6 @@ describe('fight (e2e)', () => {
             endReason: 'manual',
         });
 
-        // Events at the same instant have no defined order, so close happens later
-        clock.advance(1_000);
         const closed = await command('close').expect(200);
         expect(closed.body).toMatchObject({
             status: 'finished',
