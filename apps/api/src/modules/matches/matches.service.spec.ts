@@ -10,6 +10,7 @@ import type { MatchState } from './entities/match.entity.js';
 import { Robot } from '../robots/entities/robot.entity.js';
 import type { MatchesRepository } from './matches.repository.js';
 import type { ChampionshipsService } from '../championships/championships.service.js';
+import type { FightService } from './fight/fight.service.js';
 import type { WeightClass } from '../robots/weight-class.js';
 
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
@@ -115,12 +116,14 @@ function setup(robots: Robot[], matches: Match[] = []) {
         findOwned: vi.fn().mockResolvedValue({ id: CHAMPIONSHIP_ID }),
         isOwnedBy: vi.fn().mockResolvedValue(true),
     };
+    const fightService = { settle: vi.fn().mockResolvedValue(false) };
     const service = new MatchesService(
         matchesRepository as unknown as MatchesRepository,
         championshipsService as unknown as ChampionshipsService,
+        fightService as unknown as FightService,
     );
 
-    return { service, matchesRepository, championshipsService };
+    return { service, matchesRepository, championshipsService, fightService };
 }
 
 const dto = {
@@ -290,6 +293,58 @@ describe('MatchesService.findAll', () => {
         await service.findAll(CHAMPIONSHIP_ID);
 
         expect(matchesRepository.findAll).toHaveBeenCalledWith(CHAMPIONSHIP_ID);
+    });
+
+    it('re-reads when a listed ongoing match was settled', async () => {
+        const { service, matchesRepository, fightService } = setup(
+            [],
+            [match('scheduled')],
+        );
+        const ongoing = match('ongoing');
+        const settled = match('finished');
+        matchesRepository.findAll
+            .mockResolvedValueOnce([match('scheduled'), ongoing])
+            .mockResolvedValueOnce([settled]);
+        fightService.settle.mockResolvedValueOnce(true);
+
+        const result = await service.findAll();
+
+        expect(fightService.settle).toHaveBeenCalledOnce();
+        expect(fightService.settle).toHaveBeenCalledWith(ongoing.id);
+        expect(matchesRepository.findAll).toHaveBeenCalledTimes(2);
+        expect(result).toEqual([settled]);
+    });
+
+    it('reads once when nothing was settled', async () => {
+        const { service, matchesRepository } = setup([], [match('scheduled')]);
+        matchesRepository.findAll.mockResolvedValue([match('ongoing')]);
+
+        await service.findAll();
+
+        expect(matchesRepository.findAll).toHaveBeenCalledOnce();
+    });
+});
+
+describe('MatchesService.findOne settling', () => {
+    it('findOne settles before reading', async () => {
+        const order: string[] = [];
+        const { service, matchesRepository, fightService } = setup(
+            [],
+            [match('ongoing')],
+        );
+        fightService.settle.mockImplementation(() => {
+            order.push('settle');
+            return Promise.resolve(false);
+        });
+        matchesRepository.findOne.mockImplementation(() => {
+            order.push('read');
+            return Promise.resolve(match('finished'));
+        });
+
+        await service.findOne(MATCH_ID);
+
+        expect(fightService.settle).toHaveBeenCalledWith(MATCH_ID);
+        expect(order).toEqual(['settle', 'read']);
     });
 });
 
