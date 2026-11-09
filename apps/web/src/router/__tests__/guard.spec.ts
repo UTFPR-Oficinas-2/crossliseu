@@ -25,6 +25,13 @@ describe('router guard', () => {
     expect(router.currentRoute.value.query.redirect).toBe('/manage/new')
   })
 
+  it('sends a signed-out visit to /arenas to sign-in with a redirect', async () => {
+    await router.push('/arenas')
+
+    expect(router.currentRoute.value.name).toBe('sign-in')
+    expect(router.currentRoute.value.query.redirect).toBe('/arenas')
+  })
+
   it('lets a signed-in visit through to a protected route', async () => {
     localStorage.setItem(TOKEN_STORAGE_KEY, liveToken())
     setActivePinia(createPinia())

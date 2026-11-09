@@ -47,6 +47,9 @@ describe('PublicLayout', () => {
 
     expect(wrapper.text()).toContain('Entrar')
     expect(wrapper.text()).not.toContain('Sair')
+    expect(wrapper.text()).not.toContain('Arenas')
+    expect(wrapper.text()).not.toContain('Meus campeonatos')
+    expect(wrapper.text()).not.toContain('Operação')
   })
 
   it('shows the app nav with the username when signed in', async () => {

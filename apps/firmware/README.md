@@ -80,7 +80,7 @@ To remove everything later: `uv tool uninstall platformio` (or uninstall the VS 
 
 ## Configuration
 
-Each box needs its own `config.h` in this folder, next to `platformio.ini` (the build adds this folder to the include path). Get it from the web app: **Meus campeonatos → Arenas**, create the arena (or generate a new token) and download `config.h`. The token is shown only once. Fill in `WIFI_SSID` and `WIFI_PASSWORD`, then flash. The file is git-ignored; [`config.example.h`](config.example.h) shows the format.
+Each box needs its own `config.h` in this folder, next to `platformio.ini` (the build adds this folder to the include path). Get it from the web app: **Arenas** in the top bar (`/arenas`), create the arena (or generate a new token) and download `config.h`. The token is shown only once. Fill in `WIFI_SSID` and `WIFI_PASSWORD`, then flash. The file is git-ignored; [`config.example.h`](config.example.h) shows the format.
 
 ## Connection
 

@@ -18,6 +18,7 @@ describe('router registration', () => {
       'championship-participants',
       'championship-matches',
       'championship-settings',
+      'arenas',
       'match-operation',
       'referee-session',
       'referee-invalid-access',
