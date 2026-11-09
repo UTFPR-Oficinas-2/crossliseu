@@ -823,4 +823,20 @@ describe('arenas (db)', () => {
                 .expect(401);
         });
     });
+    describe('ArenasRepository.findLiveByDeviceId', () => {
+        it('finds a live arena and skips a soft-deleted one', async () => {
+            const found = await arenas.findLiveByDeviceId('Arena 1-device');
+            expect(found?.id).toBe(ids.arena1);
+
+            await ds.getRepository(Arena).softDelete(ids.arena1);
+
+            expect(
+                await arenas.findLiveByDeviceId('Arena 1-device'),
+            ).toBeNull();
+        });
+
+        it('returns null for an unknown device id', async () => {
+            expect(await arenas.findLiveByDeviceId('ghost-device')).toBeNull();
+        });
+    });
 });

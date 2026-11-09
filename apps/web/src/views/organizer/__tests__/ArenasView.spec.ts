@@ -54,10 +54,10 @@ async function mountView() {
     history: createMemoryHistory(),
     routes: [
       { path: '/manage', name: 'my-championships', component: stub },
-      { path: '/manage/arenas', name: 'arenas', component: ArenasView },
+      { path: '/arenas', name: 'arenas', component: ArenasView },
     ],
   })
-  await router.push('/manage/arenas')
+  await router.push('/arenas')
   const wrapper = mount(
     { template: '<RouterView />' },
     {

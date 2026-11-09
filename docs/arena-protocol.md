@@ -1,6 +1,6 @@
 # `/arena` WebSocket protocol
 
-The contract between an arena's ESP32 box and the API. The firmware (`firmware/`) and the gateway (`apps/api`) are built against this document, so a change here is a change to both.
+The contract between an arena's ESP32 box and the API. The firmware (`apps/firmware/`) and the gateway (`apps/api`) are built against this document, so a change here is a change to both.
 
 ## Roles
 
@@ -26,6 +26,7 @@ Before Start, the operator can change the selection (for example, after picking 
 | Who connects | Always the box. The server never dials out. |
 | Frames | Text frames, one JSON object each |
 | Protocol version | `1` |
+| Max frame size | 4 KiB; larger frames close the socket with `1009` |
 
 Connecting happens in two layers. First the box's WebSocket library opens the socket (an HTTP request with `Upgrade: websocket`, answered with `101 Switching Protocols`); no protocol data is exchanged yet. Then, on the open socket, the box logs in with [`hello`](#hello). Credentials travel in `hello`, not in the URL or headers, so that a refusal arrives as one of our [close codes](#close-codes) and the token never shows up in proxy logs.
 
@@ -52,7 +53,7 @@ Until `welcome` arrives, the box shows **not connected**, even if the socket is 
 [`tools/arena-sim/arena-sim.mjs`](../tools/arena-sim/arena-sim.mjs) plays the box from a terminal: it sends `hello`, prints every message, sends `surrender` A or B on a key press, and reconnects with the backoff below. It reads the same `config.h` the box is flashed with. See the header of the script for usage.
 
 ```sh
-node tools/arena-sim/arena-sim.mjs --config firmware/config.h --url ws://localhost:3000/arena
+node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h --url ws://localhost:3000/arena
 ```
 
 ## Envelope
@@ -259,6 +260,8 @@ WebSocket close codes 4000–4999 are reserved for applications; these are ours.
 
 Any other close (network loss, server restart, close code `1001`, `1006`, ...) is handled with normal backoff.
 
+The server can also close with `1001` (it is shutting down), `1011` (it could not check the credentials, for example the database is down or slower than 5 s) or `1013` (too many logins are being checked at once). All of them mean: retry with normal backoff.
+
 ## Disconnects
 
 - **Server-side detection.** The server sends a WebSocket ping every 10 s and drops a box that does not answer within 10 s. The arena is shown offline in the web app as soon as its socket closes, except when the socket was replaced (`4003`): the new connection keeps it online.
@@ -301,13 +304,41 @@ void setLedState(LedState state);       // sets the color/blink from the table a
 
 // Buttons (#41)
 enum class Press { None, A, B };
+void buttonsBegin();                    // sets up the pins; once in setup()
 Press pollButtons();                    // debounced; returns each press once
+
+// Connection (#97): src/arena.h; the only code that touches Wi-Fi and the socket
+void arenaBegin();                                 // Wi-Fi + socket, from config.h; once in setup()
+void arenaLoop();                                  // every loop: Wi-Fi, reconnect, liveness, incoming frames
+bool arenaConnected();                             // true between welcome and close
+void onArenaState(void (*cb)(const ArenaState&));  // called on every valid `state`
+bool arenaSendSurrender(char side);                // 'A' or 'B', with the last state's matchId; false if not connected
 ```
 
-The display only draws what it is given; it keeps no timer. The network module (#42) owns the socket and the countdown:
+`ArenaState` (in `lib/ArenaLogic/src/arena_logic.h`) is one parsed `state`:
+
+```cpp
+enum class ArenaStatus : uint8_t { Idle, Ready, Running, Paused, Ended };
+enum class EndReason   : uint8_t { None, TimeOut, OperatorEnded, SurrenderA, SurrenderB };
+struct ArenaState {
+  ArenaStatus status;
+  char matchId[37];        // "" when null
+  bool hasRemaining;       // false when remainingMs is null
+  int32_t remainingMs;
+  EndReason endReason;
+  char robotA[33];         // "" when robots is null; longer names are cut on a UTF-8 boundary
+  char robotB[33];
+  uint32_t receivedAtMs;   // millis() when it arrived, the start point for the local countdown
+};
+```
+
+The connection layer follows the [Handshake](#handshake), [Close codes](#close-codes) and [Disconnects](#disconnects) rules above, and ignores (and logs) malformed frames and unknown events. Each connect attempt blocks `arenaLoop()` while TCP and TLS are set up: normally under a second, at worst about 15 s (5 s TCP connect timeout plus 10 s TLS handshake timeout). That happens only while the box is already not connected.
+
+The display only draws what it is given; it keeps no timer. The integration (#42) owns the countdown and joins the modules:
 
 - On `state` it maps `status` / `endReason` to `setLedState` and `showMessage`, and resets the local countdown from `remainingMs`.
 - Every loop while `running`, it computes the time left (`remainingMs` minus the time since that `state` arrived) and passes it to `showTime`.
-- On a press from `pollButtons()` it sends `surrender` if connected and drops it otherwise.
+- On a press from `pollButtons()` it calls `arenaSendSurrender`, which drops the press when not connected.
+- While `arenaConnected()` is false, it shows **not connected**.
 
 How the text and time are laid out on the LCDs depends on the displays and is left to the firmware.

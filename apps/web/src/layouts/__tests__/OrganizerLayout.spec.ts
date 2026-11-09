@@ -43,6 +43,11 @@ async function mountAt(path: string) {
           { path: ':championshipId/settings', name: 'championship-settings', component: stub },
         ],
       },
+      {
+        path: '/arenas',
+        component: OrganizerLayout,
+        children: [{ path: '', name: 'arenas', component: stub }],
+      },
     ],
   })
   await router.push(path)
@@ -79,5 +84,25 @@ describe('OrganizerLayout sidebar', () => {
 
   it('highlights a route without meta by its own name', async () => {
     expect(await currentItems('/manage/c1/matches')).toEqual(['Lutas'])
+  })
+})
+
+const currentTopItems = async (path: string) =>
+  (await mountAt(path))
+    .findAll('nav[aria-label="Navegação principal"] a[aria-current="page"]')
+    .map((a) => a.text())
+
+describe('OrganizerLayout top bar', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('highlights Arenas on the arenas page', async () => {
+    expect(await currentTopItems('/arenas')).toEqual(['Arenas'])
+  })
+
+  it('highlights Meus campeonatos on championship management', async () => {
+    expect(await currentTopItems('/manage')).toEqual(['Meus campeonatos'])
+    expect(await currentTopItems('/manage/c1/participants')).toEqual(['Meus campeonatos'])
   })
 })

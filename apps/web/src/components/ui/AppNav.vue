@@ -16,6 +16,7 @@ const {
   items = [
     { id: 'championships', label: 'Campeonatos', to: { name: 'home' } },
     { id: 'my-championships', label: 'Meus campeonatos', to: { name: 'my-championships' } },
+    { id: 'arenas', label: 'Arenas', to: { name: 'arenas' } },
     { id: 'operator', label: 'Operação', to: { name: 'operator' } },
   ],
   active,

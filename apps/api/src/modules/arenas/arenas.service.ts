@@ -9,7 +9,11 @@ import {
     type LockedArenaResult,
     type SetCurrentMatchResult,
 } from './arenas.repository.js';
-import { generateDeviceToken, hashDeviceToken } from './device-token.js';
+import {
+    generateDeviceToken,
+    hashDeviceToken,
+    verifyDeviceToken,
+} from './device-token.js';
 import { generateDeviceId } from './device-id.js';
 import { arenaServerUrl } from './server-url.js';
 import { ArenaNameDto } from './dto/arena-name.dto.js';
@@ -17,14 +21,22 @@ import { ArenaResponse } from './dto/arena-response.dto.js';
 import type { DeviceCredentials } from './dto/device-credentials.dto.js';
 import { SetCurrentMatchDto } from './dto/set-current-match.dto.js';
 import { Arena } from './entities/arena.entity.js';
+import { ArenaConnections } from './device/arena-connections.js';
+import { CloseCode } from './device/arena-protocol.js';
 
 const MAX_DEVICE_ID_ATTEMPTS = 5;
+
+/** The arena a box logged in as on /arena */
+export type AuthenticatedArena = { id: string; name: string };
 
 @Injectable()
 export class ArenasService {
     logger: Logger = new Logger(ArenasService.name);
 
-    constructor(private readonly arenasRepository: ArenasRepository) {}
+    constructor(
+        private readonly arenasRepository: ArenasRepository,
+        private readonly connections: ArenaConnections,
+    ) {}
 
     async findAll(userId: string): Promise<ArenaResponse[]> {
         const arenas = await this.arenasRepository.findByOwner(userId);
@@ -109,6 +121,8 @@ export class ArenasService {
             this.logger.warn(result, { arenaId: id });
             throw lockedException(result);
         }
+        // The box logged in with the old token: it reconnects and gets 4001 until reflashed
+        this.revokeBox(id);
 
         const arena = await this.arenasRepository.findOwned(id, userId);
         if (!arena) {
@@ -130,6 +144,7 @@ export class ArenasService {
             this.logger.warn(result, { arenaId: id });
             throw lockedException(result);
         }
+        this.revokeBox(id);
     }
 
     /**
@@ -186,6 +201,23 @@ export class ArenasService {
         return this.toResponse(arena);
     }
 
+    /**
+     * Checks a box's credentials from its `hello`. Null when the device id is unknown or deleted,
+     * or the token doesn't match the stored hash. Never logs the token.
+     */
+    async authenticateDevice(
+        deviceId: string,
+        token: string,
+    ): Promise<AuthenticatedArena | null> {
+        const arena = await this.arenasRepository.findLiveByDeviceId(deviceId);
+        const valid = await verifyDeviceToken(token, arena?.tokenHash ?? null);
+        if (!arena || !valid) {
+            this.logger.warn('device_auth_failed', { deviceId });
+            return null;
+        }
+        return { id: arena.id, name: arena.name };
+    }
+
     /** Same as clearCurrentMatch, without an account check: for the arena device link (#19) */
     async releaseCurrentMatch(arenaId: string): Promise<void> {
         const result = await this.arenasRepository.clearCurrentMatch(
@@ -198,14 +230,22 @@ export class ArenasService {
         }
     }
 
+    /** Closes the box connected with now-invalid credentials, as a fresh login would be refused */
+    private revokeBox(arenaId: string): void {
+        this.connections.drop(
+            arenaId,
+            CloseCode.BadCredentials,
+            'bad_credentials',
+        );
+    }
+
     private toResponse(arena: Arena): ArenaResponse {
         const match = arena.currentMatch;
         return {
             id: arena.id,
             name: arena.name,
             deviceId: arena.deviceId,
-            // Becomes real once arena devices connect (#19)
-            online: false,
+            online: this.connections.isOnline(arena.id),
             currentMatchId: arena.currentMatchId,
             currentMatch:
                 match?.robotA && match.robotB
