@@ -6,11 +6,11 @@ The box talks to the API over the [`/arena` WebSocket protocol](../../docs/arena
 
 ## Board
 
-**Heltec WiFi LoRa 32 V2**: original ESP32 (D0WDQ6), 8 MB flash, CP2102 USB-serial (no driver needed on macOS). Not the V3, which is an ESP32-S3 and needs a different build.
+Any board with the **original ESP32** chip (ESP32-WROOM-32 or WROVER module): the ESP32 DevKit, the Heltec WiFi LoRa 32 V2 and most ESP32 dev boards. The build uses PlatformIO's generic `esp32dev` board, which also runs on boards with more than 4 MB of flash. Boards with a newer chip (ESP32-S2, S3, C3, C6, for example the Heltec V3) need a different build and are not supported.
 
-Pins already taken on the board: onboard LED 25, OLED SDA 4 / SCL 15 / RST 16, Vext (OLED power) 21, PRG button 0, LoRa radio 5, 14, 18, 19, 26, 27 (plus 34, 35 as inputs).
+The default pins are the box PCB's (an ESP32 DevKit with the surrender buttons, the two LCDs and the strip); see [Pins](#pins). A board wired differently changes them in `platformio.ini`, without touching the code; see [Other boards](#other-boards).
 
-**ESP32 DevKit** (ESP32-WROOM-32, 4 MB flash): the box PCB with the surrender buttons, the two LCDs and the strip. Same chip as the V2, so the code is the same; build it with the `esp32dev` env (`pio run -e esp32dev`, `pio run -e esp32dev -t upload`). Its onboard LED is on GPIO 2. The pins in [Pins](#pins) are for this board; several of them are taken on the V2.
+If the board's serial port does not show up, install the USB-serial driver for the chip on the board (usually CP210x or CH340).
 
 ## Setup (macOS)
 
@@ -69,7 +69,7 @@ To remove everything later: `uv tool uninstall platformio` (or uninstall the VS 
 
 ## Old countdown sketch
 
-`main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). Their pins clash with the V2's OLED and LoRa pins (see [Board](#board)). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
+`main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). Their pins clash with the Heltec V2's OLED and LoRa pins (see [Other boards](#other-boards)). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
 
 | Input | Effect |
 | --- | --- |
@@ -86,7 +86,7 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 
 `src/arena.cpp` connects the box to the API's [`/arena` WebSocket](../../docs/arena-protocol.md); other modules use only the functions in `src/arena.h` (listed under "Firmware modules" in the protocol doc). Until the display and strip exist (#42), `src/main.cpp` is a demo:
 
-- The onboard LED (GPIO 25 on the V2, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
+- The onboard LED (`PIN_ONBOARD_LED`, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
 - Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
@@ -112,14 +112,38 @@ To test the arena flow without the hardware, the simulator in [`tools/arena-sim`
 
 ## Pins
 
-Surrender buttons (`src/buttons.cpp`, ESP32 DevKit). Both use the internal pull-up; the other contact terminal goes to GND.
+All pins are in [`src/pins.h`](src/pins.h). The defaults are the box PCB's (ESP32 DevKit):
 
-| Signal | GPIO | Contact | Pressed reads |
-| --- | --- | --- | --- |
-| Surrender, side A | 27 | NO (normally open) | LOW |
-| Surrender, side B | 32 | NC (normally closed) | HIGH |
+| Signal | Name in `pins.h` | GPIO |
+| --- | --- | --- |
+| Onboard LED | `PIN_ONBOARD_LED` | 2 |
+| Surrender, side A | `PIN_SURRENDER_A` | 27 |
+| Surrender, side B | `PIN_SURRENDER_B` | 32 |
+| LCD U3 | `PIN_LCD1_SDA`, `PIN_LCD1_SCL` | SDA 21, SCL 23 |
+| LCD U4 | `PIN_LCD2_SDA`, `PIN_LCD2_SCL` | SDA 18, SCL 19 |
+| LED strip (#42) | (colors confirmed in #42) | 25, 26, 33 |
+
+The LCDs and the strip are not driven yet (#42). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
+
+Surrender buttons (`src/buttons.cpp`) use the internal pull-up; the other contact terminal goes to GND. `SURRENDER_A_PRESSED` and `SURRENDER_B_PRESSED` are what the pin reads with the button pressed: `LOW` for a normally open (NO) contact, `HIGH` for a normally closed (NC) one. On the PCB, side A is NO (`LOW`) and side B is NC (`HIGH`).
 
 A press counts once, after the reading stays the same for 30 ms; holding the button counts nothing more. A button already pressed at boot (or an NC button with a loose wire) is not a press.
+
+### Other boards
+
+To use a board wired differently, add an env to [`platformio.ini`](platformio.ini) that extends `esp32dev` and changes only the pins that differ (the names in the table above, as `-D` flags):
+
+```ini
+[env:my_board]
+extends = env:esp32dev
+build_flags = ${env:esp32dev.build_flags} -DPIN_ONBOARD_LED=25 -DPIN_SURRENDER_A=13 -DSURRENDER_B_PRESSED=LOW
+```
+
+Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick the env in the PlatformIO toolbar). Keep `${env:esp32dev.build_flags}` at the start, or `config.h` is not found.
+
+Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
+
+On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them.
 
 For the old `main.cpp` / `Definitions.h`:
 
@@ -136,6 +160,7 @@ For the old `main.cpp` / `Definitions.h`:
 - `src/main.cpp`: demo of the connection layer and the buttons (onboard LED, serial `a`/`b`, `button: A`/`B`) until #42
 - `src/arena.h`, `src/arena.cpp`: connection layer (Wi-Fi, WebSocket, handshake, retries)
 - `src/arena_ca.h`: root certificates for `wss://`
+- `src/pins.h`: every pin number, with the box PCB's defaults
 - `src/buttons.h`, `src/buttons.cpp`: surrender buttons (`buttonsBegin`, `pollButtons`)
 - `lib/Buttons/`: debounce logic with no Arduino dependency
 - `lib/ArenaLogic/`: protocol logic with no Arduino dependency (URL, retry policy, JSON frames)

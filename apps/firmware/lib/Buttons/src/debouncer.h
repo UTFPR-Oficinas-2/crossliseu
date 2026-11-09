@@ -1,5 +1,5 @@
 // Debounce de um botão, sem dependência do Arduino, para ser testado no
-// computador (test/test_buttons, pio test -e native). Os pinos ficam em src/buttons.cpp.
+// computador (test/test_buttons, pio test -e native). Os pinos ficam em src/pins.h.
 #pragma once
 
 #include <stdint.h>
