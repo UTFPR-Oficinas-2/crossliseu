@@ -354,12 +354,56 @@ describe('FightService', () => {
         const { service, store } = setup({
             state: 'ongoing',
             events: [event('started', T0)],
-            now: at(1000),
+            now: at(181_000),
             lockedNow: at(200_000),
         });
 
         expect(await service.settle(MATCH_ID)).toBe(true);
         expect(store.match.state).toBe('finished');
+        expect(store.written[0].occurredAt).toEqual(at(180_000));
+    });
+
+    it('settle() takes no lock for a fight with time left', async () => {
+        const { service, repo } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+
+        expect(await service.settle(MATCH_ID)).toBe(false);
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
+    it('settle() takes no lock for a fight that is not ongoing, or unknown', async () => {
+        const paused = setup({
+            state: 'paused',
+            events: [event('started', T0)],
+            now: at(500_000),
+        });
+        expect(await paused.service.settle(MATCH_ID)).toBe(false);
+        expect(paused.repo.withLockedFight).not.toHaveBeenCalled();
+
+        const missing = setup({ missing: true });
+        expect(await missing.service.settle(MATCH_ID)).toBe(false);
+        expect(missing.repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
+    it('settle() returns true when a concurrent call settled the fight first', async () => {
+        const { service, repo, store } = setup({
+            state: 'finished',
+            events: [event('started', T0), event('finished', at(180_000))],
+            now: at(300_000),
+        });
+        store.match.endReason = 'time_out';
+        // The lock-free first look still saw it ongoing
+        const stale = cloneMatch(store.match);
+        stale.state = 'ongoing';
+        stale.endReason = null;
+        repo.findWithRobots.mockResolvedValueOnce(stale);
+        repo.findEvents.mockResolvedValueOnce([event('started', T0)]);
+
+        expect(await service.settle(MATCH_ID)).toBe(true);
+        expect(store.written).toHaveLength(0);
     });
 
     it('state() returns status, remainingMs, endReason and robot names', async () => {

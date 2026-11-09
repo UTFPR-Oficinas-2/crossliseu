@@ -97,16 +97,39 @@ export class FightService {
         return this.buildState(matchId);
     }
 
-    /** Settles a time-out if the match is ongoing and out of time; true when it wrote one */
+    /**
+     * Settles a time-out if the match is ongoing and out of time. True when the fight had run out
+     * and is no longer `ongoing` as a result, whichever call wrote the time-out (this one, or a
+     * concurrent one that got to the lock first). False for a fight with time left, one that is
+     * not `ongoing`, and an unknown match.
+     *
+     * The first look takes no locks, so public reads of a fight with time left never wait for the
+     * operator's commands. Only an expired-looking fight opens the locking transaction, which
+     * checks again.
+     */
     async settle(matchId: string): Promise<boolean> {
-        const wrote = await this.repo.withLockedFight(
+        const match = await this.repo.findWithRobots(matchId);
+        if (!match || match.state !== 'ongoing') {
+            return false;
+        }
+        const events = await this.repo.findEvents(matchId);
+        if (remainingMs(match.state, events, this.clock.now()) !== 0) {
+            return false;
+        }
+        const expired = await this.repo.withLockedFight(
             matchId,
-            async (fight, writes) =>
+            async (fight, writes) => {
                 // `now` is read after the locks, so events are written in lock order
-                (await this.settleLocked(fight, writes, this.clock.now()))
-                    .wrote,
+                const settled = await this.settleLocked(
+                    fight,
+                    writes,
+                    this.clock.now(),
+                );
+                // Not ongoing any more: somebody else settled it while we waited for the lock
+                return settled.wrote || fight.match.state !== 'ongoing';
+            },
         );
-        return wrote ?? false;
+        return expired ?? false;
     }
 
     /** Inside the lock: writes the time-out when due and returns the state and events after */

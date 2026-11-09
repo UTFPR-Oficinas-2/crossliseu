@@ -63,12 +63,17 @@ export class MatchesService {
     /** An ongoing match that ran out of time is settled as a time-out, so the list never shows it as live */
     async findAll(championshipId?: string) {
         const matches = await this.matchesRepository.findAll(championshipId);
-        const settled = await Promise.all(
-            matches
-                .filter((match) => match.state === 'ongoing')
-                .map((match) => this.fightService.settle(match.id)),
-        );
-        return settled.includes(true)
+        // One after another: a listing must not hold several pooled connections at once
+        let settled = false;
+        for (const match of matches) {
+            if (
+                match.state === 'ongoing' &&
+                (await this.fightService.settle(match.id))
+            ) {
+                settled = true;
+            }
+        }
+        return settled
             ? this.matchesRepository.findAll(championshipId)
             : matches;
     }

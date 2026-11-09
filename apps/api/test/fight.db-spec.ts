@@ -215,6 +215,8 @@ describe('fight (e2e)', () => {
             [arena.id],
         );
         expect(row.current_match_id).toBe(ids.match);
+        // The fight keeps its arena as history
+        expect((await matchRow()).arena_id).toBe(arena.id);
     });
 
     it('a non-owner gets 404 on every command', async () => {
@@ -337,13 +339,57 @@ describe('fight (e2e)', () => {
         ).toHaveLength(1);
     });
 
+    /**
+     * Holds the match's row lock, fires the requests, waits until every one of them is blocked on
+     * a lock, then releases it. A run that did not take the lock would never block, and the wait
+     * would time out.
+     */
+    async function whileMatchLocked<T>(fire: () => Promise<T>[]): Promise<T[]> {
+        const runner = ds.createQueryRunner();
+        await runner.connect();
+        await runner.startTransaction();
+        try {
+            await runner.query(
+                `SELECT 1 FROM "matches" WHERE "id" = $1 FOR UPDATE`,
+                [ids.match],
+            );
+            const pending = fire();
+            const deadline = Date.now() + 5000;
+            for (;;) {
+                const [{ waiting }] = (await ds.query(
+                    `SELECT count(*)::int AS waiting FROM pg_stat_activity
+                     WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+                )) as { waiting: number }[];
+                if (waiting >= pending.length) {
+                    break;
+                }
+                if (Date.now() > deadline) {
+                    throw new Error(
+                        `only ${waiting} of ${pending.length} requests waited for the lock`,
+                    );
+                }
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            await runner.commitTransaction();
+            return await Promise.all(pending);
+        } finally {
+            if (runner.isTransactionActive) {
+                await runner.rollbackTransaction();
+            }
+            await runner.release();
+        }
+    }
+
+    // supertest sends on then(), so this starts the request without waiting for it
+    const send = (req: request.Test) => req.then((response) => response);
+
     it('two concurrent finish calls: one 200, one 409, one finished event', async () => {
         await command('start').expect(200);
         clock.advance(10_000);
 
-        const responses = await Promise.all([
-            command('finish'),
-            command('finish'),
+        const responses = await whileMatchLocked(() => [
+            send(command('finish')),
+            send(command('finish')),
         ]);
 
         expect(responses.map((r) => r.status).sort((x, y) => x - y)).toEqual([
@@ -354,12 +400,29 @@ describe('fight (e2e)', () => {
         ).toHaveLength(1);
     });
 
+    it('two concurrent close calls: one 200, one 409, one closed event', async () => {
+        await command('start').expect(200);
+        await command('finish').expect(200);
+
+        const responses = await whileMatchLocked(() => [
+            send(command('close')),
+            send(command('close')),
+        ]);
+
+        expect(responses.map((r) => r.status).sort((x, y) => x - y)).toEqual([
+            200, 409,
+        ]);
+        expect(
+            (await events()).filter((e) => e.type === 'closed'),
+        ).toHaveLength(1);
+    });
+
     it('two concurrent reads of an expired fight write one finished event and both succeed', async () => {
         await expireFight();
 
-        const responses = await Promise.all([
-            http().get(`/matches/${ids.match}/state`),
-            http().get(`/matches/${ids.match}/state`),
+        const responses = await whileMatchLocked(() => [
+            send(http().get(`/matches/${ids.match}/state`)),
+            send(http().get(`/matches/${ids.match}/state`)),
         ]);
 
         expect(responses.map((r) => r.status)).toEqual([200, 200]);
@@ -372,6 +435,31 @@ describe('fight (e2e)', () => {
         expect(
             (await events()).filter((e) => e.type === 'finished'),
         ).toHaveLength(1);
+    });
+
+    it('a read of a fight with time left does not wait for the match lock', async () => {
+        await command('start').expect(200);
+        clock.advance(10_000);
+
+        const [response] = await (async () => {
+            const runner = ds.createQueryRunner();
+            await runner.connect();
+            await runner.startTransaction();
+            try {
+                await runner.query(
+                    `SELECT 1 FROM "matches" WHERE "id" = $1 FOR UPDATE`,
+                    [ids.match],
+                );
+                const read = send(http().get(`/matches/${ids.match}/state`));
+                return [await read];
+            } finally {
+                await runner.rollbackTransaction();
+                await runner.release();
+            }
+        })();
+
+        expect(response.status).toBe(200);
+        expect(response.body.remainingMs).toBe(170_000);
     });
 
     it('GET /matches/:id still returns arenaId', async () => {

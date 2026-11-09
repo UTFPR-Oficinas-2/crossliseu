@@ -315,6 +315,27 @@ describe('MatchesService.findAll', () => {
         expect(result).toEqual([settled]);
     });
 
+    it('settles the listed ongoing matches one after another', async () => {
+        const { service, matchesRepository, fightService } = setup([], []);
+        const first = match('ongoing');
+        first.id = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+        matchesRepository.findAll.mockResolvedValue([first, match('ongoing')]);
+        let running = 0;
+        let maxRunning = 0;
+        fightService.settle.mockImplementation(async () => {
+            running++;
+            maxRunning = Math.max(maxRunning, running);
+            await Promise.resolve();
+            running--;
+            return false;
+        });
+
+        await service.findAll();
+
+        expect(fightService.settle).toHaveBeenCalledTimes(2);
+        expect(maxRunning).toBe(1);
+    });
+
     it('reads once when nothing was settled', async () => {
         const { service, matchesRepository } = setup([], [match('scheduled')]);
         matchesRepository.findAll.mockResolvedValue([match('ongoing')]);
