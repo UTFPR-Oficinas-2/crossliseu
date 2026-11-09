@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import type {
     ArenasRepository,
     CreateArenaResult,
+    ClearCurrentMatchResult,
     LockedArenaResult,
     RenameArenaResult,
     SetCurrentMatchResult,
@@ -49,7 +50,7 @@ function setup(
         setResult?: SetCurrentMatchResult;
         createResults?: CreateArenaResult[];
         renameResult?: RenameArenaResult;
-        lockedResult?: LockedArenaResult;
+        lockedResult?: LockedArenaResult | ClearCurrentMatchResult;
     } = {},
 ) {
     const arenasRepository = {
@@ -251,7 +252,7 @@ describe('ArenasService.clearCurrentMatch', () => {
 
     it.each([
         ['arena_not_found', NotFoundException],
-        ['arena_match_live', ConflictException],
+        ['arena_match_started', ConflictException],
     ] as const)('turns %s into %o', async (lockedResult, exception) => {
         const { service } = setup([arena(ARENA_1_ID, 'Arena 1', MATCH_ID)], {
             lockedResult,
@@ -279,15 +280,15 @@ describe('ArenasService.releaseCurrentMatch', () => {
         );
     });
 
-    it('turns arena_match_live into a ConflictException', async () => {
+    it('turns arena_match_started into a ConflictException', async () => {
         const { service } = setup([arena(ARENA_1_ID, 'Arena 1', MATCH_ID)], {
-            lockedResult: 'arena_match_live',
+            lockedResult: 'arena_match_started',
         });
 
         const call = service.releaseCurrentMatch(ARENA_1_ID);
 
         await expect(call).rejects.toThrow(ConflictException);
-        await expect(call).rejects.toThrow('arena_match_live');
+        await expect(call).rejects.toThrow('arena_match_started');
     });
 });
 

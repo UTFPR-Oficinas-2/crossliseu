@@ -40,10 +40,9 @@ erDiagram
   users ||--o{ matches : creates
   users ||--o{ robots : creates
   users ||--o{ arenas : owns
-  matches ||--o{ match_pauses : "paused during"
-  users ||--o{ match_pauses : pauses
-  matches ||--o{ match_score_events : "scored in"
-  robots  ||--o{ match_score_events : "scored for"
+  matches ||--o{ match_events : "timeline"
+  users |o--o{ match_events : "acts in"
+  robots |o--o{ match_events : "scored for"
   robots ||--o{ matches : "wins"
   arenas |o--o| matches : "runs now (current_match_id)"
   arenas ||--o{ matches : "played on (arena_id)"
@@ -90,8 +89,6 @@ erDiagram
     string state "scheduled | ongoing | paused | finished"
     string end_reason "(time_out | manual | surrender), nullable"
     timestamptz scheduled_at
-    timestamptz started_at "nullable"
-    timestamptz finished_at "nullable"
     timestamptz created_at
     timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"
@@ -107,19 +104,16 @@ erDiagram
     timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"
   }
-  match_score_events {
+  match_events {
     uuid id PK
     uuid match_id FK
-    uuid robot_id FK
-    int judge_seat "(1 | 2 | 3)"
-    int action "+1 | -1"
-    timestamptz created_at
-  }
-  match_pauses {
-    uuid id PK
-    uuid match_id FK
-    uuid paused_by_user_id FK
-    timestamptz paused_at
-    timestamptz resumed_at "nullable, null while the match is paused"
+    uuid actor_user_id FK "nullable, the user who triggered the event"
+    uuid robot_id FK "nullable, only on scored"
+    string type "(started | paused | resumed | finished | closed | scored)"
+    timestamptz occurred_at
+    int judge_seat "(1 | 2 | 3), nullable, only on scored"
+    int action "+1 | -1, nullable, only on scored"
   }
 ```
+
+A match's start and finish times are the `occurred_at` of its `started` and `finished` events in `match_events`.

@@ -642,31 +642,13 @@ describe('arenas (db)', () => {
     });
 
     describe('ArenasRepository.clearCurrentMatch', () => {
-        it.each(['scheduled', 'finished'] as const)(
-            'clears a %s current match',
-            async (state) => {
-                await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
-                await setState(ids.m1, state);
-
-                expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
-                    'done',
-                );
-                expect(await currentMatchOf(ids.arena1)).toBeNull();
-            },
-        );
-
-        it('clears a finished match so the next one can be selected', async () => {
+        it('clears a scheduled current match', async () => {
             await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
-            await setState(ids.m1, 'finished');
-            expect(
-                await arenas.setCurrentMatch(ids.arena1, ids.m2, ownerA),
-            ).toBe('arena_match_started');
 
-            await arenas.clearCurrentMatch(ids.arena1, ownerA);
-
-            expect(
-                await arenas.setCurrentMatch(ids.arena1, ids.m2, ownerA),
-            ).toBe('done');
+            expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
+                'done',
+            );
+            expect(await currentMatchOf(ids.arena1)).toBeNull();
         });
 
         it('frees the match for another arena', async () => {
@@ -685,14 +667,14 @@ describe('arenas (db)', () => {
             expect(await currentMatchOf(ids.arena1)).toBeNull();
         });
 
-        it.each(['ongoing', 'paused'] as const)(
-            'refuses with arena_match_live while the match is %s',
+        it.each(['ongoing', 'paused', 'finished'] as const)(
+            'refuses with arena_match_started while the match is %s',
             async (state) => {
                 await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
                 await setState(ids.m1, state);
 
                 expect(await arenas.clearCurrentMatch(ids.arena1, ownerA)).toBe(
-                    'arena_match_live',
+                    'arena_match_started',
                 );
                 expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
             },
@@ -739,7 +721,7 @@ describe('arenas (db)', () => {
                 start,
             ]);
 
-            expect(result).toBe('arena_match_live');
+            expect(result).toBe('arena_match_started');
             expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
         });
     });
@@ -773,15 +755,15 @@ describe('arenas (db)', () => {
             expect(second.body).toEqual(first.body);
         });
 
-        it.each(['ongoing', 'paused'] as const)(
-            'answers 409 arena_match_live while the match is %s',
+        it.each(['ongoing', 'paused', 'finished'] as const)(
+            'answers 409 arena_match_started while the match is %s',
             async (state) => {
                 await arenas.setCurrentMatch(ids.arena1, ids.m1, ownerA);
                 await setState(ids.m1, state);
 
                 const response = await clear(ids.arena1).expect(409);
 
-                expect(response.body.message).toBe('arena_match_live');
+                expect(response.body.message).toBe('arena_match_started');
                 expect(await currentMatchOf(ids.arena1)).toBe(ids.m1);
             },
         );

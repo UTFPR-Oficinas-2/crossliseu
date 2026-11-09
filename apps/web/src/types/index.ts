@@ -133,6 +133,8 @@ export interface MatchSummary {
   robotAId: string
   robotBId: string
   state: MatchState
+  /** The arena the fight ran on, set at Start. `null` before Start */
+  arenaId: string | null
   /** When the fight is planned to start (ISO) */
   scheduledAt: string
   createdAt: string
@@ -148,7 +150,6 @@ export interface Match extends MatchSummary {
   arenaId: string
   roundDurationSeconds: number
   elapsedSeconds: number
-  startedAt: string | null
   operatorName: string | null
   /** "Logitech C920 · 1080p" */
   camera: string | null

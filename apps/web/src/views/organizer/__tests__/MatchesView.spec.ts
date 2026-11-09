@@ -35,6 +35,7 @@ const match = (
   weightClass: 'beetleweight',
   robotAId,
   robotBId,
+  arenaId: null,
   state,
   scheduledAt: '2026-12-09T14:00:00.000Z',
 })

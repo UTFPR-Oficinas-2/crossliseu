@@ -10,6 +10,7 @@ import { Match } from './entities/match.entity.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
 import { ChampionshipsService } from '../championships/championships.service.js';
+import { FightService } from './fight/fight.service.js';
 import { Robot } from '../robots/entities/robot.entity.js';
 import type { WeightClass } from '../robots/weight-class.js';
 
@@ -20,6 +21,7 @@ export class MatchesService {
     constructor(
         private readonly matchesRepository: MatchesRepository,
         private readonly championshipsService: ChampionshipsService,
+        private readonly fightService: FightService,
     ) {}
 
     async create(createMatchDto: CreateMatchDto, createdByUserId: string) {
@@ -58,11 +60,27 @@ export class MatchesService {
         return this.findOne(created.id);
     }
 
-    findAll(championshipId?: string) {
-        return this.matchesRepository.findAll(championshipId);
+    /** An ongoing match that ran out of time is settled as a time-out, so the list never shows it as live */
+    async findAll(championshipId?: string) {
+        const matches = await this.matchesRepository.findAll(championshipId);
+        // One after another: a listing must not hold several pooled connections at once
+        let settled = false;
+        for (const match of matches) {
+            if (
+                match.state === 'ongoing' &&
+                (await this.fightService.settle(match.id))
+            ) {
+                settled = true;
+            }
+        }
+        return settled
+            ? this.matchesRepository.findAll(championshipId)
+            : matches;
     }
 
     async findOne(id: string) {
+        // An expired fight is settled as a time-out before it is read
+        await this.fightService.settle(id);
         const match = await this.matchesRepository.findOne(id);
 
         if (!match) {

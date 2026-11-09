@@ -19,6 +19,7 @@ function match(id: string, state: MatchState, scheduledAt: string): MatchSummary
     weightClass: 'beetleweight',
     robotAId: 'r1',
     robotBId: 'r2',
+    arenaId: null,
     state,
     scheduledAt,
     createdAt: at,

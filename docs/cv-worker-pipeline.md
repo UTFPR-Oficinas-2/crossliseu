@@ -285,8 +285,8 @@ Planned, after the pipeline works on local videos. The worker will hand `traject
 ## Open questions
 
 - **Real footage.** The pipeline has only run on a synthetic video. A recording of the real arena with the blue and red markers is needed to calibrate `ROBOT_COLORS`, `MIN_CONTOUR_AREA` and `MAX_SPEED_PX_PER_FRAME`, and to take the empty-arena photo for the heatmap background.
-- **Video start vs. match start.** `timestamp_s` counts from the start of the video, which may begin before the match starts. Aligning it with `started_at` needs either a trimmed video or a known offset.
-- **Pauses.** During a pause (`match_pauses`) the robots stand still, which would inflate their heatmap cells. Those frames should probably be dropped once the offset above is known.
+- **Video start vs. match start.** `timestamp_s` counts from the start of the video, which may begin before the match starts. Aligning it with the `started` event's `occurred_at` needs either a trimmed video or a known offset.
+- **Pauses.** Between a `paused` and the next `resumed` event (`match_events`) the robots stand still, which would inflate their heatmap cells. Those frames should probably be dropped once the offset above is known.
 - **Marker occlusion.** A robot that flips or hides its marker behind the opponent produces misses. The detection rate on real footage will tell whether this needs more than the first version of tracking.
 
 ## Development order
