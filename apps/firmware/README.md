@@ -30,7 +30,7 @@ pio device monitor           # serial monitor at 115200; Ctrl+C to quit
 
 `src/` is the code that gets built; it needs a `config.h` (see [Configuration](#configuration)). Build output goes to `.pio/` (git-ignored).
 
-The protocol logic (`lib/ArenaLogic`) and the button debounce (`lib/Buttons`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
+The protocol logic (`lib/ArenaLogic`), the button debounce (`lib/Buttons`) and the strip colours (`lib/Led`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
 
 ```sh
 pio test -e native
@@ -89,6 +89,7 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 - The onboard LED (`PIN_ONBOARD_LED`, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
 - Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
+- The LED strip follows the box (see [Strip states](#strip-states)): not connected, idle, and each `state` the server sends. The `state` parser in `lib/ArenaLogic` still expects the old names (`ready`, `running`, `ended`), so the `scheduled`, `ongoing` and `finished` the server sends since #101 are dropped until it is updated. In the serial monitor, `l` moves it to the next state by hand (to test on the bench); after the last one it follows the box again.
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |
@@ -103,12 +104,19 @@ To test the arena flow without the hardware, the simulator in [`tools/arena-sim`
 
 ## Strip states
 
-| State | Colour |
-| --- | --- |
-| Waiting | White, blinking |
-| Counting | White |
-| Stopped | Red |
-| Finished | Blinks green, then solid blue |
+`src/led.cpp` drives the 12 V RGB strip through one MOSFET per channel, with PWM (5 kHz, 8 bits), so it can dim and mix colours. `setLedState()` is called every loop: the same state keeps its effect going, a new state restarts it. The colours and timings are in [`lib/Led/src/led_pattern.h`](lib/Led/src/led_pattern.h) (tweak them there if two colours look alike on the strip), and the table is also in the protocol doc's "LED colors".
+
+| `LedState` | Box state | Colour |
+| --- | --- | --- |
+| `NotConnected` | No `welcome` yet | Magenta, blinking (0.5 s on, 0.5 s off) |
+| `Connected` | `idle` | Blue → green → red, 1 s each, cycling |
+| `Ready` | `scheduled` | Pink in 5 brightness steps (20% to 100%, 1 s each), off 1 s, again: an F1 start |
+| `Running` | `ongoing` | White |
+| `Paused` | `paused` | Yellow |
+| `Surrender` | `finished`, `surrender` | Red |
+| `Ended` | `finished`, `time_out` / `manual` | White, blinking (a chequered flag), until the operator closes the match |
+
+`ledStateFor(connected, state)` in `led_pattern.h` picks the `LedState` for the last `state`, for #42. The strip can't do a real F1 "lights out": the box doesn't know when the operator will press Start, so it jumps from pink to white when the server's `ongoing` arrives.
 
 ## Pins
 
@@ -121,9 +129,11 @@ All pins are in [`src/pins.h`](src/pins.h). The defaults are the box PCB's (ESP3
 | Surrender, side B | `PIN_SURRENDER_B` | 32 |
 | LCD U3 | `PIN_LCD1_SDA`, `PIN_LCD1_SCL` | SDA 21, SCL 23 |
 | LCD U4 | `PIN_LCD2_SDA`, `PIN_LCD2_SCL` | SDA 18, SCL 19 |
-| LED strip (#42) | (colors confirmed in #42) | 25, 26, 33 |
+| LED strip, red | `PIN_STRIP_RED` | 25 |
+| LED strip, green | `PIN_STRIP_GREEN` | 33 |
+| LED strip, blue | `PIN_STRIP_BLUE` | 26 |
 
-The LCDs and the strip are not driven yet (#42). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
+The LCDs are not driven yet (#39). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
 
 Surrender buttons (`src/buttons.cpp`) use the internal pull-up; the other contact terminal goes to GND. `SURRENDER_A_PRESSED` and `SURRENDER_B_PRESSED` are what the pin reads with the button pressed: `LOW` for a normally open (NO) contact, `HIGH` for a normally closed (NC) one. On the PCB, side A is NO (`LOW`) and side B is NC (`HIGH`).
 
@@ -156,7 +166,7 @@ Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick t
 
 Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
 
-On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo (onboard LED and buttons), `-DPIN_ONBOARD_LED=25` is enough: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`.
+On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo (onboard LED and buttons), `-DPIN_ONBOARD_LED=25` is enough: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`. The strip's red (25) and blue (26) clash with the onboard LED and the radio; move them too (for example `-DPIN_STRIP_RED=13 -DPIN_STRIP_BLUE=17`).
 
 For the old `main.cpp` / `Definitions.h`:
 
@@ -170,16 +180,19 @@ For the old `main.cpp` / `Definitions.h`:
 ## Files
 
 - `platformio.ini`: board, platform version and build settings
-- `src/main.cpp`: demo of the connection layer and the buttons (onboard LED, serial `a`/`b`, `button: A`/`B`) until #42
+- `src/main.cpp`: demo of the connection layer, the buttons and the strip (onboard LED, serial `a`/`b`/`l`, `button: A`/`B`) until #42
 - `src/arena.h`, `src/arena.cpp`: connection layer (Wi-Fi, WebSocket, handshake, retries)
 - `src/arena_ca.h`: root certificates for `wss://`
 - `src/pins.h`: every pin number, with the box PCB's defaults
 - `src/buttons.h`, `src/buttons.cpp`: surrender buttons (`buttonsBegin`, `pollButtons`)
+- `src/led.h`, `src/led.cpp`: LED strip (`ledBegin`, `setLedState`)
+- `lib/Led/`: strip colours, effects and `ledStateFor`, with no Arduino dependency
 - `lib/Buttons/`: debounce logic with no Arduino dependency
 - `lib/ArenaLogic/`: protocol logic with no Arduino dependency (URL, retry policy, JSON frames)
 - `lib/WebSockets/`: patched arduinoWebSockets 2.7.2
 - `test/test_arena_logic/`: unit tests for `lib/ArenaLogic` (`pio test -e native`)
 - `test/test_buttons/`: unit tests for the debounce in `lib/Buttons` (`pio test -e native`)
+- `test/test_led/`: unit tests for the strip colours in `lib/Led` (`pio test -e native`)
 - `main.cpp`: old sketch: setup, serial commands and state machine
 - `Definitions.h`: pin numbers and the state enum
 - `config.example.h`: template for the git-ignored `config.h` (server address, device id and token, Wi-Fi)

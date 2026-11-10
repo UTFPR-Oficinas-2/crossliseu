@@ -275,16 +275,16 @@ After any close not covered above: wait 1 s, then double the wait on each failed
 
 ## LED colors
 
-The strip is an RGB strip driven on/off per channel, so these are its eight possible colors. They are the agreed defaults; changing them is a firmware-only change, but update this table too.
+The strip is a 12 V RGB strip driven by PWM on each channel, so it can dim and mix colours. These are the colours chosen for the box (#40); changing them is a firmware-only change (`apps/firmware/lib/Led/src/led_pattern.h`), but update this table too.
 
 | Box state | Color |
 | --- | --- |
 | Not connected | Magenta, blinking |
-| Connected (`idle`) | Cyan |
-| Ready | White, blinking |
+| Connected (`idle`) | Blue → green → red, 1 s each, cycling |
+| Ready | Pink in 5 brightness steps, 1 s each, then off 1 s, again (an F1 start) |
 | Running | White |
 | Paused | Yellow |
-| Ended (`time_out`, `manual`) | Blue |
+| Ended (`time_out`, `manual`) | White, blinking |
 | Ended (`surrender`) | Red |
 
 ## Firmware modules
@@ -298,6 +298,8 @@ void showMessage(const char* text);     // status text, e.g. "Not connected", "R
 
 // LED (#40)
 enum class LedState { NotConnected, Connected, Ready, Running, Paused, Ended, Surrender };
+void ledBegin();                        // sets up the strip's PWM and turns it off; once in setup()
+LedState ledStateFor(bool connected, const ArenaState& s);  // the LedState for the last state
 void setLedState(LedState state);       // sets the color/blink from the table above; call every loop for blinking,
                                         // calling again with the same state keeps the blink going without restarting it
 

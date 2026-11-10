@@ -41,4 +41,13 @@
 #define PIN_LCD2_SCL 19
 #endif
 
-// Fita de LED (#42): GPIO 25, 26 e 33 na PCB. A cor de cada um entra aqui no PR do LED.
+// Fita de LED RGB 12 V (src/led.cpp): cada pino liga o gate de um MOSFET por PWM.
+#ifndef PIN_STRIP_RED
+#define PIN_STRIP_RED 25
+#endif
+#ifndef PIN_STRIP_GREEN
+#define PIN_STRIP_GREEN 33
+#endif
+#ifndef PIN_STRIP_BLUE
+#define PIN_STRIP_BLUE 26
+#endif
