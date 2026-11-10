@@ -12,7 +12,7 @@ Each section says whether it is **done**, **in progress** or **planned**. Update
 | Upload with progress, retry and leave guard | `apps/web` (#20) | Done, not tested end to end |
 | R2 bucket and CORS | Cloudflare (#45) | Done |
 | R2 access key | Cloudflare dashboard (#45) | Done |
-| `upload-url` and `complete` routes, `videos` table | `apps/api` (#45) | Planned |
+| `upload-url` and `complete` routes, `match_videos` table | `apps/api` (#45) | Done, not tested end to end |
 | Start processing after the upload | `apps/api` (#21) | Planned |
 
 ## Flow
@@ -113,9 +113,20 @@ One video per match: uploading again overwrites the same key.
 
 ## API routes
 
-**Proposed.** These are the routes `apps/web/src/api/recordings.ts` calls today. They are not implemented yet (#45); if the API ends up different, that file is the only one to change on the web side.
+**Done** (#45), in `apps/api/src/modules/recordings/`. These are the routes `apps/web/src/api/recordings.ts` calls.
 
-Both require the operator's JWT (`Authorization: Bearer <token>`).
+Both require the operator's JWT (`Authorization: Bearer <token>`) and only work for the owner of the match's championship; anyone else gets `404 match_not_found`, like the other match routes. Both answer `503 recording_storage_not_configured` while any `R2_*` variable is missing.
+
+The video is stored in the `match_videos` table, one row per match:
+
+| Column | Notes |
+| --- | --- |
+| `match_id` | Unique: recording a match again reuses the row and overwrites the object |
+| `object_key` | `recordings/<matchId>.<ext>` |
+| `content_type` | `video/mp4` or `video/webm` |
+| `status` | `uploading` (URL handed out) or `uploaded` (confirmed and found in R2) |
+| `size_bytes` | Read from R2 on `complete`; `null` while uploading |
+| `uploaded_at`, `uploaded_by_user_id` | When it was confirmed, and who asked for the URL |
 
 ### `POST /matches/:id/recording/upload-url`
 
@@ -135,9 +146,9 @@ Response `200`:
 }
 ```
 
-- The URL allows one `PUT` to `key`, for about 15 minutes.
-- `contentType` is signed into the URL, so the `PUT` must send the same `Content-Type`. The browser always sends the plain type (`video/mp4` or `video/webm`, no `codecs=`).
-- `404` when the match does not exist.
+- The URL allows one `PUT` to `key`, for 15 minutes.
+- `contentType` is signed into the URL, so the `PUT` must send the same `Content-Type`; R2 answers `403` to any other. The browser always sends the plain type (`video/mp4` or `video/webm`, no `codecs=`). The AWS SDK leaves `Content-Type` out of the signature by default, so `R2RecordingStorage` passes `signableHeaders` to include it.
+- `400` when `contentType` is not `video/mp4` or `video/webm`; `404 match_not_found`.
 
 ### `POST /matches/:id/recording/complete`
 
@@ -147,7 +158,14 @@ Request:
 { "key": "recordings/6f1c….mp4", "size": 73400320 }
 ```
 
-Response `204`. Stores the video as `uploaded` (and, with #21, creates the analysis job). The API can check the object really exists in R2 before accepting it.
+Response `204`. The API reads the object from R2 before accepting it, then stores the video as `uploaded` with R2's size (with #21, this is also where the analysis job will be created).
+
+| Error | When |
+| --- | --- |
+| `409 recording_not_requested` | `key` is not the one handed out by `upload-url` for this match (or none was) |
+| `409 recording_not_uploaded` | The object is not in R2 |
+| `409 recording_size_mismatch` | R2 has a different size than `size`: the upload did not finish |
+| `404 match_not_found` | Unknown match, or not the caller's |
 
 ## Web app
 
@@ -191,7 +209,8 @@ The video only exists in the tab's memory until it reaches R2. While a recording
 | --- | --- |
 | Web logic | `npx vitest run src/utils src/composables src/api` in `apps/web` (API and R2 are faked) |
 | Recording without a camera | Start Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` and open `/dev/components` |
-| Upload end to end | Needs the #45 routes running locally (Docker Compose) and the R2 variables in `.env` |
+| API logic | `npx vitest run src/modules/recordings` in `apps/api` (R2 and the database are faked) |
+| Upload end to end | API running locally (Docker Compose, after `migration:run`), the R2 variables in `.env`, signed in on the operator screen |
 
 ## Open questions
 
