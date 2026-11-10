@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "display_text.h"
+#include "link_monitor.h"
 #include "pins.h"
 
 namespace {
@@ -22,13 +23,14 @@ struct Lcd {
   LiquidCrystal_PCF8574* lcd;          // criado na primeira vez que o LCD responde
   bool online;                         // respondeu na última verificação
   char shown[2][LCD_COLS + 1];         // o que está na tela, para só reescrever o que mudou
+  LinkMonitor link;                    // conta leituras ruins seguidas antes de dar o LCD por perdido
 };
 
 // Pinos em pins.h. Na PCB, o SCL do U3 é o 23 (conferido na bancada); o
 // lcd_led_botao_01.cpp antigo usava o 22.
 Lcd lcds[] = {
-    {"U3", &Wire, PIN_LCD1_SDA, PIN_LCD1_SCL, 0, nullptr, false, {}},
-    {"U4", &Wire1, PIN_LCD2_SDA, PIN_LCD2_SCL, 0, nullptr, false, {}},
+    {"U3", &Wire, PIN_LCD1_SDA, PIN_LCD1_SCL, 0, nullptr, false, {}, {}},
+    {"U4", &Wire1, PIN_LCD2_SDA, PIN_LCD2_SCL, 0, nullptr, false, {}, {}},
 };
 
 constexpr uint32_t I2C_HZ = 100000;
@@ -38,10 +40,10 @@ constexpr uint32_t I2C_HZ = 100000;
 // uma linha leva ~10 ms de I2C, então é uma por vez para não travar o loop().
 constexpr uint32_t CHECK_MS = 500;
 
-// Na ligação padrão do módulo PCF8574, P2 é o E do LCD. A biblioteca sempre o
-// deixa em 0 depois de escrever, e o PCF8574 volta de um reset com todos os
-// pinos em 1: E lido em 1 quer dizer que o LCD perdeu energia e precisa de begin().
-constexpr uint8_t PCF_E = 0x04;
+// Na ligação padrão do módulo PCF8574, P2 é o E do LCD (LCD_E_MASK em pins.h). A
+// biblioteca sempre o deixa em 0 depois de escrever, e o PCF8574 volta de um reset
+// com todos os pinos em 1: E lido em 1 quer dizer que o LCD perdeu energia e
+// precisa de begin(). Com LCD_E_MASK 0 só vale a resposta do LCD no barramento.
 
 bool started = false;               // displayBegin() ligou os barramentos
 char wanted[2][LCD_COLS + 1];       // o que os dois LCDs devem mostrar
@@ -84,6 +86,7 @@ bool connect(Lcd& l) {
   l.lcd->clear();
   for (uint8_t row = 0; row < 2; row++) drawRow(l, row);
   l.online = true;
+  l.link.reset();
   Serial.printf("display: LCD %s at 0x%02X (SDA %u, SCL %u)\n", l.name, addr, l.sda, l.scl);
   return true;
 }
@@ -91,7 +94,8 @@ bool connect(Lcd& l) {
 // Lê a porta do PCF8574: false se o LCD não respondeu ou voltou de um reset.
 bool stillOk(Lcd& l) {
   if (l.bus->requestFrom(l.addr, (uint8_t)1) != 1) return false;
-  return (l.bus->read() & PCF_E) == 0;
+  const uint8_t port = l.bus->read();
+  return LCD_E_MASK == 0 || (port & LCD_E_MASK) == 0;
 }
 
 // Escreve uma linha (já com 16 caracteres) nos dois LCDs, só onde ela mudou.
@@ -129,7 +133,7 @@ void displayPoll() {
     if (row == 0) connect(l);  // um LCD fora tenta voltar a cada 2 s
     return;
   }
-  if (!stillOk(l)) {
+  if (l.link.lost(stillOk(l))) {
     Serial.printf("display: LCD %s lost or reset, reconnecting\n", l.name);
     l.online = false;
     connect(l);

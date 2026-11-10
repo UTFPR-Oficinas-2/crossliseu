@@ -4,6 +4,7 @@
 #include <unity.h>
 
 #include "display_text.h"
+#include "link_monitor.h"
 
 void setUp() {}
 void tearDown() {}
@@ -100,8 +101,33 @@ static void test_line_chars_the_lcd_rom_lacks() {
   assertLine("      A B       ", "A\x7F" "B");
 }
 
+// --- ligação com o LCD --------------------------------------------------------
+
+static void test_link_one_bad_poll_is_not_lost() {
+  LinkMonitor m;
+  TEST_ASSERT_FALSE(m.lost(false));
+  TEST_ASSERT_FALSE(m.lost(true));
+  TEST_ASSERT_FALSE(m.lost(false));  // a leitura boa zerou a contagem
+}
+
+static void test_link_two_bad_polls_in_a_row_is_lost() {
+  LinkMonitor m;
+  TEST_ASSERT_FALSE(m.lost(false));
+  TEST_ASSERT_TRUE(m.lost(false));
+}
+
+static void test_link_reset_clears_failures() {
+  LinkMonitor m;
+  m.lost(false);
+  m.reset();
+  TEST_ASSERT_FALSE(m.lost(false));
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_link_one_bad_poll_is_not_lost);
+  RUN_TEST(test_link_two_bad_polls_in_a_row_is_lost);
+  RUN_TEST(test_link_reset_clears_failures);
   RUN_TEST(test_time_issue_examples);
   RUN_TEST(test_time_rounds_up);
   RUN_TEST(test_time_zero_or_negative);

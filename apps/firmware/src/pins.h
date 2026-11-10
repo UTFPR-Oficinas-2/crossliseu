@@ -40,5 +40,11 @@
 #ifndef PIN_LCD2_SCL
 #define PIN_LCD2_SCL 19
 #endif
+// Bit do PCF8574 ligado ao E do LCD (P2 = 0x04 no módulo padrão), usado para
+// notar que o LCD resetou. Um módulo ligado de outro jeito usa -DLCD_E_MASK=0
+// para desligar essa checagem e ficar só com a resposta do LCD no barramento.
+#ifndef LCD_E_MASK
+#define LCD_E_MASK 0x04
+#endif
 
 // Fita de LED (#42): GPIO 25, 26 e 33 na PCB. A cor de cada um entra aqui no PR do LED.
