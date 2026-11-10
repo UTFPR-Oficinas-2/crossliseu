@@ -73,6 +73,17 @@ static void test_line_removes_portuguese_accents() {
   assertLine(" aeiouc AEIOUC  ", "áéíóúç ÁÉÍÓÚÇ");
 }
 
+// Acento decomposto (letra + marca combinante, NFD): a marca some, sem '?' sobrando.
+static void test_line_removes_decomposed_accents() {
+  assertLine("       e        ", "e\xCC\x81");
+  assertLine("  DESISTENCIA   ", "DESISTE\xCC\x82" "NCIA");
+}
+
+static void test_line_folds_extra_latin1_letters() {
+  assertLine("      OoS       ", "\xC3\x98\xC3\xB8" "S");
+  assertLine("       s        ", "\xC3\x9F");
+}
+
 static void test_line_other_unicode_becomes_question_mark() {
   assertLine("      A?B       ", "A\xF0\x9F\xA4\x96" "B");  // emoji de robô
   assertLine("      A?B       ", "A\xE2\x82\xAC" "B");      // euro
@@ -99,6 +110,8 @@ int main() {
   RUN_TEST(test_line_full_and_truncated);
   RUN_TEST(test_line_empty);
   RUN_TEST(test_line_removes_portuguese_accents);
+  RUN_TEST(test_line_removes_decomposed_accents);
+  RUN_TEST(test_line_folds_extra_latin1_letters);
   RUN_TEST(test_line_other_unicode_becomes_question_mark);
   RUN_TEST(test_line_control_chars_become_spaces);
   RUN_TEST(test_line_chars_the_lcd_rom_lacks);

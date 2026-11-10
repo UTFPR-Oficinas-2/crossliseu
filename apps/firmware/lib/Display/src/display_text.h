@@ -37,6 +37,8 @@ inline char foldLatin1(uint8_t c) {
   if (c >= 0x8C && c <= 0x8F) return 'I';  // ÌÍÎÏ
   if (c == 0x91) return 'N';               // Ñ
   if (c >= 0x92 && c <= 0x96) return 'O';  // ÒÓÔÕÖ
+  if (c == 0x98) return 'O';               // Ø
+  if (c == 0x9F) return 's';               // ß
   if (c >= 0x99 && c <= 0x9C) return 'U';  // ÙÚÛÜ
   if (c >= 0xA0 && c <= 0xA5) return 'a';
   if (c == 0xA7) return 'c';
@@ -44,6 +46,7 @@ inline char foldLatin1(uint8_t c) {
   if (c >= 0xAC && c <= 0xAF) return 'i';
   if (c == 0xB1) return 'n';
   if (c >= 0xB2 && c <= 0xB6) return 'o';
+  if (c == 0xB8) return 'o';               // ø
   if (c >= 0xB9 && c <= 0xBC) return 'u';
   return '?';
 }
@@ -67,6 +70,8 @@ inline void formatLine(const char* text, char out[LCD_COLS + 1]) {
     } else if (c == 0xC3 && p[1] >= 0x80 && p[1] <= 0xBF) {
       out[n++] = display_text_detail::foldLatin1(p[1]);
       p += 2;
+    } else if ((c == 0xCC && p[1] >= 0x80 && p[1] <= 0xBF) || (c == 0xCD && p[1] >= 0x80 && p[1] <= 0xAF)) {
+      p += 2;  // marca combinante (U+0300-U+036F): o acento decomposto some
     } else {
       // Outro caractere UTF-8: um '?' e pula os bytes de continuação.
       out[n++] = '?';
