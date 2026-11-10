@@ -35,6 +35,7 @@ Lcd lcds[] = {
 };
 
 constexpr uint32_t I2C_HZ = 100000;
+constexpr uint16_t I2C_TIMEOUT_MS = 20;
 
 // A cada CHECK_MS, displayPoll() cuida de uma linha de um LCD, em rodízio: cada
 // linha é redesenhada a cada 2 s e cada LCD verificado a cada 1 s. Redesenhar
@@ -80,10 +81,27 @@ uint8_t findLcd(TwoWire& bus, const char* name, bool report) {
   return found;
 }
 
-void drawRow(Lcd& l, uint8_t row) {
+// Lê a porta do PCF8574; false se o LCD não respondeu.
+bool readPort(Lcd& l, uint8_t& port) {
+  if (l.bus->requestFrom(l.addr, (uint8_t)1) != 1) return false;
+  port = l.bus->read();
+  return true;
+}
+
+// A biblioteca ignora os erros do I2C, então depois de escrever confere se o LCD
+// ainda responde: só então a linha conta como mostrada. Senão o LCD fica fora, e
+// displayPoll() o traz de volta e redesenha tudo.
+bool drawRow(Lcd& l, uint8_t row) {
   l.lcd->setCursor(0, row);
   l.lcd->print(wanted[row]);
+  uint8_t port;
+  if (!readPort(l, port)) {
+    Serial.printf("display: LCD %s write failed, reconnecting\n", l.name);
+    l.online = false;
+    return false;
+  }
   memcpy(l.shown[row], wanted[row], LCD_COLS + 1);
+  return true;
 }
 
 // Procura o LCD no barramento, inicializa e desenha as duas linhas.
@@ -101,8 +119,9 @@ bool connect(Lcd& l, bool report = false) {
   l.lcd->begin(LCD_COLS, 2, *l.bus);
   l.lcd->setBacklight(255);
   l.lcd->clear();
-  for (uint8_t row = 0; row < 2; row++) drawRow(l, row);
-  l.online = true;
+  l.online = true;  // drawRow() baixa para false se uma escrita falhar
+  for (uint8_t row = 0; row < 2 && l.online; row++) drawRow(l, row);
+  if (!l.online) return false;
   l.link.reset();
   Serial.printf("display: LCD %s at 0x%02X (SDA %u, SCL %u)\n", l.name, addr, l.sda, l.scl);
   return true;
@@ -110,8 +129,8 @@ bool connect(Lcd& l, bool report = false) {
 
 // Lê a porta do PCF8574: false se o LCD não respondeu ou voltou de um reset.
 bool stillOk(Lcd& l) {
-  if (l.bus->requestFrom(l.addr, (uint8_t)1) != 1) return false;
-  const uint8_t port = l.bus->read();
+  uint8_t port;
+  if (!readPort(l, port)) return false;
   return LCD_E_MASK == 0 || (port & LCD_E_MASK) == 0;
 }
 
@@ -130,6 +149,7 @@ void displayBegin() {
 
   for (Lcd& l : lcds) {
     l.bus->begin(l.sda, l.scl, I2C_HZ);
+    l.bus->setTimeOut(I2C_TIMEOUT_MS);  // um barramento preso não pode travar o loop() (WebSocket e botões)
     if (!connect(l, true)) Serial.printf("display: LCD %s not found (SDA %u, SCL %u)\n", l.name, l.sda, l.scl);
   }
   started = true;

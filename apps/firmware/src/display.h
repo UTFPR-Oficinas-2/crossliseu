@@ -5,5 +5,7 @@
 
 void displayBegin();                  // liga os dois barramentos I2C e os LCDs; chamar uma vez no setup()
 void displayPoll();                   // chamar a cada loop(): redesenha os LCDs e traz de volta um que resetou ou foi desligado
-void showTime(long ms);               // linha de baixo: ms como mm:ss, arredondado para cima; ms <= 0 mostra 00:00
+// Tempo bloqueado no loop(): uma mudança de texto leva ~10 ms de I2C por LCD (no
+// máximo ~20 ms com o timeout do barramento); reconectar um LCD leva ~60 ms.
+void showTime(long ms);              // linha de baixo: ms como mm:ss, arredondado para cima; ms <= 0 mostra 00:00
 void showMessage(const char* text);   // linha de cima: texto de status, centralizado (até 16 caracteres)
