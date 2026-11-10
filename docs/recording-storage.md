@@ -11,7 +11,7 @@ Each section says whether it is **done**, **in progress** or **planned**. Update
 | Record in the browser | `apps/web` (#20) | Done |
 | Upload with progress, retry and leave guard | `apps/web` (#20) | Done, not tested end to end |
 | R2 bucket and CORS | Cloudflare (#45) | Done |
-| R2 access key | Cloudflare dashboard (#45) | Planned |
+| R2 access key | Cloudflare dashboard (#45) | Done |
 | `upload-url` and `complete` routes, `videos` table | `apps/api` (#45) | Planned |
 | Start processing after the upload | `apps/api` (#21) | Planned |
 
@@ -99,7 +99,7 @@ Read by `apps/api` to sign URLs (and later by the CV worker to download videos a
 | `R2_SECRET_ACCESS_KEY` | | From the access key; shown only once |
 | `R2_BUCKET` | `crossliseu-videos` | |
 
-The names (without values) go into `.env.example` together with the API code that reads them.
+The names (without values) are in `.env.example`. To get the values, ask the Cloudflare account owner in private (a direct message or a shared password manager), or ask for a key of your own: one token per developer can be revoked without affecting the others. To manage the bucket itself, ask to be invited under **Manage account → Members**.
 
 ## Object keys
 
