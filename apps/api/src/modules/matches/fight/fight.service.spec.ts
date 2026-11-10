@@ -982,6 +982,41 @@ describe('FightService time-out timer', () => {
         );
     });
 
+    it('a stale sync that read paused cannot cancel the timer a newer sync armed', async () => {
+        const { service, repo, store, timer, armed } = setup({
+            state: 'paused',
+            events: [event('started', T0), event('paused', at(60_000))],
+            now: at(70_000),
+        });
+        const stale = store.match;
+        let release: (m: Match) => void = () => {};
+        repo.findMatch.mockImplementationOnce(
+            () =>
+                new Promise<Match>((resolve) => {
+                    release = resolve;
+                }),
+        );
+        // First sync: its findMatch snapshot is `paused`, held until after the resume
+        const first = (
+            service as unknown as { syncTimer(id: string): Promise<void> }
+        ).syncTimer(MATCH_ID);
+        const staleSnapshot = Object.assign(
+            Object.create(Object.getPrototypeOf(stale) as object) as Match,
+            stale,
+        );
+
+        await service.command(MATCH_ID, 'resume', USER_ID);
+        expect(timer.arm).toHaveBeenCalledTimes(1);
+        const delay = armed.get(MATCH_ID)?.delayMs;
+
+        release(staleSnapshot);
+        await first;
+
+        expect(armed.has(MATCH_ID)).toBe(true);
+        expect(armed.get(MATCH_ID)?.delayMs).toBe(delay);
+        expect(timer.cancel).not.toHaveBeenCalled();
+    });
+
     it('a failing syncTimer never fails the command', async () => {
         const { service, repo } = setup();
         const error = vi

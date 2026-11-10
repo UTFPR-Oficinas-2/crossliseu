@@ -48,6 +48,9 @@ function errorMessage(error: unknown): string {
 export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
     logger: Logger = new Logger(FightService.name);
 
+    /** Latest `syncTimer` started per match; see there */
+    private readonly syncGen = new Map<string, number>();
+
     constructor(
         private readonly repo: FightRepository,
         private readonly championships: ChampionshipsService,
@@ -263,16 +266,25 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         return outcome.result;
     }
 
-    /** Arms the timer for an ongoing match, cancels it for any other state */
+    /**
+     * Arms the timer for an ongoing match, cancels it for any other state. The reads take no
+     * lock, so syncs can overlap; only the one that started last may touch the timer, or a stale
+     * `paused` read could cancel the timer a newer resume just armed.
+     */
     private async syncTimer(matchId: string): Promise<void> {
+        const gen = (this.syncGen.get(matchId) ?? 0) + 1;
+        this.syncGen.set(matchId, gen);
         const match = await this.repo.findMatch(matchId);
-        if (!match || match.state !== 'ongoing') {
-            this.timer.cancel(matchId);
+        const events =
+            match?.state === 'ongoing'
+                ? await this.repo.findEvents(matchId)
+                : [];
+        if (this.syncGen.get(matchId) !== gen) {
             return;
         }
-        const events = await this.repo.findEvents(matchId);
-        const at = timeOutAt(match.state, events);
+        const at = match ? timeOutAt(match.state, events) : null;
         if (!at) {
+            this.syncGen.delete(matchId);
             this.timer.cancel(matchId);
             return;
         }
