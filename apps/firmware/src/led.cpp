@@ -26,8 +26,14 @@ void write(const Rgb& c) {
 
 void ledBegin() {
   const uint8_t pins[] = {PIN_STRIP_RED, PIN_STRIP_GREEN, PIN_STRIP_BLUE};
-  for (uint8_t pin : pins) {
-    if (!ledcAttach(pin, PWM_HZ, PWM_BITS)) Serial.printf("led: PWM failed on GPIO %u\n", pin);
+  for (uint8_t i = 0; i < 3; i++) {
+    if (!ledcAttach(pins[i], PWM_HZ, PWM_BITS)) {
+      // Fita pela metade engana mais que fita apagada: solta os canais já presos e
+      // deixa setLedState() sem efeito (nada de ledcWrite num pino sem PWM).
+      Serial.printf("led: PWM failed on GPIO %u, strip disabled\n", pins[i]);
+      for (uint8_t j = 0; j < i; j++) ledcDetach(pins[j]);
+      return;
+    }
   }
   write(led_colors::OFF);
   started = true;

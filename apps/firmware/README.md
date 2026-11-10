@@ -169,16 +169,16 @@ U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp`
 
 ### Other boards
 
-The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, for a board whose onboard LED is on GPIO 25:
+The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, for a board whose onboard LED is on GPIO 4:
 
 ```sh
-PLATFORMIO_BUILD_FLAGS="-DPIN_ONBOARD_LED=25" pio run -t upload
+PLATFORMIO_BUILD_FLAGS="-DPIN_ONBOARD_LED=4" pio run -t upload
 ```
 
 In PowerShell, set it first; it lasts until the terminal is closed (or `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`):
 
 ```powershell
-$env:PLATFORMIO_BUILD_FLAGS = "-DPIN_ONBOARD_LED=25"
+$env:PLATFORMIO_BUILD_FLAGS = "-DPIN_ONBOARD_LED=4"
 pio run -t upload
 ```
 
@@ -187,12 +187,12 @@ To keep the pins for a board (or to build from the VS Code toolbar), add an env 
 ```ini
 [env:my_board]
 extends = env:esp32dev
-build_flags = ${env:esp32dev.build_flags} -DPIN_ONBOARD_LED=25 -DPIN_SURRENDER_A=13 -DSURRENDER_B_PRESSED=LOW
+build_flags = ${env:esp32dev.build_flags} -DPIN_ONBOARD_LED=4 -DPIN_SURRENDER_A=13 -DSURRENDER_B_PRESSED=LOW
 ```
 
 Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick the env in the PlatformIO toolbar). Keep `${env:esp32dev.build_flags}` at the start, or `config.h` is not found.
 
-Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
+Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot). Every pin must be different; the build stops if two signals share a GPIO.
 
 For the old `main.cpp` / `Definitions.h`:
 

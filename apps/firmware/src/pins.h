@@ -65,3 +65,18 @@
 #ifndef PIN_STRIP_BLUE
 #define PIN_STRIP_BLUE 26
 #endif
+
+// Dois sinais no mesmo GPIO brigam entre si (por exemplo o LED da placa e o
+// vermelho da fita): o build para em vez de a fita piscar errado na bancada.
+namespace pins_check {
+constexpr int ALL[] = {PIN_ONBOARD_LED, PIN_SURRENDER_A, PIN_SURRENDER_B, PIN_LCD1_SDA, PIN_LCD1_SCL,
+                       PIN_LCD2_SDA,    PIN_LCD2_SCL,    PIN_STRIP_RED,   PIN_STRIP_GREEN, PIN_STRIP_BLUE};
+constexpr bool distinct(const int* p, int n) {
+  for (int i = 0; i < n; i++)
+    for (int j = i + 1; j < n; j++)
+      if (p[i] == p[j]) return false;
+  return true;
+}
+static_assert(distinct(ALL, sizeof(ALL) / sizeof(ALL[0])),
+              "pins.h: two signals on the same GPIO; check the -D pin flags (README.md, Other boards)");
+}  // namespace pins_check
