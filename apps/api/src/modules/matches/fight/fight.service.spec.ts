@@ -948,6 +948,32 @@ describe('FightService time-out timer', () => {
             expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
         });
 
+        it('keeps arming later matches after one fails', async () => {
+            const { service, repo, timer } = setup({
+                state: 'ongoing',
+                events: [event('started', T0)],
+                now: at(30_000),
+            });
+            const error = vi
+                .spyOn(service.logger, 'error')
+                .mockImplementation(() => {});
+            repo.findOngoingIds.mockResolvedValue(['other-id', MATCH_ID]);
+            repo.findMatch.mockRejectedValueOnce(new Error('db down'));
+
+            await service.restoreTimeOuts();
+
+            expect(error).toHaveBeenCalledWith(
+                'fight_timer_sync_failed',
+                expect.objectContaining({ matchId: 'other-id' }),
+            );
+            expect(timer.arm).toHaveBeenCalledTimes(1);
+            expect(timer.arm).toHaveBeenCalledWith(
+                MATCH_ID,
+                150_000,
+                expect.any(Function),
+            );
+        });
+
         it('ignores paused matches', async () => {
             const { service, timer } = setup({
                 state: 'paused',
@@ -1015,6 +1041,43 @@ describe('FightService time-out timer', () => {
         expect(armed.has(MATCH_ID)).toBe(true);
         expect(armed.get(MATCH_ID)?.delayMs).toBe(delay);
         expect(timer.cancel).not.toHaveBeenCalled();
+    });
+
+    it('a stale sync cannot cancel the timer of a later sync after the generation entry was deleted', async () => {
+        const { service, repo, store, timer, armed } = setup({
+            state: 'paused',
+            events: [event('started', T0), event('paused', at(60_000))],
+            now: at(70_000),
+        });
+        const stale = store.match;
+        let release: (m: Match) => void = () => {};
+        repo.findMatch.mockImplementationOnce(
+            () =>
+                new Promise<Match>((resolve) => {
+                    release = resolve;
+                }),
+        );
+        const first = (
+            service as unknown as { syncTimer(id: string): Promise<void> }
+        ).syncTimer(MATCH_ID);
+        const staleSnapshot = Object.assign(
+            Object.create(Object.getPrototypeOf(stale) as object) as Match,
+            stale,
+        );
+
+        await service.command(MATCH_ID, 'resume', USER_ID);
+        await service.command(MATCH_ID, 'pause', USER_ID);
+        // The pause's sync cancelled and deleted the generation entry
+        expect(armed.has(MATCH_ID)).toBe(false);
+        await service.command(MATCH_ID, 'resume', USER_ID);
+        expect(armed.has(MATCH_ID)).toBe(true);
+        const cancels = timer.cancel.mock.calls.length;
+
+        release(staleSnapshot);
+        await first;
+
+        expect(armed.has(MATCH_ID)).toBe(true);
+        expect(timer.cancel).toHaveBeenCalledTimes(cancels);
     });
 
     it('a failing syncTimer never fails the command', async () => {

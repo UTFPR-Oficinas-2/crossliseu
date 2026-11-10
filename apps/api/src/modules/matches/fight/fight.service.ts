@@ -50,6 +50,8 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
 
     /** Latest `syncTimer` started per match; see there */
     private readonly syncGen = new Map<string, number>();
+    /** Never reset, so a generation is never handed out twice, even after a cancel deletes the entry */
+    private syncCounter = 0;
 
     constructor(
         private readonly repo: FightRepository,
@@ -73,10 +75,10 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         this.timer.cancelAll();
     }
 
-    /** Arms the time-out of every ongoing match, one after another. Run once at boot. */
+    /** Arms the time-out of every ongoing match, one after another; a failing match is logged and does not stop the rest. Run once at boot. */
     async restoreTimeOuts(): Promise<void> {
         for (const matchId of await this.repo.findOngoingIds()) {
-            await this.syncTimer(matchId);
+            await this.trySyncTimer(matchId);
         }
     }
 
@@ -272,7 +274,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
      * `paused` read could cancel the timer a newer resume just armed.
      */
     private async syncTimer(matchId: string): Promise<void> {
-        const gen = (this.syncGen.get(matchId) ?? 0) + 1;
+        const gen = ++this.syncCounter;
         this.syncGen.set(matchId, gen);
         const match = await this.repo.findMatch(matchId);
         const events =
