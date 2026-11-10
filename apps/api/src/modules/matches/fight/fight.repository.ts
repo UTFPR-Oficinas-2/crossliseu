@@ -107,6 +107,15 @@ export class FightRepository {
         return this.repository.findOne({ where: { id: matchId } });
     }
 
+    /** Ids of the live matches that are `ongoing`; soft-deleted ones are left out by `find` */
+    async findOngoingIds(): Promise<string[]> {
+        const matches = await this.repository.find({
+            select: { id: true },
+            where: { state: 'ongoing' },
+        });
+        return matches.map((m) => m.id);
+    }
+
     /** Match with robotA / robotB, for building FightState */
     findWithRobots(matchId: string): Promise<Match | null> {
         return this.repository.findOne({

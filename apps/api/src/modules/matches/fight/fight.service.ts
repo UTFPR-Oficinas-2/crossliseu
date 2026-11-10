@@ -4,12 +4,14 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common';
+import type { OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { ChampionshipsService } from '../../championships/championships.service.js';
 import type { MatchState } from '../entities/match.entity.js';
 import type { MatchEvent } from '../entities/match-event.entity.js';
 import { Clock } from './clock.js';
 import { FightEvents } from './fight-events.js';
+import { FightTimer } from './fight-timer.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
 import { transitionFor } from './fight-transitions.js';
@@ -38,8 +40,12 @@ function eventTime(wanted: Date, events: readonly MatchEvent[]): Date {
     return new Date(Math.max(wanted.getTime(), last + 1));
 }
 
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
 @Injectable()
-export class FightService {
+export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
     logger: Logger = new Logger(FightService.name);
 
     constructor(
@@ -47,7 +53,29 @@ export class FightService {
         private readonly championships: ChampionshipsService,
         private readonly clock: Clock,
         private readonly events: FightEvents,
+        private readonly timer: FightTimer,
     ) {}
+
+    async onApplicationBootstrap(): Promise<void> {
+        try {
+            await this.restoreTimeOuts();
+        } catch (error) {
+            this.logger.error('fight_timer_restore_failed', {
+                message: errorMessage(error),
+            });
+        }
+    }
+
+    onModuleDestroy(): void {
+        this.timer.cancelAll();
+    }
+
+    /** Arms the time-out of every ongoing match, one after another. Run once at boot. */
+    async restoreTimeOuts(): Promise<void> {
+        for (const matchId of await this.repo.findOngoingIds()) {
+            await this.syncTimer(matchId);
+        }
+    }
 
     /** Owner-only. 404 match_not_found, 409 match_invalid_transition. Returns the state after. */
     async command(
@@ -114,6 +142,7 @@ export class FightService {
         // After the commit, so listeners read what was written
         if (result.wrote) {
             this.events.emit({ matchId, arenaId: result.arenaId });
+            await this.trySyncTimer(matchId);
         }
         if (!result.ok) {
             this.logger.warn('match_invalid_transition', { matchId, command });
@@ -169,6 +198,7 @@ export class FightService {
         );
         if (expired?.wrote) {
             this.events.emit({ matchId, arenaId: expired.arenaId });
+            await this.trySyncTimer(matchId);
         }
         return expired?.expired ?? false;
     }
@@ -228,8 +258,56 @@ export class FightService {
         }
         if (outcome.wrote) {
             this.events.emit({ matchId, arenaId: outcome.arenaId });
+            await this.trySyncTimer(matchId);
         }
         return outcome.result;
+    }
+
+    /** Arms the timer for an ongoing match, cancels it for any other state */
+    private async syncTimer(matchId: string): Promise<void> {
+        const match = await this.repo.findMatch(matchId);
+        if (!match || match.state !== 'ongoing') {
+            this.timer.cancel(matchId);
+            return;
+        }
+        const events = await this.repo.findEvents(matchId);
+        const at = timeOutAt(match.state, events);
+        if (!at) {
+            this.timer.cancel(matchId);
+            return;
+        }
+        this.timer.arm(
+            matchId,
+            at.getTime() - this.clock.now().getTime(),
+            () => {
+                void this.onTimeOut(matchId);
+            },
+        );
+    }
+
+    /** After a commit: a timer failure must not turn a successful write into an error */
+    private async trySyncTimer(matchId: string): Promise<void> {
+        try {
+            await this.syncTimer(matchId);
+        } catch (error) {
+            this.logger.error('fight_timer_sync_failed', {
+                matchId,
+                message: errorMessage(error),
+            });
+        }
+    }
+
+    private async onTimeOut(matchId: string): Promise<void> {
+        try {
+            await this.settle(matchId);
+            // Re-arms when the timer fired a little early
+            await this.syncTimer(matchId);
+        } catch (error) {
+            this.logger.error('fight_timeout_failed', {
+                matchId,
+                message: errorMessage(error),
+            });
+        }
     }
 
     /** Inside the lock: writes the time-out when due and returns the state and events after */

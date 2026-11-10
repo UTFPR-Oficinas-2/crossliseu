@@ -4,6 +4,7 @@ import { Match } from './entities/match.entity.js';
 import { MatchEvent } from './entities/match-event.entity.js';
 import { Clock, SystemClock } from './fight/clock.js';
 import { FightEvents } from './fight/fight-events.js';
+import { FightTimer } from './fight/fight-timer.js';
 import { FightRepository } from './fight/fight.repository.js';
 import { FightService } from './fight/fight.service.js';
 import { MatchesController } from './matches.controller.js';
@@ -23,6 +24,7 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
         FightRepository,
         FightService,
         FightEvents,
+        FightTimer,
         { provide: Clock, useClass: SystemClock },
     ],
     exports: [MatchesService, FightService, FightEvents],

@@ -8,6 +8,7 @@ import type {
 } from './fight.repository.js';
 import { Clock } from './clock.js';
 import { FightEvents } from './fight-events.js';
+import type { FightTimer } from './fight-timer.js';
 import type { FightChange } from './fight-events.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import { Match } from '../entities/match.entity.js';
@@ -105,6 +106,11 @@ function setup({
 
     const clock = new FixedClock(now);
     const repo = {
+        findOngoingIds: vi.fn(() =>
+            Promise.resolve(
+                !missing && store.match.state === 'ongoing' ? [MATCH_ID] : [],
+            ),
+        ),
         findMatch: vi.fn(() => Promise.resolve(missing ? null : store.match)),
         findWithRobots: vi.fn(() =>
             Promise.resolve(missing ? null : store.match),
@@ -173,14 +179,29 @@ function setup({
     const fightEvents = new FightEvents();
     const changes: FightChange[] = [];
     fightEvents.onChange((change) => changes.push(change));
+    const armed = new Map<string, { delayMs: number; onFire: () => void }>();
+    const timer = {
+        arm: vi.fn((id: string, delayMs: number, onFire: () => void) => {
+            armed.set(id, { delayMs, onFire });
+        }),
+        cancel: vi.fn((id: string) => {
+            armed.delete(id);
+        }),
+        cancelAll: vi.fn(() => armed.clear()),
+        armed: vi.fn((id: string) => armed.has(id)),
+    };
     const service = new FightService(
         repo as unknown as FightRepository,
         championships as unknown as ChampionshipsService,
         clock,
         fightEvents,
+        timer as unknown as FightTimer,
     );
     return {
         service,
+        timer,
+        armed,
+        clock,
         repo,
         store,
         championships,
@@ -782,6 +803,217 @@ describe('FightService.surrender', () => {
         await service.surrender(ARENA_ID, MATCH_ID, 'A');
 
         expect(store.written[0].occurredAt).toEqual(at(60_001));
+    });
+});
+
+describe('FightService time-out timer', () => {
+    it('start arms the timer for 180_000 ms', async () => {
+        const { service, timer } = setup({ now: at(1000) });
+
+        await service.command(MATCH_ID, 'start', USER_ID);
+
+        expect(timer.arm).toHaveBeenCalledWith(
+            MATCH_ID,
+            180_000,
+            expect.any(Function),
+        );
+    });
+
+    it('resume after 10 s of pause arms for the remaining time', async () => {
+        const { service, timer } = setup({
+            state: 'paused',
+            events: [event('started', T0), event('paused', at(60_000))],
+            now: at(70_000),
+        });
+
+        await service.command(MATCH_ID, 'resume', USER_ID);
+
+        // 60 s fought, so 120 s left from now
+        expect(timer.arm).toHaveBeenCalledWith(
+            MATCH_ID,
+            120_000,
+            expect.any(Function),
+        );
+    });
+
+    it('pause, finish and surrender cancel the timer', async () => {
+        const a = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        await a.service.command(MATCH_ID, 'pause', USER_ID);
+        expect(a.timer.cancel).toHaveBeenCalledWith(MATCH_ID);
+
+        const b = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        await b.service.command(MATCH_ID, 'finish', USER_ID);
+        expect(b.timer.cancel).toHaveBeenCalledWith(MATCH_ID);
+
+        const c = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now: at(1000),
+        });
+        await c.service.surrender(ARENA_ID, MATCH_ID, 'A');
+        expect(c.timer.cancel).toHaveBeenCalledWith(MATCH_ID);
+    });
+
+    it('onTimeOut settles the fight, emits and cancels', async () => {
+        const { service, armed, clock, store, changes, timer } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now: at(1000),
+        });
+        await service.restoreTimeOuts();
+        const fire = armed.get(MATCH_ID)?.onFire;
+        expect(fire).toBeDefined();
+        timer.cancel.mockClear();
+
+        clock.current = at(180_000);
+        fire?.();
+        await vi.waitFor(() => expect(timer.cancel).toHaveBeenCalled());
+
+        expect(store.match.state).toBe('finished');
+        expect(store.match.endReason).toBe('time_out');
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+        expect(armed.has(MATCH_ID)).toBe(false);
+    });
+
+    it('onTimeOut that fires 5 ms early re-arms for 5 ms and writes nothing', async () => {
+        const { service, armed, clock, store, changes, timer } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        await service.restoreTimeOuts();
+        const fire = armed.get(MATCH_ID)?.onFire;
+        timer.arm.mockClear();
+
+        clock.current = at(179_995);
+        fire?.();
+        await vi.waitFor(() => expect(timer.arm).toHaveBeenCalled());
+
+        expect(timer.arm).toHaveBeenCalledWith(
+            MATCH_ID,
+            5,
+            expect.any(Function),
+        );
+        expect(store.written).toHaveLength(0);
+        expect(store.match.state).toBe('ongoing');
+        expect(changes).toEqual([]);
+    });
+
+    describe('restoreTimeOuts', () => {
+        it('arms an ongoing match with time left', async () => {
+            const { service, timer } = setup({
+                state: 'ongoing',
+                events: [event('started', T0)],
+                now: at(30_000),
+            });
+
+            await service.restoreTimeOuts();
+
+            expect(timer.arm).toHaveBeenCalledWith(
+                MATCH_ID,
+                150_000,
+                expect.any(Function),
+            );
+        });
+
+        it('settles and emits for an ongoing match that already expired', async () => {
+            const { service, timer, armed, store, changes } = setup({
+                state: 'ongoing',
+                events: [event('started', T0)],
+                arenaId: ARENA_ID,
+                now: at(200_000),
+            });
+
+            await service.restoreTimeOuts();
+            // The timer fires at once for a negative delay
+            armed.get(MATCH_ID)?.onFire();
+            await vi.waitFor(() => expect(changes).toHaveLength(1));
+
+            expect(timer.arm).toHaveBeenCalledWith(
+                MATCH_ID,
+                expect.any(Number),
+                expect.any(Function),
+            );
+            expect(store.match.state).toBe('finished');
+            expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+        });
+
+        it('ignores paused matches', async () => {
+            const { service, timer } = setup({
+                state: 'paused',
+                events: [event('started', T0), event('paused', at(1000))],
+            });
+
+            await service.restoreTimeOuts();
+
+            expect(timer.arm).not.toHaveBeenCalled();
+        });
+    });
+
+    it('a failing settle inside onTimeOut is logged, not thrown', async () => {
+        const { service, repo, armed, clock } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        const error = vi
+            .spyOn(service.logger, 'error')
+            .mockImplementation(() => {});
+        await service.restoreTimeOuts();
+        repo.findMatch.mockRejectedValueOnce(new Error('db down'));
+
+        clock.current = at(180_000);
+        armed.get(MATCH_ID)?.onFire();
+        await vi.waitFor(() =>
+            expect(error).toHaveBeenCalledWith(
+                'fight_timeout_failed',
+                expect.objectContaining({ matchId: MATCH_ID }),
+            ),
+        );
+    });
+
+    it('a failing syncTimer never fails the command', async () => {
+        const { service, repo } = setup();
+        const error = vi
+            .spyOn(service.logger, 'error')
+            .mockImplementation(() => {});
+        // The command's own reads pass; the timer's re-read fails
+        repo.findEvents.mockRejectedValueOnce(new Error('db down'));
+
+        const state = await service
+            .command(MATCH_ID, 'start', USER_ID)
+            .catch(() => null);
+
+        expect(error).toHaveBeenCalledWith(
+            'fight_timer_sync_failed',
+            expect.objectContaining({ matchId: MATCH_ID }),
+        );
+        expect(state).not.toBeNull();
+    });
+
+    it('a failing restore is logged and does not throw', async () => {
+        const { service, repo } = setup();
+        const error = vi
+            .spyOn(service.logger, 'error')
+            .mockImplementation(() => {});
+        repo.findOngoingIds.mockRejectedValue(new Error('db down'));
+
+        await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
+
+        expect(error).toHaveBeenCalledWith(
+            'fight_timer_restore_failed',
+            expect.anything(),
+        );
     });
 });
 
