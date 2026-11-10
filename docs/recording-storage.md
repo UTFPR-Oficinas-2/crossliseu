@@ -10,7 +10,8 @@ Each section says whether it is **done**, **in progress** or **planned**. Update
 | --- | --- | --- |
 | Record in the browser | `apps/web` (#20) | Done |
 | Upload with progress, retry and leave guard | `apps/web` (#20) | Done, not tested end to end |
-| R2 bucket, CORS and access key | Cloudflare dashboard (#45) | In progress |
+| R2 bucket and CORS | Cloudflare (#45) | Done |
+| R2 access key | Cloudflare dashboard (#45) | Planned |
 | `upload-url` and `complete` routes, `videos` table | `apps/api` (#45) | Planned |
 | Start processing after the upload | `apps/api` (#21) | Planned |
 
@@ -42,7 +43,7 @@ Why straight to R2: the API runs on a small VPS, the host NGINX limits request b
 
 ## R2 setup
 
-Done once, in the Cloudflare dashboard, by whoever owns the account.
+Done once, by whoever owns the Cloudflare account. The bucket and its CORS rule can be created in the dashboard or with Wrangler (`npx wrangler login`, then `npx wrangler r2 bucket create crossliseu-videos` and `npx wrangler r2 bucket cors set crossliseu-videos --file <rules.json>`); the access key can only be created in the dashboard. Wrangler keeps a `.wrangler/` cache in the repository root with the account id and the owner's e-mail; it is git-ignored.
 
 ### Bucket
 
