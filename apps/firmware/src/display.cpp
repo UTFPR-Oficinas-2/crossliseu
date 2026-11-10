@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "display_text.h"
+#include "pins.h"
 
 namespace {
 
@@ -17,16 +18,36 @@ struct Lcd {
   TwoWire* bus;
   uint8_t sda;
   uint8_t scl;
-  LiquidCrystal_PCF8574* lcd;          // nullptr se o LCD não respondeu no boot
+  uint8_t addr;                        // endereço I2C achado na varredura, 0 se nunca achado
+  LiquidCrystal_PCF8574* lcd;          // criado na primeira vez que o LCD responde
+  bool online;                         // respondeu na última verificação
   char shown[2][LCD_COLS + 1];         // o que está na tela, para só reescrever o que mudou
 };
 
+// Pinos em pins.h. Na PCB, o SCL do U3 é o 23 (conferido na bancada); o
+// lcd_led_botao_01.cpp antigo usava o 22.
 Lcd lcds[] = {
-    {"U3", &Wire, 21, 23, nullptr, {}},
-    {"U4", &Wire1, 18, 19, nullptr, {}},
+    {"U3", &Wire, PIN_LCD1_SDA, PIN_LCD1_SCL, 0, nullptr, false, {}},
+    {"U4", &Wire1, PIN_LCD2_SDA, PIN_LCD2_SCL, 0, nullptr, false, {}},
 };
 
 constexpr uint32_t I2C_HZ = 100000;
+
+// A cada CHECK_MS, displayPoll() cuida de uma linha de um LCD, em rodízio: cada
+// linha é redesenhada a cada 2 s e cada LCD verificado a cada 1 s. Redesenhar
+// uma linha leva ~10 ms de I2C, então é uma por vez para não travar o loop().
+constexpr uint32_t CHECK_MS = 500;
+
+// Na ligação padrão do módulo PCF8574, P2 é o E do LCD. A biblioteca sempre o
+// deixa em 0 depois de escrever, e o PCF8574 volta de um reset com todos os
+// pinos em 1: E lido em 1 quer dizer que o LCD perdeu energia e precisa de begin().
+constexpr uint8_t PCF_E = 0x04;
+
+bool started = false;               // displayBegin() ligou os barramentos
+char wanted[2][LCD_COLS + 1];       // o que os dois LCDs devem mostrar
+long shownSeconds = -1;             // segundos do último showTime, para só formatar quando muda
+uint32_t lastCheckMs = 0;
+uint8_t nextCheck = 0;              // 0..3: LCD nextCheck / 2, linha nextCheck % 2
 
 // Endereço do módulo I2C do LCD (PCF8574: 0x20-0x27, PCF8574A: 0x38-0x3F), ou 0.
 uint8_t findLcd(TwoWire& bus) {
@@ -40,36 +61,87 @@ uint8_t findLcd(TwoWire& bus) {
   return 0;
 }
 
+void drawRow(Lcd& l, uint8_t row) {
+  l.lcd->setCursor(0, row);
+  l.lcd->print(wanted[row]);
+  memcpy(l.shown[row], wanted[row], LCD_COLS + 1);
+}
+
+// Procura o LCD no barramento, inicializa e desenha as duas linhas.
+bool connect(Lcd& l) {
+  const uint8_t addr = findLcd(*l.bus);
+  if (!addr) return false;
+  if (!l.lcd || l.addr != addr) {
+    delete l.lcd;
+    l.lcd = new LiquidCrystal_PCF8574(addr);
+    l.addr = addr;
+  }
+  // begin() chama bus->begin() sem pinos. Com o barramento já ligado em
+  // displayBegin(), o core 3.x não mexe nele (fica nos pinos certos) e só
+  // registra um aviso no log de debug.
+  l.lcd->begin(LCD_COLS, 2, *l.bus);
+  l.lcd->setBacklight(255);
+  l.lcd->clear();
+  for (uint8_t row = 0; row < 2; row++) drawRow(l, row);
+  l.online = true;
+  Serial.printf("display: LCD %s at 0x%02X (SDA %u, SCL %u)\n", l.name, addr, l.sda, l.scl);
+  return true;
+}
+
+// Lê a porta do PCF8574: false se o LCD não respondeu ou voltou de um reset.
+bool stillOk(Lcd& l) {
+  if (l.bus->requestFrom(l.addr, (uint8_t)1) != 1) return false;
+  return (l.bus->read() & PCF_E) == 0;
+}
+
 // Escreve uma linha (já com 16 caracteres) nos dois LCDs, só onde ela mudou.
 void writeLine(uint8_t row, const char* line) {
+  memcpy(wanted[row], line, LCD_COLS + 1);
   for (Lcd& l : lcds) {
-    if (!l.lcd || strcmp(l.shown[row], line) == 0) continue;
-    l.lcd->setCursor(0, row);
-    l.lcd->print(line);
-    memcpy(l.shown[row], line, LCD_COLS + 1);
+    if (l.online && strcmp(l.shown[row], line) != 0) drawRow(l, row);
   }
 }
 
 }  // namespace
 
 void displayBegin() {
+  for (auto& row : wanted) memset(row, ' ', LCD_COLS), row[LCD_COLS] = '\0';  // tela limpa
+
   for (Lcd& l : lcds) {
     l.bus->begin(l.sda, l.scl, I2C_HZ);
-    const uint8_t addr = findLcd(*l.bus);
-    if (!addr) {
-      Serial.printf("display: LCD %s not found (SDA %u, SCL %u)\n", l.name, l.sda, l.scl);
-      continue;
-    }
-    l.lcd = new LiquidCrystal_PCF8574(addr);
-    l.lcd->begin(LCD_COLS, 2, *l.bus);
-    l.lcd->setBacklight(255);
-    l.lcd->clear();
-    for (auto& row : l.shown) memset(row, ' ', LCD_COLS), row[LCD_COLS] = '\0';  // tela limpa
-    Serial.printf("display: LCD %s at 0x%02X (SDA %u, SCL %u)\n", l.name, addr, l.sda, l.scl);
+    if (!connect(l)) Serial.printf("display: LCD %s not found (SDA %u, SCL %u)\n", l.name, l.sda, l.scl);
   }
+  started = true;
+  lastCheckMs = millis();
+}
+
+void displayPoll() {
+  if (!started) return;
+  const uint32_t now = millis();
+  if (now - lastCheckMs < CHECK_MS) return;
+  lastCheckMs = now;
+
+  Lcd& l = lcds[nextCheck / 2];
+  const uint8_t row = nextCheck % 2;
+  nextCheck = (nextCheck + 1) % 4;
+
+  if (!l.online) {
+    if (row == 0) connect(l);  // um LCD fora tenta voltar a cada 2 s
+    return;
+  }
+  if (!stillOk(l)) {
+    Serial.printf("display: LCD %s lost or reset, reconnecting\n", l.name);
+    l.online = false;
+    connect(l);
+    return;
+  }
+  drawRow(l, row);  // conserta a linha se o conteúdo da tela se corrompeu
 }
 
 void showTime(long ms) {
+  const long seconds = timeSeconds(ms);
+  if (seconds == shownSeconds) return;  // o texto só muda uma vez por segundo
+  shownSeconds = seconds;
   char time[6];
   char line[LCD_COLS + 1];
   formatTime(ms, time);

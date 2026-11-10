@@ -5,7 +5,7 @@
 //   - Comandos no monitor serial:
 //       a / b  envia surrender do lado A ou B
 //       t      contagem de teste de 3 minutos nos LCDs ("TEMPO RESTANTE")
-//       p      para a contagem e mostra "Paused"
+//       p      para a contagem e mostra "PAUSADA"
 //       1 / 2  mostra showTime(185000) / showTime(94210): 03:05 / 01:35
 #include <Arduino.h>
 #include <ctype.h>
@@ -25,7 +25,7 @@ static void printState(const ArenaState& s) {
 }
 
 static void printHelp() {
-  Serial.println("demo: a/b = surrender A/B, t = 3:00 test countdown, p = Paused, 1 = showTime(185000), 2 = showTime(94210)");
+  Serial.println("demo: a/b = surrender A/B, t = 3:00 test countdown, p = PAUSADA, 1 = showTime(185000), 2 = showTime(94210)");
 }
 
 static void handleSerial(char c) {
@@ -44,8 +44,8 @@ static void handleSerial(char c) {
       break;
     case 'P':
       testRunning = false;
-      showMessage("Paused");
-      Serial.println("demo: showMessage(\"Paused\")");
+      showMessage("PAUSADA");
+      Serial.println("demo: showMessage(\"PAUSADA\")");
       break;
     case '1':
     case '2':
@@ -82,13 +82,15 @@ void loop() {
 
   if (testRunning) {
     const long remaining = TEST_MATCH_MS - (long)(millis() - testStartMs);
-    showTime(remaining);  // chamar a cada loop é barato: o LCD só é reescrito quando muda
+    showTime(remaining);  // chamar a cada loop é barato: só formata quando o segundo muda
     if (remaining <= 0) {
       testRunning = false;
       showMessage("FIM DE TEMPO");
       Serial.println("demo: test countdown finished");
     }
   }
+
+  displayPoll();
 
   while (Serial.available()) handleSerial(toupper(Serial.read()));
 }

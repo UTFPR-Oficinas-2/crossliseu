@@ -1,5 +1,6 @@
 // Testes do texto dos LCDs (#39).
 // Rodam no computador: pio test -e native
+#include <limits.h>
 #include <unity.h>
 
 #include "display_text.h"
@@ -44,6 +45,7 @@ static void test_time_caps_at_99_59() {
   assertTime("99:59", 99L * 60000 + 59000);
   assertTime("99:59", 100L * 60000);
   assertTime("99:59", 2000000000L);
+  assertTime("99:59", LONG_MAX);  // sem estouro no arredondamento
 }
 
 // --- linhas ------------------------------------------------------------------
@@ -80,6 +82,13 @@ static void test_line_control_chars_become_spaces() {
   assertLine("      A  B      ", "A\t\nB");
 }
 
+// A ROM A00 do HD44780 troca a barra invertida por iene e '~' por seta; DEL é controle.
+static void test_line_chars_the_lcd_rom_lacks() {
+  assertLine("      A?B       ", "A\\B");
+  assertLine("      A?B       ", "A~B");
+  assertLine("      A B       ", "A\x7F" "B");
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_time_issue_examples);
@@ -92,5 +101,6 @@ int main() {
   RUN_TEST(test_line_removes_portuguese_accents);
   RUN_TEST(test_line_other_unicode_becomes_question_mark);
   RUN_TEST(test_line_control_chars_become_spaces);
+  RUN_TEST(test_line_chars_the_lcd_rom_lacks);
   return UNITY_END();
 }

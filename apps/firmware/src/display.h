@@ -4,5 +4,6 @@
 #pragma once
 
 void displayBegin();                  // liga os dois barramentos I2C e os LCDs; chamar uma vez no setup()
+void displayPoll();                   // chamar a cada loop(): redesenha os LCDs e traz de volta um que resetou ou foi desligado
 void showTime(long ms);               // linha de baixo: ms como mm:ss, arredondado para cima; ms <= 0 mostra 00:00
 void showMessage(const char* text);   // linha de cima: texto de status, centralizado (até 16 caracteres)

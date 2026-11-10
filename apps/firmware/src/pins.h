@@ -27,7 +27,7 @@
 #define SURRENDER_B_PRESSED HIGH  // NC
 #endif
 
-// LCDs 16x2 I2C (#42), um barramento I2C para cada.
+// LCDs 16x2 I2C (src/display.cpp), um barramento I2C para cada.
 #ifndef PIN_LCD1_SDA
 #define PIN_LCD1_SDA 21  // U3
 #endif

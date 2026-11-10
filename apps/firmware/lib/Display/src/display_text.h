@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 constexpr size_t LCD_COLS = 16;
 
@@ -13,9 +14,15 @@ constexpr size_t LCD_COLS = 16;
 // (docs/arena-protocol.md, "Timer"): 94210 ms -> "01:35", 185000 ms -> "03:05".
 // ms <= 0 vira "00:00", que só aparece quando o tempo acabou de verdade.
 // Acima de 99:59 fica em 99:59: o LCD só tem dois dígitos de minuto.
+// timeSeconds é o número de segundos mostrado, formatTime o texto.
+inline long timeSeconds(long ms) {
+  if (ms <= 0) return 0;
+  const long seconds = ms / 1000 + (ms % 1000 != 0);  // sem ms + 999, que estoura perto de LONG_MAX
+  return seconds > 99 * 60 + 59 ? 99 * 60 + 59 : seconds;
+}
+
 inline void formatTime(long ms, char out[6]) {
-  long seconds = ms <= 0 ? 0 : (ms + 999) / 1000;
-  if (seconds > 99 * 60 + 59) seconds = 99 * 60 + 59;
+  const long seconds = timeSeconds(ms);
   snprintf(out, 6, "%02ld:%02ld", seconds / 60, seconds % 60);
 }
 
@@ -46,31 +53,32 @@ inline char foldLatin1(uint8_t c) {
 // Uma linha do LCD: texto centralizado em LCD_COLS colunas, completado com espaços.
 // O LCD só mostra ASCII, então os acentos do português saem (Ç -> C, ã -> a),
 // outros caracteres não ASCII (emoji...) viram '?', e o que passar de 16 é cortado.
+// A ROM de caracteres mais comum do HD44780 (A00) mostra a barra invertida como
+// iene e '~' como seta, então eles também viram '?'. Controles (e DEL) viram espaço.
 // text == nullptr vale como linha vazia.
 inline void formatLine(const char* text, char out[LCD_COLS + 1]) {
-  char ascii[LCD_COLS + 1];
   size_t n = 0;
   const uint8_t* p = reinterpret_cast<const uint8_t*>(text ? text : "");
   while (*p && n < LCD_COLS) {
     const uint8_t c = *p;
     if (c < 0x80) {
-      ascii[n++] = c < 0x20 ? ' ' : static_cast<char>(c);
+      out[n++] = c < 0x20 || c == 0x7F ? ' ' : c == '\\' || c == '~' ? '?' : static_cast<char>(c);
       p++;
     } else if (c == 0xC3 && p[1] >= 0x80 && p[1] <= 0xBF) {
-      ascii[n++] = display_text_detail::foldLatin1(p[1]);
+      out[n++] = display_text_detail::foldLatin1(p[1]);
       p += 2;
     } else {
       // Outro caractere UTF-8: um '?' e pula os bytes de continuação.
-      ascii[n++] = '?';
+      out[n++] = '?';
       p++;
       while ((*p & 0xC0) == 0x80) p++;
     }
   }
 
+  // Centraliza: empurra os n caracteres para a direita e completa com espaços.
   const size_t left = (LCD_COLS - n) / 2;
-  size_t i = 0;
-  for (; i < left; i++) out[i] = ' ';
-  for (size_t j = 0; j < n; j++) out[i++] = ascii[j];
-  for (; i < LCD_COLS; i++) out[i] = ' ';
+  memmove(out + left, out, n);
+  memset(out, ' ', left);
+  memset(out + left + n, ' ', LCD_COLS - left - n);
   out[LCD_COLS] = '\0';
 }

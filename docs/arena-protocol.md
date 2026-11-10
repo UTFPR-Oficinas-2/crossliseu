@@ -294,8 +294,10 @@ The firmware is split so the display, LED, button and network parts can be built
 ```cpp
 // Display (#39): both competitor LCDs
 void displayBegin();                    // sets up both LCDs; once in setup()
+void displayPoll();                     // every loop: redraws the LCDs and brings back one that was reset or unplugged
 void showTime(long ms);                 // draws ms as mm:ss, rounded up; ms <= 0 shows 00:00
-void showMessage(const char* text);     // status text, e.g. "Not connected", "Ready", "Time out"
+void showMessage(const char* text);     // status text, e.g. "SEM CONEXAO", "PREPARAR", "FIM DE TEMPO"
+                                        // (screens per state: apps/firmware/README.md, "LCD screens")
 
 // LED (#40)
 enum class LedState { NotConnected, Connected, Ready, Running, Paused, Ended, Surrender };
@@ -338,6 +340,7 @@ The display only draws what it is given; it keeps no timer. The integration (#42
 
 - On `state` it maps `status` / `endReason` to `setLedState` and `showMessage`, and resets the local countdown from `remainingMs`.
 - Every loop while `ongoing`, it computes the time left (`remainingMs` minus the time since that `state` arrived) and passes it to `showTime`.
+- Every loop, it calls `displayPoll()`.
 - On a press from `pollButtons()` it calls `arenaSendSurrender`, which drops the press when not connected.
 - While `arenaConnected()` is false, it shows **not connected**.
 
