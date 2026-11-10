@@ -28,11 +28,6 @@
 #endif
 
 // LCDs 16x2 I2C (src/display.cpp), um barramento I2C para cada.
-// Na Heltec WiFi LoRa 32 V2 (board = heltec_wifi_lora_32_V2) os pinos padrão
-// dos LCDs são os do OLED e do rádio LoRa: o build para até eles serem trocados.
-#if defined(ARDUINO_HELTEC_WIFI_LORA_32_V2) && (!defined(PIN_LCD1_SDA) || !defined(PIN_LCD2_SDA) || !defined(PIN_LCD2_SCL))
-#error "Heltec V2: os pinos padrao dos LCDs (21, 18, 19) sao do OLED e do LoRa; defina PIN_LCD1_SDA, PIN_LCD2_SDA e PIN_LCD2_SCL (README.md, Other boards)"
-#endif
 #ifndef PIN_LCD1_SDA
 #define PIN_LCD1_SDA 21  // U3
 #endif

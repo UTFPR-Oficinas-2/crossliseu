@@ -6,7 +6,7 @@ The box talks to the API over the [`/arena` WebSocket protocol](../../docs/arena
 
 ## Board
 
-Any board with the **original ESP32** chip (ESP32-WROOM-32 or WROVER module): the ESP32 DevKit, the Heltec WiFi LoRa 32 V2 and most ESP32 dev boards. The build uses PlatformIO's generic `esp32dev` board, which also runs on boards with more than 4 MB of flash. Boards with a newer chip (ESP32-S2, S3, C3, C6, for example the Heltec V3) need a different build and are not supported.
+Any board with the **original ESP32** chip (ESP32-WROOM-32 or WROVER module): the ESP32 DevKit and most ESP32 dev boards. The build uses PlatformIO's generic `esp32dev` board, which also runs on boards with more than 4 MB of flash. Boards with a newer chip (ESP32-S2, S3, C3, C6) need a different build and are not supported.
 
 The default pins are the box PCB's (an ESP32 DevKit with the surrender buttons, the two LCDs and the strip); see [Pins](#pins). A board wired differently changes them in `platformio.ini`, without touching the code; see [Other boards](#other-boards).
 
@@ -69,7 +69,7 @@ To remove everything later: `uv tool uninstall platformio` (or uninstall the VS 
 
 ## Old countdown sketch
 
-`main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). Their pins clash with the Heltec V2's OLED and LoRa pins (see [Other boards](#other-boards)). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
+`main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
 
 | Input | Effect |
 | --- | --- |
@@ -169,7 +169,7 @@ U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp`
 
 ### Other boards
 
-The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, the Heltec WiFi LoRa 32 V2's onboard LED is on GPIO 25:
+The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, for a board whose onboard LED is on GPIO 25:
 
 ```sh
 PLATFORMIO_BUILD_FLAGS="-DPIN_ONBOARD_LED=25" pio run -t upload
@@ -193,8 +193,6 @@ build_flags = ${env:esp32dev.build_flags} -DPIN_ONBOARD_LED=25 -DPIN_SURRENDER_A
 Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick the env in the PlatformIO toolbar). Keep `${env:esp32dev.build_flags}` at the start, or `config.h` is not found.
 
 Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
-
-On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo, `-DPIN_ONBOARD_LED=25` is enough for the LED and buttons: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`. The LCDs are in the demo too, so also move `PIN_LCD1_SDA` (21) and `PIN_LCD2_SDA` / `PIN_LCD2_SCL` (18, 19) to free pins; otherwise the demo drives the OLED power and LoRa lines as I2C. An env with `board = heltec_wifi_lora_32_V2` refuses to build until those three LCD pins are set (see the commented `[env:heltec_v2]` in `platformio.ini`, whose pins are not bench-tested). The check cannot fire with the generic `esp32dev` board, which does not know it is a Heltec, so there the warning above is all there is.
 
 For the old `main.cpp` / `Definitions.h`:
 
