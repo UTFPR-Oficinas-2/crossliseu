@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  baseMimeType,
   describeCameraError,
   fileExtension,
   formatBytes,
@@ -20,6 +21,14 @@ describe('pickMimeType', () => {
 
   it('returns null when no format is supported', () => {
     expect(pickMimeType(() => false)).toBeNull()
+  })
+})
+
+describe('baseMimeType', () => {
+  it('drops the codecs part', () => {
+    expect(baseMimeType('video/mp4;codecs=avc1')).toBe('video/mp4')
+    expect(baseMimeType('video/webm; codecs=vp9')).toBe('video/webm')
+    expect(baseMimeType('video/webm')).toBe('video/webm')
   })
 })
 

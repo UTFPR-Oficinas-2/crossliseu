@@ -1,12 +1,15 @@
 <script setup lang="ts">
-// Fight recording on the operator screen (RFA12, part 1: record only, no upload yet). Pick the
-// arena camera, watch the live preview, record and stop. After stopping, the file can be
-// downloaded to check it; part 4 will send this same file to R2 instead.
+// Fight recording on the operator screen (#20). Pick the arena camera, watch the live preview,
+// record and stop, then send the file to R2 (presigned URL from the API, PUT straight to R2,
+// confirm to the API). The file can also be downloaded to check it.
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import type { SelectOption } from '@/components/ui/select-field'
 import { useFightRecorder } from '@/composables/useFightRecorder'
+import { useRecordingUpload } from '@/composables/useRecordingUpload'
+import { useAuthStore } from '@/stores/auth'
 import { formatBytes, formatElapsed, recordingFileName } from '@/utils/recording'
 
 const { matchId } = defineProps<{ matchId: string }>()
@@ -44,6 +47,8 @@ const downloadUrl = ref<string | null>(null)
 watch(recording, (blob) => {
   if (downloadUrl.value) URL.revokeObjectURL(downloadUrl.value)
   downloadUrl.value = blob ? URL.createObjectURL(blob) : null
+  // A new recording replaces the one that was (or was being) sent
+  resetUpload()
 })
 onBeforeUnmount(() => {
   if (downloadUrl.value) URL.revokeObjectURL(downloadUrl.value)
@@ -51,6 +56,56 @@ onBeforeUnmount(() => {
 
 const fileName = computed(() => recordingFileName(matchId, mimeType.value))
 const isRecording = computed(() => state.value === 'recording')
+
+// ---------- upload to R2 ----------
+const auth = useAuthStore()
+const {
+  state: uploadState,
+  progress: uploadProgress,
+  error: uploadError,
+  upload,
+  reset: resetUpload,
+} = useRecordingUpload()
+
+const isSending = computed(() =>
+  ['requesting', 'uploading', 'completing'].includes(uploadState.value),
+)
+const uploadPercent = computed(() => Math.round(uploadProgress.value * 100))
+const uploadLabel = computed(() => {
+  switch (uploadState.value) {
+    case 'requesting':
+      return 'Preparando o envio…'
+    case 'uploading':
+      return `Enviando… ${uploadPercent.value}%`
+    case 'completing':
+      return 'Confirmando com o servidor…'
+    case 'done':
+      return 'Vídeo enviado.'
+    default:
+      return ''
+  }
+})
+
+function send() {
+  if (recording.value) void upload(matchId, recording.value, auth.token ?? '')
+}
+
+// ---------- don't lose an unsent video ----------
+// The video only exists in this tab's memory until it reaches R2
+const hasUnsentVideo = computed(
+  () => isRecording.value || (recording.value !== null && uploadState.value !== 'done'),
+)
+const leaveMessage = 'O vídeo da luta ainda não foi enviado e será perdido. Sair mesmo assim?'
+
+// Closing or reloading the tab: the browser shows its own confirmation
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (hasUnsentVideo.value) event.preventDefault()
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+
+// Navigating inside the app
+onBeforeRouteLeave(() => !hasUnsentVideo.value || window.confirm(leaveMessage))
 
 function download() {
   if (!downloadUrl.value) return
@@ -104,7 +159,7 @@ onMounted(loadCameras)
       <span class="recorder__timer text-timer-l" aria-label="Tempo de gravação">
         {{ formatElapsed(elapsedSeconds) }}
       </span>
-      <AppButton v-if="!isRecording" :disabled="!stream" @click="start">
+      <AppButton v-if="!isRecording" :disabled="!stream || isSending" @click="start">
         {{ state === 'stopped' ? 'Gravar de novo' : 'Gravar' }}
       </AppButton>
       <AppButton v-else variant="destructive" @click="stop">Parar</AppButton>
@@ -129,7 +184,31 @@ onMounted(loadCameras)
           <dd class="text-mono-s">{{ formatElapsed(elapsedSeconds) }}</dd>
         </div>
       </dl>
-      <AppButton variant="secondary" @click="download">Baixar</AppButton>
+      <div class="recorder__actions">
+        <AppButton variant="secondary" @click="download">Baixar</AppButton>
+        <AppButton v-if="uploadState === 'idle'" @click="send">Enviar</AppButton>
+        <AppButton v-else-if="uploadState === 'error'" @click="send">Tentar de novo</AppButton>
+      </div>
+
+      <div v-if="uploadState !== 'idle'" class="recorder__upload" aria-live="polite">
+        <progress
+          v-if="isSending"
+          class="recorder__progress"
+          :value="uploadState === 'uploading' ? uploadProgress : undefined"
+          max="1"
+          aria-label="Progresso do envio"
+        />
+        <p
+          v-if="uploadLabel"
+          class="text-body-s"
+          :class="{ 'recorder__upload-done': uploadState === 'done' }"
+        >
+          {{ uploadLabel }}
+        </p>
+        <p v-if="uploadError" class="recorder__error text-body-s" role="alert">
+          {{ uploadError }}
+        </p>
+      </div>
     </div>
   </section>
 </template>
@@ -214,5 +293,29 @@ onMounted(loadCameras)
   margin: 0;
   color: var(--color-text);
   overflow-wrap: anywhere;
+}
+
+.recorder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.recorder__upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* Native <progress>: no value = indeterminate (requesting, completing) */
+.recorder__progress {
+  width: 100%;
+  height: var(--space-2);
+  accent-color: var(--color-orange);
+}
+
+.recorder__upload-done {
+  color: var(--color-green);
 }
 </style>

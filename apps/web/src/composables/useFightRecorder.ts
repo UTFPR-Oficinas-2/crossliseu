@@ -1,5 +1,6 @@
 import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import {
+  baseMimeType,
   describeCameraError,
   pickMimeType,
   RECORDING_BITS_PER_SECOND,
@@ -120,7 +121,8 @@ export function useFightRecorder() {
       // `onstop` fires after the last `ondataavailable`, so every piece is in `chunks` by then
       current.onstop = () => {
         clearInterval(timer)
-        const blob = new Blob(chunks, { type: mimeType.value || 'video/webm' })
+        // Plain type ("video/mp4"): it is what the upload signs and what R2 stores
+        const blob = new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
         chunks = []
         recording.value = blob
         state.value = 'stopped'

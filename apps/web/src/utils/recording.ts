@@ -34,6 +34,14 @@ export function pickMimeType(isSupported: (mimeType: string) => boolean): string
   return RECORDING_MIME_TYPES.find((mimeType) => isSupported(mimeType)) ?? null
 }
 
+/**
+ * "video/mp4;codecs=avc1" -> "video/mp4". The recorded file and the R2 object use the plain type:
+ * it is signed into the upload URL, so a short stable value avoids mismatches.
+ */
+export function baseMimeType(mimeType: string): string {
+  return mimeType.split(';')[0]!.trim()
+}
+
 /** "mp4" or "webm", from a type like "video/webm;codecs=vp9" */
 export function fileExtension(mimeType: string): 'mp4' | 'webm' {
   return mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
