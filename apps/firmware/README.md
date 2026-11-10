@@ -30,7 +30,7 @@ pio device monitor           # serial monitor at 115200; Ctrl+C to quit
 
 `src/` is the code that gets built; it needs a `config.h` (see [Configuration](#configuration)). Build output goes to `.pio/` (git-ignored).
 
-The protocol logic (`lib/ArenaLogic`) and the button debounce (`lib/Buttons`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
+The protocol logic (`lib/ArenaLogic`), the button debounce (`lib/Buttons`) and the LCD text (`lib/Display`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
 
 ```sh
 pio test -e native
@@ -89,6 +89,7 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 - The onboard LED (`PIN_ONBOARD_LED`, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
 - Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
+- Both LCDs show `CROSSLISEU` / `03:00` after boot. In the serial monitor, `t` starts a 3-minute test countdown on them (`TEMPO RESTANTE`), `p` pauses it and shows `PAUSADA` (a later `t` continues from where it stopped), and `1` / `2` show `showTime(185000)` / `showTime(94210)` (`03:05` / `01:35`).
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |
@@ -100,6 +101,23 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 The WebSocket library is a patched copy of arduinoWebSockets 2.7.2 in `lib/WebSockets`, so the box can read the server's close code; see [`lib/WebSockets/CROSSLISEU_PATCH.md`](lib/WebSockets/CROSSLISEU_PATCH.md). The server certificate is checked against the ISRG Root X1 and X2 certificates in `src/arena_ca.h`.
 
 To test the arena flow without the hardware, the simulator in [`tools/arena-sim`](../../tools/arena-sim/arena-sim.mjs) logs in with the same `config.h`: `node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h`.
+
+## LCD screens
+
+Line 1 is `showMessage`, line 2 is `showTime`. The display only draws what it is given; the integration (#42) picks the screen from each `state`. These are the texts agreed for the box (the LCD has no accents; `showMessage` drops them, so `DESISTÊNCIA` shows as `DESISTENCIA`):
+
+| Box state | Line 1 | Line 2 |
+| --- | --- | --- |
+| Not connected | `SEM CONEXAO` | (empty) |
+| `idle` | `AGUARDANDO LUTA` | (empty) |
+| `scheduled` | `PREPARAR` | `remainingMs`, frozen |
+| `ongoing` | `TEMPO RESTANTE` | counting down |
+| `paused` | `PAUSADA` | frozen |
+| `finished`, `time_out` | `FIM DE TEMPO` | `00:00` |
+| `finished`, `surrender` | `DESISTENCIA` | frozen |
+| `finished`, `manual` | `LUTA ENCERRADA` | frozen |
+
+`state` does not say which side surrendered (docs/arena-protocol.md, "End reasons"), so the screen is the same for both. The box never shows a surrender on its own when a button is pressed: it waits for the server's `state` with `endReason` `surrender`, so the LCDs and the web app always agree.
 
 ## Strip states
 
@@ -121,13 +139,23 @@ All pins are in [`src/pins.h`](src/pins.h). The defaults are the box PCB's (ESP3
 | Surrender, side B | `PIN_SURRENDER_B` | 32 |
 | LCD U3 | `PIN_LCD1_SDA`, `PIN_LCD1_SCL` | SDA 21, SCL 23 |
 | LCD U4 | `PIN_LCD2_SDA`, `PIN_LCD2_SCL` | SDA 18, SCL 19 |
+| LCD I2C address (U3, U4) | `LCD1_ADDR`, `LCD2_ADDR` | 0 (scan at boot) |
+| LCD reset check | `LCD_E_MASK` | 0x04 (PCF8574 P2; 0 turns it off) |
 | LED strip (#42) | (colors confirmed in #42) | 25, 26, 33 |
 
-The LCDs and the strip are not driven yet (#42). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
+The strip is not driven yet (#42). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
 
 Surrender buttons (`src/buttons.cpp`) use the internal pull-up; the other contact terminal goes to GND. `SURRENDER_A_PRESSED` and `SURRENDER_B_PRESSED` are what the pin reads with the button pressed: `LOW` for a normally open (NO) contact, `HIGH` for a normally closed (NC) one. On the PCB, side A is NO (`LOW`) and side B is NC (`HIGH`).
 
 A press counts once, after the reading stays the same for 30 ms; holding the button counts nothing more. A button already pressed at boot (or an NC button with a loose wire) is not a press.
+
+LCDs (`src/display.cpp`): two 16x2 LCDs with a PCF8574 I2C backpack, U3 on `Wire` and U4 on `Wire1`, both showing the same thing. The I2C address is found at boot (0x20-0x27 or 0x38-0x3F) and printed as `display: LCD U3 at 0x27 (SDA 21, SCL 23)`. If another device on the same bus also answers in those ranges, the log says so (`display: U3 bus has several devices ...`); pin the address with `-DLCD1_ADDR=0x27` / `-DLCD2_ADDR=0x27`. A backpack whose E line is not on P2 uses `-DLCD_E_MASK=0` to turn off the "E reads high means reset" check. VCC is 5 V.
+
+The display relies on Arduino core 3.x accepting `begin()` on an already started I2C bus (the library calls it without pins). That is why `platformio.ini` pins the pioarduino release; on an older core the LCD buses would be reset to the default pins and stop answering.
+
+U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp` had it on 22.
+
+`displayPoll()`, called every loop, checks one LCD every 500 ms (each LCD every 1 s) and redraws each line every 10 s to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn (an LCD that answers with its E line high has reset and is set up again at once; one that does not answer needs two bad checks in a row, so a single glitch on the bus does nothing), and one missing at boot is looked for every 2 s. The LCD is checked before and after every line write, and a line only counts as shown when both checks pass, so a failed write is tried again. The log lines are `display: LCD U3 not found ...` and `display: LCD U3 lost or reset, reconnecting`. The I2C timeout is 20 ms, so a stuck bus cannot hold up the WebSocket and the buttons for long.
 
 ### Other boards
 
@@ -156,7 +184,7 @@ Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick t
 
 Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
 
-On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo (onboard LED and buttons), `-DPIN_ONBOARD_LED=25` is enough: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`.
+On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo, `-DPIN_ONBOARD_LED=25` is enough for the LED and buttons: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`. The LCDs are in the demo too, so also move `PIN_LCD1_SDA` (21) and `PIN_LCD2_SDA` / `PIN_LCD2_SCL` (18, 19) to free pins; otherwise the demo drives the OLED power and LoRa lines as I2C. An env with `board = heltec_wifi_lora_32_V2` refuses to build until those three LCD pins are set (see the commented `[env:heltec_v2]` in `platformio.ini`, whose pins are not bench-tested). The check cannot fire with the generic `esp32dev` board, which does not know it is a Heltec, so there the warning above is all there is.
 
 For the old `main.cpp` / `Definitions.h`:
 
@@ -170,16 +198,19 @@ For the old `main.cpp` / `Definitions.h`:
 ## Files
 
 - `platformio.ini`: board, platform version and build settings
-- `src/main.cpp`: demo of the connection layer and the buttons (onboard LED, serial `a`/`b`, `button: A`/`B`) until #42
+- `src/main.cpp`: demo of the connection layer, the buttons and the LCDs (onboard LED, serial `a`/`b`/`t`/`p`/`1`/`2`, `button: A`/`B`) until #42
 - `src/arena.h`, `src/arena.cpp`: connection layer (Wi-Fi, WebSocket, handshake, retries)
 - `src/arena_ca.h`: root certificates for `wss://`
 - `src/pins.h`: every pin number, with the box PCB's defaults
 - `src/buttons.h`, `src/buttons.cpp`: surrender buttons (`buttonsBegin`, `pollButtons`)
+- `src/display.h`, `src/display.cpp`: both LCDs (`displayBegin`, `displayPoll`, `showTime`, `showMessage`)
+- `lib/Display/`: LCD text (mm:ss, centring, accents) with no Arduino dependency
 - `lib/Buttons/`: debounce logic with no Arduino dependency
 - `lib/ArenaLogic/`: protocol logic with no Arduino dependency (URL, retry policy, JSON frames)
 - `lib/WebSockets/`: patched arduinoWebSockets 2.7.2
 - `test/test_arena_logic/`: unit tests for `lib/ArenaLogic` (`pio test -e native`)
 - `test/test_buttons/`: unit tests for the debounce in `lib/Buttons` (`pio test -e native`)
+- `test/test_display/`: unit tests for the LCD text in `lib/Display` (`pio test -e native`)
 - `main.cpp`: old sketch: setup, serial commands and state machine
 - `Definitions.h`: pin numbers and the state enum
 - `config.example.h`: template for the git-ignored `config.h` (server address, device id and token, Wi-Fi)
