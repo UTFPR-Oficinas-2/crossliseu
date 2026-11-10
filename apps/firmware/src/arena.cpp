@@ -32,7 +32,7 @@ Backoff backoff;
 ArenaState lastState;
 void (*stateCb)(const ArenaState&) = nullptr;
 
-const char* const STATUS_NAMES[] = {"idle", "ready", "running", "paused", "ended"};
+const char* const STATUS_NAMES[] = {"idle", "scheduled", "ongoing", "paused", "finished"};
 
 void enter(Phase p) {
   phase = p;

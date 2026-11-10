@@ -100,12 +100,12 @@ static void test_state_idle() {
   TEST_ASSERT_TRUE(s.endReason == EndReason::None);
 }
 
-static void test_state_running() {
+static void test_state_ongoing() {
   ArenaState s;
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"running","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":180000,"endReason":null,"robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ongoing","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":180000,"endReason":null,"robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
                          s, text, sizeof text) == FrameKind::State);
-  TEST_ASSERT_TRUE(s.status == ArenaStatus::Running);
+  TEST_ASSERT_TRUE(s.status == ArenaStatus::Ongoing);
   TEST_ASSERT_EQUAL_STRING("6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33", s.matchId);
   TEST_ASSERT_TRUE(s.hasRemaining);
   TEST_ASSERT_EQUAL_INT32(180000, s.remainingMs);
@@ -113,14 +113,31 @@ static void test_state_running() {
   TEST_ASSERT_EQUAL_STRING("Ferrugem", s.robotB);
 }
 
-static void test_state_ended() {
+static void test_state_finished() {
   ArenaState s;
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ended","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":61530,"endReason":"surrender_B","robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":61530,"endReason":"surrender","robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
                          s, text, sizeof text) == FrameKind::State);
-  TEST_ASSERT_TRUE(s.status == ArenaStatus::Ended);
+  TEST_ASSERT_TRUE(s.status == ArenaStatus::Finished);
   TEST_ASSERT_EQUAL_INT32(61530, s.remainingMs);
-  TEST_ASSERT_TRUE(s.endReason == EndReason::SurrenderB);
+  TEST_ASSERT_TRUE(s.endReason == EndReason::Surrender);
+}
+
+static void test_parses_manual_end_reason() {
+  ArenaState s;
+  char text[64];
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"m","remainingMs":5000,"endReason":"manual","robots":null}})",
+                         s, text, sizeof text) == FrameKind::State);
+  TEST_ASSERT_TRUE(s.endReason == EndReason::Manual);
+}
+
+static void test_rejects_old_names() {
+  ArenaState s;
+  char text[64];
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"running","matchId":null,"remainingMs":null,"endReason":null,"robots":null}})",
+                         s, text, sizeof text) == FrameKind::Bad);
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"m","remainingMs":0,"endReason":"surrender_A","robots":null}})",
+                         s, text, sizeof text) == FrameKind::Bad);
 }
 
 static void test_state_unknown_status() {
@@ -133,7 +150,7 @@ static void test_state_unknown_status() {
 static void test_state_long_name() {
   std::string name;
   for (int i = 0; i < 40; i++) name += "\xC3\xA9";  // "é", 2 bytes
-  std::string json = R"({"event":"state","data":{"status":"ready","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
+  std::string json = R"({"event":"state","data":{"status":"scheduled","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
                      name + R"("},"B":{"name":"x"}}}})";
   ArenaState s;
   char text[64];
@@ -148,7 +165,7 @@ static void test_state_long_name_odd_cut() {
   // 31 bytes ASCII + "é": cortar em 32 partiria o "é"; deve ficar só o ASCII.
   std::string name(31, 'a');
   name += "\xC3\xA9";
-  std::string json = R"({"event":"state","data":{"status":"ready","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
+  std::string json = R"({"event":"state","data":{"status":"scheduled","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
                      name + R"("},"B":{"name":"x"}}}})";
   ArenaState s;
   char text[64];
@@ -159,7 +176,7 @@ static void test_state_long_name_odd_cut() {
 static void test_state_long_match_id() {
   ArenaState s;
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ready","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33X","remainingMs":1000,"endReason":null,"robots":null}})",
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"scheduled","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33X","remainingMs":1000,"endReason":null,"robots":null}})",
                          s, text, sizeof text) == FrameKind::Bad);
 }
 
@@ -173,11 +190,11 @@ static void test_state_bad_not_applied() {
   // Um state inválido não pode alterar o último state válido.
   ArenaState s;
   strcpy(s.matchId, "keep");
-  s.status = ArenaStatus::Running;
+  s.status = ArenaStatus::Ongoing;
   char text[64];
   TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"exploded","matchId":"other"}})", s, text, sizeof text) == FrameKind::Bad);
   TEST_ASSERT_EQUAL_STRING("keep", s.matchId);
-  TEST_ASSERT_TRUE(s.status == ArenaStatus::Running);
+  TEST_ASSERT_TRUE(s.status == ArenaStatus::Ongoing);
 }
 
 static void test_frame_error() {
@@ -259,8 +276,10 @@ int main() {
   RUN_TEST(test_backoff_reset);
   RUN_TEST(test_frame_welcome);
   RUN_TEST(test_state_idle);
-  RUN_TEST(test_state_running);
-  RUN_TEST(test_state_ended);
+  RUN_TEST(test_state_ongoing);
+  RUN_TEST(test_state_finished);
+  RUN_TEST(test_parses_manual_end_reason);
+  RUN_TEST(test_rejects_old_names);
   RUN_TEST(test_state_unknown_status);
   RUN_TEST(test_state_long_name);
   RUN_TEST(test_state_long_name_odd_cut);
