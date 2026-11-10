@@ -63,6 +63,7 @@ describe('matchRows', () => {
       weightClass: 'beetleweight',
       robotAId: 'r1',
       robotBId: 'gone',
+      arenaId: null,
       state: 'scheduled',
       scheduledAt: '',
       createdAt: '',

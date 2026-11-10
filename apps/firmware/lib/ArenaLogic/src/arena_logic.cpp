@@ -23,19 +23,18 @@ void copyUtf8(char* dst, size_t cap, const char* src) {
 bool parseStatus(const char* s, ArenaStatus& out) {
   if (!s) return false;
   if (!strcmp(s, "idle")) out = ArenaStatus::Idle;
-  else if (!strcmp(s, "ready")) out = ArenaStatus::Ready;
-  else if (!strcmp(s, "running")) out = ArenaStatus::Running;
+  else if (!strcmp(s, "scheduled")) out = ArenaStatus::Scheduled;
+  else if (!strcmp(s, "ongoing")) out = ArenaStatus::Ongoing;
   else if (!strcmp(s, "paused")) out = ArenaStatus::Paused;
-  else if (!strcmp(s, "ended")) out = ArenaStatus::Ended;
+  else if (!strcmp(s, "finished")) out = ArenaStatus::Finished;
   else return false;
   return true;
 }
 
 bool parseEndReason(const char* s, EndReason& out) {
   if (!strcmp(s, "time_out")) out = EndReason::TimeOut;
-  else if (!strcmp(s, "operator_ended")) out = EndReason::OperatorEnded;
-  else if (!strcmp(s, "surrender_A")) out = EndReason::SurrenderA;
-  else if (!strcmp(s, "surrender_B")) out = EndReason::SurrenderB;
+  else if (!strcmp(s, "manual")) out = EndReason::Manual;
+  else if (!strcmp(s, "surrender")) out = EndReason::Surrender;
   else return false;
   return true;
 }

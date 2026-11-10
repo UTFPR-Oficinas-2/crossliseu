@@ -15,8 +15,8 @@ export interface ApiMatch {
   state: ApiMatchState
   /** ISO timestamps */
   scheduledAt: string
-  startedAt: string | null
-  finishedAt: string | null
+  /** The arena the fight runs on (set at Start); kept after Close. `null` before Start */
+  arenaId: string | null
   endReason: MatchEndReason | null
   /** `null` until finished, and on a draw */
   winnerRobotId: string | null

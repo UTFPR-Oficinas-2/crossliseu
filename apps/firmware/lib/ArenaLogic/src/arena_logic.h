@@ -6,8 +6,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-enum class ArenaStatus : uint8_t { Idle, Ready, Running, Paused, Ended };
-enum class EndReason : uint8_t { None, TimeOut, OperatorEnded, SurrenderA, SurrenderB };
+// Os nomes de docs/arena-protocol.md ("Statuses" e "End reasons"), sem tradução.
+enum class ArenaStatus : uint8_t { Idle, Scheduled, Ongoing, Paused, Finished };
+enum class EndReason : uint8_t { None, TimeOut, Manual, Surrender };
 
 // Último `state` recebido do servidor. Cada `state` substitui o anterior por inteiro.
 struct ArenaState {

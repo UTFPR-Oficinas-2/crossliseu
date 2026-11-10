@@ -30,6 +30,12 @@ export type CreateArenaResult = 'done' | 'arena_name_taken' | 'device_id_taken';
 /** Outcome of a write that needs the arena's current match not to be live */
 export type LockedArenaResult = 'done' | 'arena_not_found' | 'arena_match_live';
 
+/** Outcome of undoing a pick: refused once the match has started, or finished and awaits close */
+export type ClearCurrentMatchResult =
+    | 'done'
+    | 'arena_not_found'
+    | 'arena_match_started';
+
 export type RenameArenaResult = 'done' | 'arena_not_found' | 'arena_name_taken';
 
 const UNIQUE_VIOLATION = '23505';
@@ -169,21 +175,34 @@ export class ArenasRepository {
     }
 
     /**
-     * Leaves the arena without a current match, unless that match is live. `ownerUserId` null
-     * skips the account check (arena device link, #19).
+     * Undoes a pick before Start: leaves the arena without a current match, only while that match
+     * is still scheduled. Closing a finished fight is `POST /matches/:id/close`. `ownerUserId`
+     * null skips the account check (arena device link, #19).
      */
     clearCurrentMatch(
         arenaId: string,
         ownerUserId: string | null,
-    ): Promise<LockedArenaResult> {
+    ): Promise<ClearCurrentMatchResult> {
         return this.repository.manager.transaction(async (manager) => {
-            const arena = await this.withLiveCheck(
-                manager,
-                arenaId,
-                ownerUserId,
-            );
-            if (!(arena instanceof Arena)) {
-                return arena;
+            // Arena first, then its match: the same order as setCurrentMatchLocked
+            const arena = await manager.findOne(Arena, {
+                where:
+                    ownerUserId === null
+                        ? { id: arenaId }
+                        : { id: arenaId, ownerUserId },
+                lock: { mode: 'pessimistic_write' },
+            });
+            if (!arena) {
+                return 'arena_not_found';
+            }
+            if (arena.currentMatchId) {
+                const match = await this.lockMatch(
+                    manager,
+                    arena.currentMatchId,
+                );
+                if (match && match.state !== 'scheduled') {
+                    return 'arena_match_started';
+                }
             }
             await manager.update(
                 Arena,

@@ -13,9 +13,9 @@ The contract between an arena's ESP32 box and the API. The firmware (`apps/firmw
 
 An arena is the physical space where two robots fight. It has exactly one box, and at most one match at a time.
 
-The arena has no match until the operator opens the lobby for a match (the one the referees join) and selects which match runs on this arena. From then until the operator closes that match, it is the arena's **current match**, and every `state` sent to the box describes it. Closing it (or undoing a pick before Start) is `DELETE /arenas/:id/current-match`, refused while the match is ongoing or paused. With no current match, the box gets `idle`.
+The arena has no match until the operator opens the lobby for a match (the one the referees join) and selects which match runs on this arena. From then until the operator closes that match, it is the arena's **current match**, and every `state` sent to the box describes it. Undoing a pick before Start is `DELETE /arenas/:id/current-match`, refused once the match has started. Closing a finished match is `POST /matches/:id/close`, which also clears it as the arena's current match. With no current match, the box gets `idle`.
 
-Before Start, the operator can change the selection (for example, after picking the wrong match). The box then gets a new `ready` with the new `matchId`.
+Before Start, the operator can change the selection (for example, after picking the wrong match). The box then gets a new `scheduled` with the new `matchId`.
 
 ## Connection
 
@@ -98,7 +98,7 @@ Sent on every surrender button press, without checking the local state. The serv
 { "event": "surrender", "data": { "side": "B", "matchId": "6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33" } }
 ```
 
-A surrender counts only when the arena's current match is `running` **and** `matchId` matches it. It then ends the match with `endReason` `surrender_A` or `surrender_B`. `matchId` stops a late press from landing on the next match. In any other case (paused, ready, ended, no match, wrong `matchId`) the server replies with `error` (`surrender_rejected`) and the match stays as it is. A paused match cannot be surrendered (decided in #30). A second press after the match ended is rejected the same way, so a match can only end once.
+A surrender counts only when the arena's current match is `ongoing` **and** `matchId` matches it. It then ends the match with `endReason` `surrender`, and the other side wins. `matchId` stops a late press from landing on the next match. In any other case (paused, scheduled, finished, no match, wrong `matchId`) the server replies with `error` (`surrender_rejected`) and the match stays as it is. A paused match cannot be surrendered (decided in #30). A second press after the match ended is rejected the same way, so a match can only end once.
 
 Presses while the box is not connected are dropped, not queued.
 
@@ -122,10 +122,10 @@ A **full snapshot** of what the box should show. It is sent right after `welcome
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `status` | `"idle"` \| `"ready"` \| `"running"` \| `"paused"` \| `"ended"` | See [Statuses](#statuses) |
+| `status` | `"idle"` \| `"scheduled"` \| `"ongoing"` \| `"paused"` \| `"finished"` | See [Statuses](#statuses) |
 | `matchId` | string \| null | `null` only when `idle` |
 | `remainingMs` | integer \| null | Time left on the match clock when the message was sent; `null` only when `idle` |
-| `endReason` | `"time_out"` \| `"operator_ended"` \| `"surrender_A"` \| `"surrender_B"` \| null | Set only when `ended`; see [End reasons](#end-reasons) |
+| `endReason` | `"time_out"` \| `"manual"` \| `"surrender"` \| null | Set only when `finished`; see [End reasons](#end-reasons) |
 | `robots` | `{ "A": { "name": string }, "B": { "name": string } }` \| null | `null` only when `idle`; the box may show the names |
 
 The score is never sent: competitors do not see it on the box.
@@ -138,7 +138,7 @@ Examples:
 
 ```json
 { "event": "state", "data": {
-  "status": "ready",
+  "status": "scheduled",
   "matchId": "6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33",
   "remainingMs": 180000,
   "endReason": null,
@@ -148,7 +148,7 @@ Examples:
 
 ```json
 { "event": "state", "data": {
-  "status": "running",
+  "status": "ongoing",
   "matchId": "6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33",
   "remainingMs": 180000,
   "endReason": null,
@@ -168,10 +168,10 @@ Examples:
 
 ```json
 { "event": "state", "data": {
-  "status": "ended",
+  "status": "finished",
   "matchId": "6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33",
   "remainingMs": 61530,
-  "endReason": "surrender_B",
+  "endReason": "surrender",
   "robots": { "A": { "name": "Tritura" }, "B": { "name": "Ferrugem" } }
 } }
 ```
@@ -206,22 +206,22 @@ Something the box sent was rejected. The connection stays open. What the box sho
 | --- | --- | --- | --- |
 | Not connected | (local) | No `welcome` yet: booting, retrying or rejected | Dropped |
 | Connected | `idle` | Online, no current match on this arena | Sent, rejected |
-| Ready | `ready` | A match is selected for this arena, waiting for Start | Sent, rejected |
-| Running | `running` | The match clock is running | Sent, may end the match |
+| Ready | `scheduled` | A match is selected for this arena, waiting for Start | Sent, rejected |
+| Running | `ongoing` | The match clock is running | Sent, may end the match |
 | Paused | `paused` | The operator paused the match; clock frozen | Sent, rejected |
-| Ended | `ended` | The match is over, waiting for the operator to close it; `endReason` says why | Sent, rejected |
+| Ended | `finished` | The match is over, waiting for the operator to close it; `endReason` says why | Sent, rejected |
 
 Transitions, all driven by the server:
 
-- `idle → ready`: the operator opens the lobby and selects the match for this arena.
-- `ready → ready`: the operator selects a different match before Start (new `matchId`).
-- `ready → idle`: the operator drops the selection without starting.
-- `ready → running`, `running ⇄ paused`: the operator starts, pauses and resumes.
-- `running → ended`: the clock reaches zero (`time_out`), a valid surrender (`surrender_A` / `surrender_B`), or the operator ends it (`operator_ended`).
-- `paused → ended`: only the operator can end a paused match (`operator_ended`).
-- `ended → idle`: the operator confirms closing the match. There is no direct `ended → ready`: the next match is selected after closing. Until then the box keeps showing the result.
+- `idle → scheduled`: the operator opens the lobby and selects the match for this arena.
+- `scheduled → scheduled`: the operator selects a different match before Start (new `matchId`).
+- `scheduled → idle`: the operator drops the selection without starting.
+- `scheduled → ongoing`, `ongoing ⇄ paused`: the operator starts, pauses and resumes.
+- `ongoing → finished`: the clock reaches zero (`time_out`), a valid surrender (`surrender`), or the operator ends it (`manual`).
+- `paused → finished`: only the operator can end a paused match (`manual`).
+- `finished → idle`: the operator confirms closing the match. There is no direct `finished → scheduled`: the next match is selected after closing. Until then the box keeps showing the result.
 
-Mapping to the API's match status (`MatchState` in `apps/api/src/modules/matches/entities/match.entity.ts`): `ready` = `waiting`, `running` = `running`, `paused` = `paused`, `ended` = `finished`. `idle` has no match.
+`scheduled`, `ongoing`, `paused` and `finished` are the API's match states (`MatchState` in `apps/api/src/modules/matches/entities/match.entity.ts`), with no translation. `idle` is the arena's own status: it has no match.
 
 ### End reasons
 
@@ -230,22 +230,21 @@ Mapping to the API's match status (`MatchState` in `apps/api/src/modules/matches
 | `endReason` | Meaning |
 | --- | --- |
 | `time_out` | The match clock reached zero |
-| `operator_ended` | The operator ended the match |
-| `surrender_A` | Competitor A surrendered |
-| `surrender_B` | Competitor B surrendered |
+| `manual` | The operator ended the match |
+| `surrender` | A competitor surrendered |
 
-There is no separate `surrenderedSide` field; the side is part of the value.
+The side that surrendered is not part of the value or of `state`: the API records the winner (`winner_robot_id`, the other side), and the box shows the same color for either side.
 
-**Planned (#57, Final delivery milestone): correcting the end reason.** Right after a match ends, in the step where the operator confirms closing it, the operator will be able to change `endReason` (for example from `operator_ended` to `surrender_B` when the box was offline and a competitor asked to give up). Because the match is still `ended` at that point, a correction sends the box a new `state` with the new `endReason`. After closing, the result is final.
+**Planned (#57, Final delivery milestone): correcting the end reason.** Right after a match ends, in the step where the operator confirms closing it, the operator will be able to change `endReason` (for example from `manual` to `surrender` when the box was offline and a competitor asked to give up). Because the match is still `finished` at that point, a correction sends the box a new `state` with the new `endReason`. After closing, the result is final.
 
 ## Timer
 
 - The box runs its own countdown. The server does **not** stream the time.
 - Every `state` carries `remainingMs`, and the box resets its countdown to that value on each one. Start, pause, resume and reconnect each send a `state`, so every screen resyncs at those moments.
 - `remainingMs` is the value when the server sent the message; network delay is ignored.
-- While `paused`, `ready` or `ended`, the box shows `remainingMs` frozen.
+- While `paused`, `scheduled` or `finished`, the box shows `remainingMs` frozen.
 - The time is shown as `mm:ss`, **rounded up** to the next whole second: `94210` shows `01:35`, and `00:00` appears only once the time is actually up.
-- **The server decides when time is up.** When the box's own countdown reaches zero, it shows `00:00` and waits. It switches to ended only when the server sends `state` with `status: "ended"`. This avoids the box declaring the end while a surrender is still in flight.
+- **The server decides when time is up.** When the box's own countdown reaches zero, it shows `00:00` and waits. It switches to ended only when the server sends `state` with `status: "finished"`. This avoids the box declaring the end while a surrender is still in flight.
 
 ## Close codes
 
@@ -266,7 +265,7 @@ The server can also close with `1001` (it is shutting down), `1011` (it could no
 
 - **Server-side detection.** The server sends a WebSocket ping every 10 s and drops a box that does not answer within 10 s. The arena is shown offline in the web app as soon as its socket closes, except when the socket was replaced (`4003`): the new connection keeps it online.
 - **Box-side detection.** The box expects a server ping every 10 s. If it hears nothing from the server (no ping, no message) for 30 s, it treats the connection as lost, closes it and reconnects with normal backoff. This catches connections that die silently, such as a router or proxy restart that never delivers a close.
-- **During a match the box is ignored.** The match keeps running on the server. Competitors cannot surrender; if they want to, the operator ends the match (`operator_ended`).
+- **During a match the box is ignored.** The match keeps running on the server. Competitors cannot surrender; if they want to, the operator ends the match (`manual`).
 - **On the box.** It goes back to not connected, drops button presses and reconnects.
 - **Reconnect** is just connecting again: `hello`, `welcome`, then a `state` with the current status and `remainingMs`. No special messages.
 
@@ -276,17 +275,19 @@ After any close not covered above: wait 1 s, then double the wait on each failed
 
 ## LED colors
 
-The strip is an RGB strip driven on/off per channel, so these are its eight possible colors. They are the agreed defaults; changing them is a firmware-only change, but update this table too.
+The strip is a 12 V RGB strip driven by PWM on each channel, so it can dim and mix colours. These are the colours chosen for the box (#40); changing them is a firmware-only change (`apps/firmware/lib/Led/src/led_pattern.h`), but update this table too.
 
 | Box state | Color |
 | --- | --- |
 | Not connected | Magenta, blinking |
 | Connected (`idle`) | Cyan |
-| Ready | White, blinking |
-| Running | White |
+| Ready | Blue in 5 brightness steps, 1 s each, then off 1 s, again (an F1 start) |
+| Running | Green |
 | Paused | Yellow |
-| Ended (`time_out`, `operator_ended`) | Blue |
-| Ended (`surrender_A`, `surrender_B`) | Red |
+| Ended (`time_out`, `manual`) | White, blinking |
+| Ended (`surrender`) | Red |
+
+Each state lights its own mix of the red, green and blue channels, so no two states look alike at any brightness. Red is used only for a surrender.
 
 ## Firmware modules
 
@@ -294,11 +295,16 @@ The firmware is split so the display, LED, button and network parts can be built
 
 ```cpp
 // Display (#39): both competitor LCDs
+void displayBegin();                    // sets up both LCDs; once in setup()
+void displayPoll();                     // every loop: redraws the LCDs and brings back one that was reset or unplugged
 void showTime(long ms);                 // draws ms as mm:ss, rounded up; ms <= 0 shows 00:00
-void showMessage(const char* text);     // status text, e.g. "Not connected", "Ready", "Time out"
+void showMessage(const char* text);     // status text, e.g. "SEM CONEXAO", "PREPARAR", "FIM DE TEMPO"
+                                        // (screens per state: apps/firmware/README.md, "LCD screens")
 
 // LED (#40)
 enum class LedState { NotConnected, Connected, Ready, Running, Paused, Ended, Surrender };
+void ledBegin();                        // sets up the strip's PWM and turns it off; once in setup()
+LedState ledStateFor(bool connected, const ArenaState& s);  // the LedState for the last state
 void setLedState(LedState state);       // sets the color/blink from the table above; call every loop for blinking,
                                         // calling again with the same state keeps the blink going without restarting it
 
@@ -312,14 +318,15 @@ void arenaBegin();                                 // Wi-Fi + socket, from confi
 void arenaLoop();                                  // every loop: Wi-Fi, reconnect, liveness, incoming frames
 bool arenaConnected();                             // true between welcome and close
 void onArenaState(void (*cb)(const ArenaState&));  // called on every valid `state`
+const ArenaState& arenaState();                    // last `state` of this connection; back to the default (idle) on each welcome
 bool arenaSendSurrender(char side);                // 'A' or 'B', with the last state's matchId; false if not connected
 ```
 
 `ArenaState` (in `lib/ArenaLogic/src/arena_logic.h`) is one parsed `state`:
 
 ```cpp
-enum class ArenaStatus : uint8_t { Idle, Ready, Running, Paused, Ended };
-enum class EndReason   : uint8_t { None, TimeOut, OperatorEnded, SurrenderA, SurrenderB };
+enum class ArenaStatus : uint8_t { Idle, Scheduled, Ongoing, Paused, Finished };
+enum class EndReason   : uint8_t { None, TimeOut, Manual, Surrender };
 struct ArenaState {
   ArenaStatus status;
   char matchId[37];        // "" when null
@@ -337,7 +344,8 @@ The connection layer follows the [Handshake](#handshake), [Close codes](#close-c
 The display only draws what it is given; it keeps no timer. The integration (#42) owns the countdown and joins the modules:
 
 - On `state` it maps `status` / `endReason` to `setLedState` and `showMessage`, and resets the local countdown from `remainingMs`.
-- Every loop while `running`, it computes the time left (`remainingMs` minus the time since that `state` arrived) and passes it to `showTime`.
+- Every loop while `ongoing`, it computes the time left (`remainingMs` minus the time since that `state` arrived) and passes it to `showTime`.
+- Every loop, it calls `displayPoll()`.
 - On a press from `pollButtons()` it calls `arenaSendSurrender`, which drops the press when not connected.
 - While `arenaConnected()` is false, it shows **not connected**.
 

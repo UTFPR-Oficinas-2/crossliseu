@@ -54,6 +54,7 @@ const summary = (state: MatchState = 'scheduled'): MatchSummary => ({
   weightClass: 'beetleweight',
   robotAId: 'tita',
   robotBId: 'marte',
+  arenaId: null,
   state,
   scheduledAt: '2026-12-09T14:00:00.000Z',
 })

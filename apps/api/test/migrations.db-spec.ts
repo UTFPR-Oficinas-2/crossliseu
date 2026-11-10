@@ -45,8 +45,7 @@ describe('migrations on a fresh database', () => {
         expect(await tables()).toEqual([
             'arenas',
             'championships',
-            'match_pauses',
-            'match_score_events',
+            'match_events',
             'matches',
             'migrations',
             'robots',
@@ -143,6 +142,8 @@ describe('migrations on a fresh database', () => {
         beforeEach(async () => {
             await ds.runMigrations();
             await ds.query(`TRUNCATE "users", "arenas" CASCADE`);
+            // MatchEvents is newer than ArenaOwners: undo both to leave ArenaOwners pending
+            await ds.undoLastMigration();
             await ds.undoLastMigration();
         });
 
