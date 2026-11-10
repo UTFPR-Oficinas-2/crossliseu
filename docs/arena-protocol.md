@@ -322,8 +322,8 @@ bool arenaSendSurrender(char side);                // 'A' or 'B', with the last 
 `ArenaState` (in `lib/ArenaLogic/src/arena_logic.h`) is one parsed `state`:
 
 ```cpp
-enum class ArenaStatus : uint8_t { Idle, Ready, Running, Paused, Ended };
-enum class EndReason   : uint8_t { None, TimeOut, OperatorEnded, SurrenderA, SurrenderB };
+enum class ArenaStatus : uint8_t { Idle, Scheduled, Ongoing, Paused, Finished };
+enum class EndReason   : uint8_t { None, TimeOut, Manual, Surrender };
 struct ArenaState {
   ArenaStatus status;
   char matchId[37];        // "" when null
