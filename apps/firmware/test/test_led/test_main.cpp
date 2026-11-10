@@ -113,19 +113,30 @@ static ArenaState stateWith(ArenaStatus status, EndReason reason = EndReason::No
 
 static void test_led_state_for_each_server_state() {
   TEST_ASSERT_EQUAL(LedState::Connected, ledStateFor(true, stateWith(ArenaStatus::Idle)));
-  TEST_ASSERT_EQUAL(LedState::Ready, ledStateFor(true, stateWith(ArenaStatus::Ready)));
-  TEST_ASSERT_EQUAL(LedState::Running, ledStateFor(true, stateWith(ArenaStatus::Running)));
+  TEST_ASSERT_EQUAL(LedState::Ready, ledStateFor(true, stateWith(ArenaStatus::Scheduled)));
+  TEST_ASSERT_EQUAL(LedState::Running, ledStateFor(true, stateWith(ArenaStatus::Ongoing)));
   TEST_ASSERT_EQUAL(LedState::Paused, ledStateFor(true, stateWith(ArenaStatus::Paused)));
-  TEST_ASSERT_EQUAL(LedState::Ended, ledStateFor(true, stateWith(ArenaStatus::Ended, EndReason::TimeOut)));
-  TEST_ASSERT_EQUAL(LedState::Ended, ledStateFor(true, stateWith(ArenaStatus::Ended, EndReason::OperatorEnded)));
-  TEST_ASSERT_EQUAL(LedState::Surrender, ledStateFor(true, stateWith(ArenaStatus::Ended, EndReason::SurrenderA)));
-  TEST_ASSERT_EQUAL(LedState::Surrender, ledStateFor(true, stateWith(ArenaStatus::Ended, EndReason::SurrenderB)));
+  TEST_ASSERT_EQUAL(LedState::Ended, ledStateFor(true, stateWith(ArenaStatus::Finished, EndReason::TimeOut)));
+  TEST_ASSERT_EQUAL(LedState::Ended, ledStateFor(true, stateWith(ArenaStatus::Finished, EndReason::Manual)));
+  TEST_ASSERT_EQUAL(LedState::Surrender, ledStateFor(true, stateWith(ArenaStatus::Finished, EndReason::Surrender)));
+}
+
+static void test_led_finished_null_reason_is_ended() {
+  TEST_ASSERT_EQUAL(LedState::Ended, ledStateFor(true, stateWith(ArenaStatus::Finished, EndReason::None)));
+}
+
+// Correção do endReason (#57): um novo state finished com outro motivo troca a cor.
+static void test_led_reason_correction_switches_to_surrender() {
+  LedAnimator a;
+  a.update(ledStateFor(true, stateWith(ArenaStatus::Finished, EndReason::Manual)), 0);
+  const Rgb c = a.update(ledStateFor(true, stateWith(ArenaStatus::Finished, EndReason::Surrender)), 100);
+  assertRgb(RED, c);
 }
 
 static void test_led_state_not_connected_wins() {
-  TEST_ASSERT_EQUAL(LedState::NotConnected, ledStateFor(false, stateWith(ArenaStatus::Running)));
+  TEST_ASSERT_EQUAL(LedState::NotConnected, ledStateFor(false, stateWith(ArenaStatus::Ongoing)));
   TEST_ASSERT_EQUAL(LedState::NotConnected,
-                    ledStateFor(false, stateWith(ArenaStatus::Ended, EndReason::SurrenderA)));
+                    ledStateFor(false, stateWith(ArenaStatus::Finished, EndReason::Surrender)));
 }
 
 int main() {
@@ -140,6 +151,8 @@ int main() {
   RUN_TEST(test_new_state_restarts_the_effect);
   RUN_TEST(test_animator_millis_wraparound);
   RUN_TEST(test_led_state_for_each_server_state);
+  RUN_TEST(test_led_finished_null_reason_is_ended);
+  RUN_TEST(test_led_reason_correction_switches_to_surrender);
   RUN_TEST(test_led_state_not_connected_wins);
   return UNITY_END();
 }

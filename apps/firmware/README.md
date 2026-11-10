@@ -90,7 +90,7 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
 - Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
 - Both LCDs show `CROSSLISEU` / `03:00` after boot. In the serial monitor, `t` starts a 3-minute test countdown on them (`TEMPO RESTANTE`), `p` pauses it and shows `PAUSADA` (a later `t` continues from where it stopped), and `1` / `2` show `showTime(185000)` / `showTime(94210)` (`03:05` / `01:35`).
-- The LED strip follows the box (see [Strip states](#strip-states)): not connected, idle, and each `state` the server sends. The `state` parser in `lib/ArenaLogic` still expects the old names (`ready`, `running`, `ended`), so the `scheduled`, `ongoing` and `finished` the server sends since #101 are dropped until it is updated. In the serial monitor, `l` moves it to the next state by hand (to test on the bench); after the last one it follows the box again.
+- The LED strip follows the box (see [Strip states](#strip-states)): not connected, idle, and each `state` the server sends. In the serial monitor, `l` moves it to the next state by hand (to test on the bench); after the last one it follows the box again.
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |

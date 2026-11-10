@@ -106,15 +106,14 @@ inline LedState ledStateFor(bool connected, const ArenaState& s) {
   switch (s.status) {
     case ArenaStatus::Idle:
       return LedState::Connected;
-    case ArenaStatus::Ready:
+    case ArenaStatus::Scheduled:
       return LedState::Ready;
-    case ArenaStatus::Running:
+    case ArenaStatus::Ongoing:
       return LedState::Running;
     case ArenaStatus::Paused:
       return LedState::Paused;
-    case ArenaStatus::Ended:
-      return (s.endReason == EndReason::SurrenderA || s.endReason == EndReason::SurrenderB) ? LedState::Surrender
-                                                                                              : LedState::Ended;
+    case ArenaStatus::Finished:
+      return s.endReason == EndReason::Surrender ? LedState::Surrender : LedState::Ended;
   }
   return LedState::Connected;
 }
