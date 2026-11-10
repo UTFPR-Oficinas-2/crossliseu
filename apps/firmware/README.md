@@ -6,7 +6,7 @@ The box talks to the API over the [`/arena` WebSocket protocol](../../docs/arena
 
 ## Board
 
-Any board with the **original ESP32** chip (ESP32-WROOM-32 or WROVER module): the ESP32 DevKit, the Heltec WiFi LoRa 32 V2 and most ESP32 dev boards. The build uses PlatformIO's generic `esp32dev` board, which also runs on boards with more than 4 MB of flash. Boards with a newer chip (ESP32-S2, S3, C3, C6, for example the Heltec V3) need a different build and are not supported.
+Any board with the **original ESP32** chip (ESP32-WROOM-32 or WROVER module): the ESP32 DevKit and most ESP32 dev boards. The build uses PlatformIO's generic `esp32dev` board, which also runs on boards with more than 4 MB of flash. Boards with a newer chip (ESP32-S2, S3, C3, C6) need a different build and are not supported.
 
 The default pins are the box PCB's (an ESP32 DevKit with the surrender buttons, the two LCDs and the strip); see [Pins](#pins). A board wired differently changes them in `platformio.ini`, without touching the code; see [Other boards](#other-boards).
 
@@ -30,7 +30,7 @@ pio device monitor           # serial monitor at 115200; Ctrl+C to quit
 
 `src/` is the code that gets built; it needs a `config.h` (see [Configuration](#configuration)). Build output goes to `.pio/` (git-ignored).
 
-The protocol logic (`lib/ArenaLogic`), the button debounce (`lib/Buttons`) and the LCD text (`lib/Display`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
+The protocol logic (`lib/ArenaLogic`), the button debounce (`lib/Buttons`), the LCD text (`lib/Display`) and the strip colours (`lib/Led`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
 
 ```sh
 pio test -e native
@@ -69,7 +69,7 @@ To remove everything later: `uv tool uninstall platformio` (or uninstall the VS 
 
 ## Old countdown sketch
 
-`main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). Their pins clash with the Heltec V2's OLED and LoRa pins (see [Other boards](#other-boards)). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
+`main.cpp`, `Definitions.h` and `lcd_led_botao_01.cpp` in this folder are the earlier Arduino sketch. They are kept for reference and are **not** built by PlatformIO (only `src/` is). To run one, open it in the Arduino IDE, upload it, and open the Serial Monitor at **115200 baud** with "New Line" enabled.
 
 | Input | Effect |
 | --- | --- |
@@ -90,6 +90,7 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
 - Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
 - Both LCDs show `CROSSLISEU` / `03:00` after boot. In the serial monitor, `t` starts a 3-minute test countdown on them (`TEMPO RESTANTE`), `p` pauses it and shows `PAUSADA` (a later `t` continues from where it stopped), and `1` / `2` show `showTime(185000)` / `showTime(94210)` (`03:05` / `01:35`).
+- The LED strip follows the box (see [Strip states](#strip-states)): not connected, idle, and each `state` the server sends. In the serial monitor, `l` moves it to the next state by hand (to test on the bench); after the last one it follows the box again.
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |
@@ -121,12 +122,19 @@ Line 1 is `showMessage`, line 2 is `showTime`. The display only draws what it is
 
 ## Strip states
 
-| State | Colour |
-| --- | --- |
-| Waiting | White, blinking |
-| Counting | White |
-| Stopped | Red |
-| Finished | Blinks green, then solid blue |
+`src/led.cpp` drives the 12 V RGB strip through one MOSFET per channel, with PWM (5 kHz, 8 bits), so it can dim and mix colours. `setLedState()` is called every loop: the same state keeps its effect going, a new state restarts it. The colours and timings are in [`lib/Led/src/led_pattern.h`](lib/Led/src/led_pattern.h) (tweak them there if two colours look alike on the strip), and the table is also in the protocol doc's "LED colors".
+
+| `LedState` | Box state | Colour |
+| --- | --- | --- |
+| `NotConnected` | No `welcome` yet | Magenta, blinking (0.5 s on, 0.5 s off) |
+| `Connected` | `idle` | Cyan |
+| `Ready` | `scheduled` | Blue in 5 brightness steps (20% to 100%, 1 s each), off 1 s, again: an F1 start |
+| `Running` | `ongoing` | Green |
+| `Paused` | `paused` | Yellow |
+| `Surrender` | `finished`, `surrender` | Red |
+| `Ended` | `finished`, `time_out` / `manual` | White, blinking (a chequered flag), until the operator closes the match |
+
+Each state lights its own mix of the red, green and blue channels (red only for `Surrender`), so no two look alike at any brightness; `test_led` checks it. `ledStateFor(connected, state)` in `led_pattern.h` picks the `LedState` for the last `state`, for #42. The strip can't do a real F1 "lights out": the box doesn't know when the operator will press Start, so it jumps from blue to green when the server's `ongoing` arrives.
 
 ## Pins
 
@@ -141,9 +149,11 @@ All pins are in [`src/pins.h`](src/pins.h). The defaults are the box PCB's (ESP3
 | LCD U4 | `PIN_LCD2_SDA`, `PIN_LCD2_SCL` | SDA 18, SCL 19 |
 | LCD I2C address (U3, U4) | `LCD1_ADDR`, `LCD2_ADDR` | 0 (scan at boot) |
 | LCD reset check | `LCD_E_MASK` | 0x04 (PCF8574 P2; 0 turns it off) |
-| LED strip (#42) | (colors confirmed in #42) | 25, 26, 33 |
+| LED strip, red | `PIN_STRIP_RED` | 25 |
+| LED strip, green | `PIN_STRIP_GREEN` | 33 |
+| LED strip, blue | `PIN_STRIP_BLUE` | 26 |
 
-The strip is not driven yet (#42). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
+Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
 
 Surrender buttons (`src/buttons.cpp`) use the internal pull-up; the other contact terminal goes to GND. `SURRENDER_A_PRESSED` and `SURRENDER_B_PRESSED` are what the pin reads with the button pressed: `LOW` for a normally open (NO) contact, `HIGH` for a normally closed (NC) one. On the PCB, side A is NO (`LOW`) and side B is NC (`HIGH`).
 
@@ -159,16 +169,16 @@ U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp`
 
 ### Other boards
 
-The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, the Heltec WiFi LoRa 32 V2's onboard LED is on GPIO 25:
+The quickest way to change pins is the `PLATFORMIO_BUILD_FLAGS` environment variable, which adds `-D` flags (the names in the table above) to the build without editing any file. For example, for a board whose onboard LED is on GPIO 4:
 
 ```sh
-PLATFORMIO_BUILD_FLAGS="-DPIN_ONBOARD_LED=25" pio run -t upload
+PLATFORMIO_BUILD_FLAGS="-DPIN_ONBOARD_LED=4" pio run -t upload
 ```
 
 In PowerShell, set it first; it lasts until the terminal is closed (or `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`):
 
 ```powershell
-$env:PLATFORMIO_BUILD_FLAGS = "-DPIN_ONBOARD_LED=25"
+$env:PLATFORMIO_BUILD_FLAGS = "-DPIN_ONBOARD_LED=4"
 pio run -t upload
 ```
 
@@ -177,14 +187,12 @@ To keep the pins for a board (or to build from the VS Code toolbar), add an env 
 ```ini
 [env:my_board]
 extends = env:esp32dev
-build_flags = ${env:esp32dev.build_flags} -DPIN_ONBOARD_LED=25 -DPIN_SURRENDER_A=13 -DSURRENDER_B_PRESSED=LOW
+build_flags = ${env:esp32dev.build_flags} -DPIN_ONBOARD_LED=4 -DPIN_SURRENDER_A=13 -DSURRENDER_B_PRESSED=LOW
 ```
 
 Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick the env in the PlatformIO toolbar). Keep `${env:esp32dev.build_flags}` at the start, or `config.h` is not found.
 
-Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
-
-On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo, `-DPIN_ONBOARD_LED=25` is enough for the LED and buttons: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`. The LCDs are in the demo too, so also move `PIN_LCD1_SDA` (21) and `PIN_LCD2_SDA` / `PIN_LCD2_SCL` (18, 19) to free pins; otherwise the demo drives the OLED power and LoRa lines as I2C. An env with `board = heltec_wifi_lora_32_V2` refuses to build until those three LCD pins are set (see the commented `[env:heltec_v2]` in `platformio.ini`, whose pins are not bench-tested). The check cannot fire with the generic `esp32dev` board, which does not know it is a Heltec, so there the warning above is all there is.
+Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot). Every pin must be different; the build stops if two signals share a GPIO.
 
 For the old `main.cpp` / `Definitions.h`:
 
@@ -198,19 +206,22 @@ For the old `main.cpp` / `Definitions.h`:
 ## Files
 
 - `platformio.ini`: board, platform version and build settings
-- `src/main.cpp`: demo of the connection layer, the buttons and the LCDs (onboard LED, serial `a`/`b`/`t`/`p`/`1`/`2`, `button: A`/`B`) until #42
+- `src/main.cpp`: demo of the connection layer, the buttons, the LCDs and the strip (onboard LED, serial `a`/`b`/`t`/`p`/`1`/`2`/`l`, `button: A`/`B`) until #42
 - `src/arena.h`, `src/arena.cpp`: connection layer (Wi-Fi, WebSocket, handshake, retries)
 - `src/arena_ca.h`: root certificates for `wss://`
 - `src/pins.h`: every pin number, with the box PCB's defaults
 - `src/buttons.h`, `src/buttons.cpp`: surrender buttons (`buttonsBegin`, `pollButtons`)
 - `src/display.h`, `src/display.cpp`: both LCDs (`displayBegin`, `displayPoll`, `showTime`, `showMessage`)
 - `lib/Display/`: LCD text (mm:ss, centring, accents) with no Arduino dependency
+- `src/led.h`, `src/led.cpp`: LED strip (`ledBegin`, `setLedState`)
+- `lib/Led/`: strip colours, effects and `ledStateFor`, with no Arduino dependency
 - `lib/Buttons/`: debounce logic with no Arduino dependency
 - `lib/ArenaLogic/`: protocol logic with no Arduino dependency (URL, retry policy, JSON frames)
 - `lib/WebSockets/`: patched arduinoWebSockets 2.7.2
 - `test/test_arena_logic/`: unit tests for `lib/ArenaLogic` (`pio test -e native`)
 - `test/test_buttons/`: unit tests for the debounce in `lib/Buttons` (`pio test -e native`)
 - `test/test_display/`: unit tests for the LCD text in `lib/Display` (`pio test -e native`)
+- `test/test_led/`: unit tests for the strip colours in `lib/Led` (`pio test -e native`)
 - `main.cpp`: old sketch: setup, serial commands and state machine
 - `Definitions.h`: pin numbers and the state enum
 - `config.example.h`: template for the git-ignored `config.h` (server address, device id and token, Wi-Fi)

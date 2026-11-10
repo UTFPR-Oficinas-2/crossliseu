@@ -2,6 +2,7 @@
 // Rodam no computador: pio test -e native
 #include <unity.h>
 #include <ArduinoJson.h>
+#include <stdio.h>
 #include <string.h>
 #include <string>
 #include "arena_logic.h"
@@ -100,7 +101,7 @@ static void test_state_idle() {
   TEST_ASSERT_TRUE(s.endReason == EndReason::None);
 }
 
-static void test_state_ongoing() {
+static void test_state_running() {
   ArenaState s;
   char text[64];
   TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ongoing","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":180000,"endReason":null,"robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
@@ -113,7 +114,7 @@ static void test_state_ongoing() {
   TEST_ASSERT_EQUAL_STRING("Ferrugem", s.robotB);
 }
 
-static void test_state_finished() {
+static void test_state_ended() {
   ArenaState s;
   char text[64];
   TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":61530,"endReason":"surrender","robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
@@ -123,21 +124,60 @@ static void test_state_finished() {
   TEST_ASSERT_TRUE(s.endReason == EndReason::Surrender);
 }
 
-static void test_parses_manual_end_reason() {
-  ArenaState s;
+// Um state com o status dado; os outros campos null.
+static FrameKind parseStatusOnly(const char* status, const char* endReason, ArenaState& s) {
+  char json[192];
+  char reason[48] = "null";
+  if (endReason) snprintf(reason, sizeof reason, "\"%s\"", endReason);
+  snprintf(json, sizeof json, R"({"event":"state","data":{"status":"%s","matchId":null,"remainingMs":null,"endReason":%s,"robots":null}})",
+           status, reason);
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"m","remainingMs":5000,"endReason":"manual","robots":null}})",
-                         s, text, sizeof text) == FrameKind::State);
-  TEST_ASSERT_TRUE(s.endReason == EndReason::Manual);
+  return parseServerFrame(json, strlen(json), s, text, sizeof text);
 }
 
-static void test_rejects_old_names() {
-  ArenaState s;
-  char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"running","matchId":null,"remainingMs":null,"endReason":null,"robots":null}})",
-                         s, text, sizeof text) == FrameKind::Bad);
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"m","remainingMs":0,"endReason":"surrender_A","robots":null}})",
-                         s, text, sizeof text) == FrameKind::Bad);
+// Os nomes de docs/arena-protocol.md ("Statuses"), sem tradução.
+static void test_state_all_statuses() {
+  const char* names[] = {"idle", "scheduled", "ongoing", "paused", "finished"};
+  const ArenaStatus expected[] = {ArenaStatus::Idle, ArenaStatus::Scheduled, ArenaStatus::Ongoing, ArenaStatus::Paused,
+                                  ArenaStatus::Finished};
+  for (int i = 0; i < 5; i++) {
+    ArenaState s;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly(names[i], nullptr, s) == FrameKind::State, names[i]);
+    TEST_ASSERT_TRUE_MESSAGE(s.status == expected[i], names[i]);
+  }
+}
+
+// Os nomes de docs/arena-protocol.md ("End reasons").
+static void test_state_end_reasons() {
+  const char* names[] = {"time_out", "manual", "surrender"};
+  const EndReason expected[] = {EndReason::TimeOut, EndReason::Manual, EndReason::Surrender};
+  for (int i = 0; i < 3; i++) {
+    ArenaState s;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly("finished", names[i], s) == FrameKind::State, names[i]);
+    TEST_ASSERT_TRUE_MESSAGE(s.endReason == expected[i], names[i]);
+  }
+}
+
+// Os nomes antigos não valem mais: o quadro é recusado e o último state fica.
+static void test_state_old_status_rejected() {
+  const char* names[] = {"ready", "running", "ended"};
+  for (const char* name : names) {
+    ArenaState s;
+    s.status = ArenaStatus::Ongoing;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly(name, nullptr, s) != FrameKind::State, name);
+    TEST_ASSERT_TRUE_MESSAGE(s.status == ArenaStatus::Ongoing, name);
+  }
+}
+
+static void test_state_old_end_reason_rejected() {
+  const char* names[] = {"surrender_A", "surrender_B", "operator_ended"};
+  for (const char* name : names) {
+    ArenaState s;
+    s.status = ArenaStatus::Ongoing;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly("finished", name, s) != FrameKind::State, name);
+    TEST_ASSERT_TRUE_MESSAGE(s.status == ArenaStatus::Ongoing, name);
+    TEST_ASSERT_TRUE_MESSAGE(s.endReason == EndReason::None, name);
+  }
 }
 
 static void test_state_unknown_status() {
@@ -276,10 +316,12 @@ int main() {
   RUN_TEST(test_backoff_reset);
   RUN_TEST(test_frame_welcome);
   RUN_TEST(test_state_idle);
-  RUN_TEST(test_state_ongoing);
-  RUN_TEST(test_state_finished);
-  RUN_TEST(test_parses_manual_end_reason);
-  RUN_TEST(test_rejects_old_names);
+  RUN_TEST(test_state_running);
+  RUN_TEST(test_state_ended);
+  RUN_TEST(test_state_all_statuses);
+  RUN_TEST(test_state_end_reasons);
+  RUN_TEST(test_state_old_status_rejected);
+  RUN_TEST(test_state_old_end_reason_rejected);
   RUN_TEST(test_state_unknown_status);
   RUN_TEST(test_state_long_name);
   RUN_TEST(test_state_long_name_odd_cut);

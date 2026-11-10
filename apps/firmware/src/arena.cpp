@@ -109,6 +109,7 @@ void handleFrame(const uint8_t* payload, size_t len) {
     case FrameKind::Welcome:
       if (phase != Phase::Handshaking) break;
       Serial.printf("arena: welcome \"%s\"\n", text);
+      lastState = ArenaState{};  // o state de antes da queda não vale mais; o servidor manda o atual logo depois
       backoff.reset();
       enter(Phase::Connected);
       break;
@@ -274,6 +275,8 @@ void arenaLoop() {
 bool arenaConnected() { return phase == Phase::Connected; }
 
 void onArenaState(void (*cb)(const ArenaState&)) { stateCb = cb; }
+
+const ArenaState& arenaState() { return lastState; }
 
 bool arenaSendSurrender(char side) {
   if (phase != Phase::Connected) return false;

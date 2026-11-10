@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Os nomes de docs/arena-protocol.md ("Statuses" e "End reasons"), sem tradução.
 enum class ArenaStatus : uint8_t { Idle, Scheduled, Ongoing, Paused, Finished };
 enum class EndReason : uint8_t { None, TimeOut, Manual, Surrender };
 

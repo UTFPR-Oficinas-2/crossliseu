@@ -28,11 +28,6 @@
 #endif
 
 // LCDs 16x2 I2C (src/display.cpp), um barramento I2C para cada.
-// Na Heltec WiFi LoRa 32 V2 (board = heltec_wifi_lora_32_V2) os pinos padrão
-// dos LCDs são os do OLED e do rádio LoRa: o build para até eles serem trocados.
-#if defined(ARDUINO_HELTEC_WIFI_LORA_32_V2) && (!defined(PIN_LCD1_SDA) || !defined(PIN_LCD2_SDA) || !defined(PIN_LCD2_SCL))
-#error "Heltec V2: os pinos padrao dos LCDs (21, 18, 19) sao do OLED e do LoRa; defina PIN_LCD1_SDA, PIN_LCD2_SDA e PIN_LCD2_SCL (README.md, Other boards)"
-#endif
 #ifndef PIN_LCD1_SDA
 #define PIN_LCD1_SDA 21  // U3
 #endif
@@ -60,4 +55,28 @@
 #define LCD_E_MASK 0x04
 #endif
 
-// Fita de LED (#42): GPIO 25, 26 e 33 na PCB. A cor de cada um entra aqui no PR do LED.
+// Fita de LED RGB 12 V (src/led.cpp): cada pino liga o gate de um MOSFET por PWM.
+#ifndef PIN_STRIP_RED
+#define PIN_STRIP_RED 25
+#endif
+#ifndef PIN_STRIP_GREEN
+#define PIN_STRIP_GREEN 33
+#endif
+#ifndef PIN_STRIP_BLUE
+#define PIN_STRIP_BLUE 26
+#endif
+
+// Dois sinais no mesmo GPIO brigam entre si (por exemplo o LED da placa e o
+// vermelho da fita): o build para em vez de a fita piscar errado na bancada.
+namespace pins_check {
+constexpr int ALL[] = {PIN_ONBOARD_LED, PIN_SURRENDER_A, PIN_SURRENDER_B, PIN_LCD1_SDA, PIN_LCD1_SCL,
+                       PIN_LCD2_SDA,    PIN_LCD2_SCL,    PIN_STRIP_RED,   PIN_STRIP_GREEN, PIN_STRIP_BLUE};
+constexpr bool distinct(const int* p, int n) {
+  for (int i = 0; i < n; i++)
+    for (int j = i + 1; j < n; j++)
+      if (p[i] == p[j]) return false;
+  return true;
+}
+static_assert(distinct(ALL, sizeof(ALL) / sizeof(ALL[0])),
+              "pins.h: two signals on the same GPIO; check the -D pin flags (README.md, Other boards)");
+}  // namespace pins_check
