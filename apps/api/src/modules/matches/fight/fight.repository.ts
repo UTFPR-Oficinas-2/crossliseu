@@ -25,7 +25,7 @@ export interface FightWrites {
     updateMatch(
         patch: Pick<
             QueryDeepPartialEntity<Match>,
-            'state' | 'endReason' | 'arenaId'
+            'state' | 'endReason' | 'arenaId' | 'winnerRobotId'
         >,
     ): Promise<void>;
     /** Clears current_match_id on the live arenas pointing at this match */

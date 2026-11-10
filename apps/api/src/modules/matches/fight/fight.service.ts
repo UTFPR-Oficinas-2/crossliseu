@@ -4,10 +4,12 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import { ChampionshipsService } from '../../championships/championships.service.js';
 import type { MatchState } from '../entities/match.entity.js';
 import type { MatchEvent } from '../entities/match-event.entity.js';
 import { Clock } from './clock.js';
+import { FightEvents } from './fight-events.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
 import { transitionFor } from './fight-transitions.js';
@@ -20,6 +22,8 @@ interface Settled {
     events: MatchEvent[];
     wrote: boolean;
 }
+
+export type SurrenderResult = 'done' | 'not_current_match' | 'not_ongoing';
 
 /**
  * When a new event is stamped: `wanted`, but strictly after the latest event. The clock's order
@@ -42,6 +46,7 @@ export class FightService {
         private readonly repo: FightRepository,
         private readonly championships: ChampionshipsService,
         private readonly clock: Clock,
+        private readonly events: FightEvents,
     ) {}
 
     /** Owner-only. 404 match_not_found, 409 match_invalid_transition. Returns the state after. */
@@ -75,7 +80,11 @@ export class FightService {
                 );
                 if (!transition) {
                     // Returned, not thrown: a time-out settled above must still commit
-                    return { ok: false };
+                    return {
+                        ok: false,
+                        wrote: settled.wrote,
+                        arenaId: fight.arenaId,
+                    };
                 }
                 if (command === 'start') {
                     await writes.updateMatch({
@@ -95,11 +104,16 @@ export class FightService {
                     });
                     await writes.appendEvent(transition.event, now, userId);
                 }
-                return { ok: true };
+                // Read before the writes: close clears the pointer, yet that arena must hear of it
+                return { ok: true, wrote: true, arenaId: fight.arenaId };
             },
         );
         if (!result) {
             throw this.notFound(matchId);
+        }
+        // After the commit, so listeners read what was written
+        if (result.wrote) {
+            this.events.emit({ matchId, arenaId: result.arenaId });
         }
         if (!result.ok) {
             this.logger.warn('match_invalid_transition', { matchId, command });
@@ -145,11 +159,77 @@ export class FightService {
                     writes,
                     this.clock.now(),
                 );
-                // Not ongoing any more: somebody else settled it while we waited for the lock
-                return settled.wrote || fight.match.state !== 'ongoing';
+                return {
+                    wrote: settled.wrote,
+                    // Not ongoing any more: somebody else settled it while we waited for the lock
+                    expired: settled.wrote || fight.match.state !== 'ongoing',
+                    arenaId: fight.arenaId,
+                };
             },
         );
-        return expired ?? false;
+        if (expired?.wrote) {
+            this.events.emit({ matchId, arenaId: expired.arenaId });
+        }
+        return expired?.expired ?? false;
+    }
+
+    /**
+     * A surrender button press from the box in `arenaId` (docs/arena-protocol.md, `surrender`).
+     * Counts only when `matchId` is that arena's current match and it is `ongoing`; the other
+     * side wins. A time-out that was due is settled first, so a press after time ran out is
+     * `not_ongoing` and the match ends as `time_out`.
+     */
+    async surrender(
+        arenaId: string,
+        matchId: string | null,
+        side: 'A' | 'B',
+    ): Promise<SurrenderResult> {
+        // From the box, unchecked: a malformed id would fail the uuid column's cast
+        if (matchId === null || !isUUID(matchId)) {
+            return 'not_current_match';
+        }
+        const outcome = await this.repo.withLockedFight(
+            matchId,
+            async (fight, writes) => {
+                // `now` is read after the locks, so events are written in lock order
+                const settled = await this.settleLocked(
+                    fight,
+                    writes,
+                    this.clock.now(),
+                );
+                const done = (result: SurrenderResult, wrote: boolean) => ({
+                    result,
+                    wrote,
+                    arenaId: fight.arenaId,
+                });
+                if (fight.arenaId !== arenaId) {
+                    return done('not_current_match', settled.wrote);
+                }
+                if (settled.state !== 'ongoing') {
+                    return done('not_ongoing', settled.wrote);
+                }
+                const { match } = fight;
+                await writes.updateMatch({
+                    state: 'finished',
+                    endReason: 'surrender',
+                    winnerRobotId:
+                        side === 'A' ? match.robotBId : match.robotAId,
+                });
+                await writes.appendEvent(
+                    'finished',
+                    eventTime(this.clock.now(), settled.events),
+                    null,
+                );
+                return done('done', true);
+            },
+        );
+        if (!outcome) {
+            return 'not_current_match';
+        }
+        if (outcome.wrote) {
+            this.events.emit({ matchId, arenaId: outcome.arenaId });
+        }
+        return outcome.result;
     }
 
     /** Inside the lock: writes the time-out when due and returns the state and events after */

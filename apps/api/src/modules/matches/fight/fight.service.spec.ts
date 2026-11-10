@@ -7,6 +7,8 @@ import type {
     LockedFight,
 } from './fight.repository.js';
 import { Clock } from './clock.js';
+import { FightEvents } from './fight-events.js';
+import type { FightChange } from './fight-events.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import { Match } from '../entities/match.entity.js';
 import type { MatchState } from '../entities/match.entity.js';
@@ -18,6 +20,8 @@ import type { ChampionshipsService } from '../../championships/championships.ser
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const ARENA_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const OTHER_ARENA_ID = '99999999-9999-4999-8999-999999999999';
+const OTHER_MATCH_ID = '88888888-8888-4888-8888-888888888888';
 const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const T0 = new Date('2026-11-10T14:00:00Z');
 const at = (ms: number) => new Date(T0.getTime() + ms);
@@ -108,7 +112,7 @@ function setup({
         findEvents: vi.fn(() => Promise.resolve([...store.events])),
         withLockedFight: vi.fn(
             async (
-                _id: string,
+                id: string,
                 work: (f: LockedFight, w: FightWrites) => Promise<unknown>,
             ) => {
                 if (missing) {
@@ -147,7 +151,9 @@ function setup({
                             // A copy: the real repository never mutates it
                             match: cloneMatch(store.match),
                             events: [...store.events],
-                            arenaId: store.arenaPointer,
+                            // The arena points at this match only
+                            arenaId:
+                                id === MATCH_ID ? store.arenaPointer : null,
                         },
                         writes,
                     );
@@ -164,12 +170,23 @@ function setup({
     const championships = {
         isOwnedBy: vi.fn(() => Promise.resolve(owner)),
     };
+    const fightEvents = new FightEvents();
+    const changes: FightChange[] = [];
+    fightEvents.onChange((change) => changes.push(change));
     const service = new FightService(
         repo as unknown as FightRepository,
         championships as unknown as ChampionshipsService,
         clock,
+        fightEvents,
     );
-    return { service, repo, store, championships };
+    return {
+        service,
+        repo,
+        store,
+        championships,
+        events: fightEvents,
+        changes,
+    };
 }
 
 describe('FightService', () => {
@@ -514,6 +531,282 @@ describe('FightService event order', () => {
         expect(finished!.occurredAt.getTime()).toBeGreaterThan(T0.getTime());
         expect(closed!.occurredAt.getTime()).toBeGreaterThan(
             finished!.occurredAt.getTime(),
+        );
+    });
+});
+
+describe('FightService change events', () => {
+    it('start emits one change with the arena id after the write', async () => {
+        const { service, changes } = setup({ arenaId: ARENA_ID });
+
+        await service.command(MATCH_ID, 'start', USER_ID);
+
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('close emits the arena id it cleared', async () => {
+        const { service, changes, store } = setup({
+            state: 'finished',
+            events: [event('started', T0), event('finished', at(1000))],
+            arenaId: ARENA_ID,
+            now: at(2000),
+        });
+
+        await service.command(MATCH_ID, 'close', USER_ID);
+
+        expect(store.arenaPointer).toBeNull();
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('a refused command that settled a time-out still emits', async () => {
+        const { service, changes } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now: at(180_001),
+        });
+
+        await expect(
+            service.command(MATCH_ID, 'pause', USER_ID),
+        ).rejects.toThrow(ConflictException);
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('a refused command with nothing written emits nothing', async () => {
+        const { service, changes } = setup({ arenaId: ARENA_ID });
+
+        await expect(
+            service.command(MATCH_ID, 'pause', USER_ID),
+        ).rejects.toThrow(ConflictException);
+        expect(changes).toEqual([]);
+    });
+
+    it('settle() that writes a time-out emits', async () => {
+        const { service, changes } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now: at(180_000),
+        });
+
+        expect(await service.settle(MATCH_ID)).toBe(true);
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('state() of a fight with time left emits nothing', async () => {
+        const { service, changes } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now: at(60_000),
+        });
+
+        await service.state(MATCH_ID);
+
+        expect(changes).toEqual([]);
+    });
+
+    it('emits after the transaction resolved, not inside it', async () => {
+        const { service, repo, events } = setup({ arenaId: ARENA_ID });
+        const impl = repo.withLockedFight.getMockImplementation()!;
+        let inside = false;
+        repo.withLockedFight.mockImplementationOnce(async (id, work) => {
+            inside = true;
+            try {
+                return await impl(id, work);
+            } finally {
+                inside = false;
+            }
+        });
+        const seenInside: boolean[] = [];
+        events.onChange(() => seenInside.push(inside));
+
+        await service.command(MATCH_ID, 'start', USER_ID);
+
+        expect(seenInside).toEqual([false]);
+    });
+});
+
+describe('FightService.surrender', () => {
+    function ongoing(now = at(60_000)) {
+        return setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now,
+        });
+    }
+
+    it('surrender by A on the ongoing current match finishes it with B as winner', async () => {
+        const { service, store, changes } = ongoing();
+
+        expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe('done');
+
+        expect(store.match.state).toBe('finished');
+        expect(store.match.endReason).toBe('surrender');
+        expect(store.match.winnerRobotId).toBe(store.match.robotBId);
+        expect(store.written).toHaveLength(1);
+        expect(store.written[0]).toMatchObject({
+            type: 'finished',
+            occurredAt: at(60_000),
+            actorUserId: null,
+        });
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it("surrender by B sets A's robot as winner", async () => {
+        const { service, store } = ongoing();
+
+        expect(await service.surrender(ARENA_ID, MATCH_ID, 'B')).toBe('done');
+
+        expect(store.match.winnerRobotId).toBe(store.match.robotAId);
+        expect(store.match.endReason).toBe('surrender');
+    });
+
+    it.each([
+        ['scheduled', []],
+        ['paused', [event('started', T0), event('paused', at(1000))]],
+        ['finished', [event('started', T0), event('finished', at(1000))]],
+    ] as [MatchState, MatchEvent[]][])(
+        'rejects a %s match as not_ongoing, with no writes and no change',
+        async (state, events) => {
+            const { service, store, changes } = setup({
+                state,
+                events,
+                arenaId: ARENA_ID,
+                now: at(60_000),
+            });
+
+            expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe(
+                'not_ongoing',
+            );
+            expect(store.match.state).toBe(state);
+            expect(store.written).toHaveLength(0);
+            expect(changes).toEqual([]);
+        },
+    );
+
+    it('rejects a press from another arena as not_current_match', async () => {
+        const { service, store, changes } = ongoing();
+
+        expect(await service.surrender(OTHER_ARENA_ID, MATCH_ID, 'A')).toBe(
+            'not_current_match',
+        );
+        expect(store.match.state).toBe('ongoing');
+        expect(store.written).toHaveLength(0);
+        expect(changes).toEqual([]);
+    });
+
+    it('rejects a press on a match no arena points at as not_current_match', async () => {
+        const { service, store, changes } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(60_000),
+        });
+
+        expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe(
+            'not_current_match',
+        );
+        expect(store.written).toHaveLength(0);
+        expect(changes).toEqual([]);
+    });
+
+    it('rejects the matchId of another match as not_current_match', async () => {
+        const { service, store, changes } = ongoing();
+
+        expect(await service.surrender(ARENA_ID, OTHER_MATCH_ID, 'A')).toBe(
+            'not_current_match',
+        );
+        expect(store.match.state).toBe('ongoing');
+        expect(store.written).toHaveLength(0);
+        expect(changes).toEqual([]);
+    });
+
+    it('rejects an unknown matchId as not_current_match', async () => {
+        const { service, changes } = setup({ missing: true });
+
+        expect(await service.surrender(ARENA_ID, OTHER_MATCH_ID, 'A')).toBe(
+            'not_current_match',
+        );
+        expect(changes).toEqual([]);
+    });
+
+    it.each(['abc', '', null])(
+        'surrender with matchId %j is not_current_match without touching the repository',
+        async (matchId) => {
+            const { service, repo, changes } = ongoing();
+
+            expect(await service.surrender(ARENA_ID, matchId, 'A')).toBe(
+                'not_current_match',
+            );
+            expect(repo.withLockedFight).not.toHaveBeenCalled();
+            expect(repo.findMatch).not.toHaveBeenCalled();
+            expect(changes).toEqual([]);
+        },
+    );
+
+    it('surrender after time ran out is not_ongoing and writes the time-out', async () => {
+        const { service, store, changes } = ongoing(at(180_000));
+
+        expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe(
+            'not_ongoing',
+        );
+        expect(store.match.state).toBe('finished');
+        expect(store.match.endReason).toBe('time_out');
+        expect(store.match.winnerRobotId ?? null).toBeNull();
+        expect(store.written.map((e) => e.type)).toEqual(['finished']);
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('a second surrender after the first is not_ongoing', async () => {
+        const { service, store, changes } = ongoing();
+
+        expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe('done');
+        expect(await service.surrender(ARENA_ID, MATCH_ID, 'B')).toBe(
+            'not_ongoing',
+        );
+
+        expect(store.match.winnerRobotId).toBe(store.match.robotBId);
+        expect(store.written).toHaveLength(1);
+        expect(changes).toHaveLength(1);
+    });
+
+    it('stamps the surrender strictly after the latest event', async () => {
+        const { service, store } = setup({
+            state: 'ongoing',
+            events: [event('started', at(60_000))],
+            arenaId: ARENA_ID,
+            now: at(60_000),
+        });
+
+        await service.surrender(ARENA_ID, MATCH_ID, 'A');
+
+        expect(store.written[0].occurredAt).toEqual(at(60_001));
+    });
+});
+
+describe('FightEvents', () => {
+    it('calls listeners in order, survives a throwing one, and unsubscribes', () => {
+        const events = new FightEvents();
+        const warn = vi
+            .spyOn(events.logger, 'warn')
+            .mockImplementation(() => {});
+        const calls: string[] = [];
+        events.onChange(() => calls.push('first'));
+        events.onChange(() => {
+            throw new Error('boom');
+        });
+        const off = events.onChange(() => calls.push('third'));
+        const change = { matchId: MATCH_ID, arenaId: ARENA_ID };
+
+        events.emit(change);
+        off();
+        events.emit(change);
+
+        expect(calls).toEqual(['first', 'third', 'first']);
+        expect(warn).toHaveBeenCalledWith(
+            'fight_listener_failed',
+            expect.objectContaining({ matchId: MATCH_ID }),
         );
     });
 });
