@@ -91,10 +91,21 @@ export class MatchesRepository {
         });
     }
 
+    /** The live arena whose current match this is, or null */
+    async findCurrentArenaId(matchId: string): Promise<string | null> {
+        // Read through the manager so this module doesn't depend on ArenasModule
+        const arena = await this.repository.manager.findOne(Arena, {
+            select: { id: true },
+            where: { currentMatchId: matchId },
+        });
+        return arena?.id ?? null;
+    }
+
     /**
      * Soft-deletes only while the live match still matches `expected`, and clears the pointer of
-     * any arena whose current match it was, in one transaction. False when nothing matched (the
-     * arenas are left as they were).
+     * any arena whose current match it was, in one transaction. Returns the live arenas whose
+     * pointer it cleared (empty when none); null when nothing matched (the arenas are left as
+     * they were).
      *
      * Every arena row is locked first (arena before match, like ArenasRepository): an arena
      * selection holds its arena's lock until it commits, so none can point an arena at this
@@ -103,33 +114,38 @@ export class MatchesRepository {
     async softDeleteIf(
         id: string,
         expected: FindOptionsWhere<Match>,
-    ): Promise<boolean> {
+    ): Promise<string[] | null> {
         try {
-            await this.repository.manager.transaction(async (manager) => {
-                // Read through the manager so this module doesn't depend on ArenasModule
-                await manager.find(Arena, {
-                    select: { id: true },
-                    order: { id: 'ASC' },
-                    lock: { mode: 'pessimistic_write' },
-                });
-                await manager.update(
-                    Arena,
-                    { currentMatchId: id },
-                    { currentMatchId: null },
-                );
-                const result = await manager.softDelete(Match, {
-                    ...expected,
-                    id,
-                    deletedAt: IsNull(),
-                });
-                if (result.affected !== 1) {
-                    throw NOTHING_DELETED;
-                }
-            });
-            return true;
+            return await this.repository.manager.transaction(
+                async (manager) => {
+                    // Read through the manager so this module doesn't depend on ArenasModule
+                    const arenas = await manager.find(Arena, {
+                        select: { id: true, currentMatchId: true },
+                        order: { id: 'ASC' },
+                        lock: { mode: 'pessimistic_write' },
+                    });
+                    await manager.update(
+                        Arena,
+                        { currentMatchId: id },
+                        { currentMatchId: null },
+                    );
+                    const result = await manager.softDelete(Match, {
+                        ...expected,
+                        id,
+                        deletedAt: IsNull(),
+                    });
+                    if (result.affected !== 1) {
+                        throw NOTHING_DELETED;
+                    }
+                    // The rows are locked, so these are exactly the pointers the update cleared
+                    return arenas
+                        .filter((arena) => arena.currentMatchId === id)
+                        .map((arena) => arena.id);
+                },
+            );
         } catch (error) {
             if (error === NOTHING_DELETED) {
-                return false;
+                return null;
             }
             throw error;
         }
