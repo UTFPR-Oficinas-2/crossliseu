@@ -95,4 +95,28 @@ describe('ArenaConnections', () => {
             false,
         );
     });
+
+    describe('send', () => {
+        it('returns false for an unknown arena', () => {
+            expect(new ArenaConnections().send('a1', 'x')).toBe(false);
+        });
+
+        it('does not send on a socket that is not open', () => {
+            const connections = new ArenaConnections();
+            const send = vi.fn();
+            connections.claim('a1', { ...socket(), readyState: 2, send });
+
+            expect(connections.send('a1', 'x')).toBe(false);
+            expect(send).not.toHaveBeenCalled();
+        });
+
+        it('sends on an open socket', () => {
+            const connections = new ArenaConnections();
+            const send = vi.fn();
+            connections.claim('a1', { ...socket(), send });
+
+            expect(connections.send('a1', 'x')).toBe(true);
+            expect(send).toHaveBeenCalledWith('x');
+        });
+    });
 });
