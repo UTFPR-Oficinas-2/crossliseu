@@ -63,7 +63,9 @@ describe('describeCameraError', () => {
   })
 
   it('falls back to a generic message', () => {
-    expect(describeCameraError(cameraError('SomethingElse'))).toBe('Não foi possível abrir a câmera.')
+    expect(describeCameraError(cameraError('SomethingElse'))).toBe(
+      'Não foi possível abrir a câmera.',
+    )
     expect(describeCameraError('not an error')).toBe('Não foi possível abrir a câmera.')
   })
 })

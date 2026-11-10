@@ -13,6 +13,7 @@ import type { SelectOption } from '@/components/ui/select-field'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
+import FightRecorderPanel from '@/views/operator/components/FightRecorderPanel.vue'
 
 const buttonVariants = [
   { variant: 'primary', label: 'Criar campeonato' },
@@ -90,6 +91,9 @@ const fights = [
 
 const operatorExits = ref(0)
 const signOuts = ref(0)
+
+// The recorder asks for the camera as soon as it mounts, so it only mounts on demand
+const showRecorder = ref(false)
 </script>
 
 <template>
@@ -324,6 +328,15 @@ const signOuts = ref(0)
       <p class="text-body-s preview__label">
         "Sair da operação" clicado {{ operatorExits }} vez(es)
       </p>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Operator / Gravação da luta</h2>
+      <FightRecorderPanel v-if="showRecorder" match-id="preview" />
+      <div v-else class="preview__row">
+        <AppButton variant="secondary" @click="showRecorder = true">Abrir gravador</AppButton>
+        <p class="text-body-s preview__label">Pede acesso à câmera ao abrir.</p>
+      </div>
     </section>
   </div>
 </template>
