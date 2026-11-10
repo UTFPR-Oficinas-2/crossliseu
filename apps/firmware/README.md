@@ -155,7 +155,7 @@ The display relies on Arduino core 3.x accepting `begin()` on an already started
 
 U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp` had it on 22.
 
-`displayPoll()`, called every loop, checks one LCD every 500 ms (each LCD every 1 s) and redraws each line every 10 s to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn (it takes two bad checks in a row, so one glitch on the bus does nothing), and one missing at boot is looked for every 2 s. Each LCD write is checked afterwards; a failed one is not counted as shown. The log lines are `display: LCD U3 not found ...`, `display: LCD U3 lost or reset, reconnecting` and `display: LCD U3 write failed, reconnecting`. The I2C timeout is 20 ms, so a stuck bus cannot hold up the WebSocket and the buttons for long.
+`displayPoll()`, called every loop, checks one LCD every 500 ms (each LCD every 1 s) and redraws each line every 10 s to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn (an LCD that answers with its E line high has reset and is set up again at once; one that does not answer needs two bad checks in a row, so a single glitch on the bus does nothing), and one missing at boot is looked for every 2 s. The LCD is checked before and after every line write, and a line only counts as shown when both checks pass, so a failed write is tried again. The log lines are `display: LCD U3 not found ...` and `display: LCD U3 lost or reset, reconnecting`. The I2C timeout is 20 ms, so a stuck bus cannot hold up the WebSocket and the buttons for long.
 
 ### Other boards
 

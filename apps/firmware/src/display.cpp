@@ -91,18 +91,37 @@ bool readPort(Lcd& l, uint8_t& port) {
   return true;
 }
 
-// A biblioteca ignora os erros do I2C, então depois de escrever confere se o LCD
-// ainda responde: só então a linha conta como mostrada. Senão o LCD fica fora, e
-// displayPoll() o traz de volta e redesenha tudo.
+enum class Health { Ok, NoAck, Reset };
+
+// Estado do LCD pela porta do PCF8574: NoAck se não respondeu; Reset se respondeu
+// com o E em 1 (voltou de um reset, ver LCD_E_MASK em pins.h).
+Health check(Lcd& l) {
+  uint8_t port;
+  if (!readPort(l, port)) return Health::NoAck;
+  return LCD_E_MASK != 0 && (port & LCD_E_MASK) != 0 ? Health::Reset : Health::Ok;
+}
+
+// Registra uma leitura e diz se o LCD passou a estar perdido: um reset vale na
+// hora, um erro de leitura só depois de LINK_LOST_AFTER seguidos. Perdido fica
+// fora (online = false) até displayPoll() reconectar.
+bool judge(Lcd& l, Health h) {
+  if (!l.link.lost(h == Health::Ok, h == Health::Reset)) return false;
+  Serial.printf("display: LCD %s lost or reset, reconnecting\n", l.name);
+  l.online = false;
+  return true;
+}
+
+// Só conta como mostrada a linha escrita num LCD que respondia antes e depois: a
+// biblioteca ignora os erros do I2C, e um LCD que resetou entre duas leituras
+// teria o E em 0 de novo depois de qualquer escrita. Com uma leitura ruim só, não
+// escreve (ou não marca) e a linha é tentada de novo.
 bool drawRow(Lcd& l, uint8_t row) {
+  const Health before = check(l);
+  if (judge(l, before) || before != Health::Ok) return false;
   l.lcd->setCursor(0, row);
   l.lcd->print(wanted[row]);
-  uint8_t port;
-  if (!readPort(l, port)) {
-    Serial.printf("display: LCD %s write failed, reconnecting\n", l.name);
-    l.online = false;
-    return false;
-  }
+  const Health after = check(l);
+  if (judge(l, after) || after != Health::Ok) return false;
   memcpy(l.shown[row], wanted[row], LCD_COLS + 1);
   return true;
 }
@@ -122,19 +141,16 @@ bool connect(Lcd& l, bool report = false) {
   l.lcd->begin(LCD_COLS, 2, *l.bus);
   l.lcd->setBacklight(255);
   l.lcd->clear();
-  l.online = true;  // drawRow() baixa para false se uma escrita falhar
-  for (uint8_t row = 0; row < 2 && l.online; row++) drawRow(l, row);
-  if (!l.online) return false;
   l.link.reset();
+  l.online = true;
+  bool drawn = true;
+  for (uint8_t row = 0; row < 2 && drawn; row++) drawn = drawRow(l, row);
+  if (!drawn) {
+    l.online = false;
+    return false;
+  }
   Serial.printf("display: LCD %s at 0x%02X (SDA %u, SCL %u)\n", l.name, addr, l.sda, l.scl);
   return true;
-}
-
-// Lê a porta do PCF8574: false se o LCD não respondeu ou voltou de um reset.
-bool stillOk(Lcd& l) {
-  uint8_t port;
-  if (!readPort(l, port)) return false;
-  return LCD_E_MASK == 0 || (port & LCD_E_MASK) == 0;
 }
 
 // Escreve uma linha (já com 16 caracteres) nos dois LCDs, só onde ela mudou.
@@ -175,12 +191,12 @@ void displayPoll() {
     if (row == 0) connect(l);  // um LCD fora tenta voltar a cada 2 s
     return;
   }
-  if (l.link.lost(stillOk(l))) {
-    Serial.printf("display: LCD %s lost or reset, reconnecting\n", l.name);
-    l.online = false;
+  const Health h = check(l);
+  if (judge(l, h)) {
     connect(l);
     return;
   }
+  if (h != Health::Ok) return;  // uma leitura ruim só: neste rodízio não escreve nada
   if (repair) drawRow(l, row);  // conserta a linha se o conteúdo da tela se corrompeu
 }
 

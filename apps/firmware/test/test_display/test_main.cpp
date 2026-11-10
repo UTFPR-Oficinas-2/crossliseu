@@ -117,6 +117,12 @@ static void test_link_two_bad_polls_in_a_row_is_lost() {
   TEST_ASSERT_TRUE(m.lost(false));
 }
 
+// LCD que responde com o E em 1 voltou de um reset: não há o que debater.
+static void test_link_reset_evidence_is_lost_at_once() {
+  LinkMonitor m;
+  TEST_ASSERT_TRUE(m.lost(false, true));
+}
+
 static void test_link_reset_clears_failures() {
   LinkMonitor m;
   m.lost(false);
@@ -164,6 +170,7 @@ int main() {
   RUN_TEST(test_demo_clock_stop_clears_pause);
   RUN_TEST(test_link_one_bad_poll_is_not_lost);
   RUN_TEST(test_link_two_bad_polls_in_a_row_is_lost);
+  RUN_TEST(test_link_reset_evidence_is_lost_at_once);
   RUN_TEST(test_link_reset_clears_failures);
   RUN_TEST(test_time_issue_examples);
   RUN_TEST(test_time_rounds_up);
