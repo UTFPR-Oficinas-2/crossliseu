@@ -140,6 +140,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 .worktrees
 .claude
+.superpowers
 
 # Python cache
 __pycache__/
