@@ -139,6 +139,8 @@ All pins are in [`src/pins.h`](src/pins.h). The defaults are the box PCB's (ESP3
 | Surrender, side B | `PIN_SURRENDER_B` | 32 |
 | LCD U3 | `PIN_LCD1_SDA`, `PIN_LCD1_SCL` | SDA 21, SCL 23 |
 | LCD U4 | `PIN_LCD2_SDA`, `PIN_LCD2_SCL` | SDA 18, SCL 19 |
+| LCD I2C address (U3, U4) | `LCD1_ADDR`, `LCD2_ADDR` | 0 (scan at boot) |
+| LCD reset check | `LCD_E_MASK` | 0x04 (PCF8574 P2; 0 turns it off) |
 | LED strip (#42) | (colors confirmed in #42) | 25, 26, 33 |
 
 The strip is not driven yet (#42). Each LCD has its own I2C bus, so the ESP32's two I2C controllers are both in use.
@@ -147,11 +149,13 @@ Surrender buttons (`src/buttons.cpp`) use the internal pull-up; the other contac
 
 A press counts once, after the reading stays the same for 30 ms; holding the button counts nothing more. A button already pressed at boot (or an NC button with a loose wire) is not a press.
 
-LCDs (`src/display.cpp`): two 16x2 LCDs with a PCF8574 I2C backpack, U3 on `Wire` and U4 on `Wire1`, both showing the same thing. The I2C address is found at boot (0x20-0x27 or 0x38-0x3F) and printed as `display: LCD U3 at 0x27`. VCC is 5 V.
+LCDs (`src/display.cpp`): two 16x2 LCDs with a PCF8574 I2C backpack, U3 on `Wire` and U4 on `Wire1`, both showing the same thing. The I2C address is found at boot (0x20-0x27 or 0x38-0x3F) and printed as `display: LCD U3 at 0x27 (SDA 21, SCL 23)`. If another device on the same bus also answers in those ranges, the log says so (`display: U3 bus has several devices ...`); pin the address with `-DLCD1_ADDR=0x27` / `-DLCD2_ADDR=0x27`. A backpack whose E line is not on P2 uses `-DLCD_E_MASK=0` to turn off the "E reads high means reset" check. VCC is 5 V.
+
+The display relies on Arduino core 3.x accepting `begin()` on an already started I2C bus (the library calls it without pins). That is why `platformio.ini` pins the pioarduino release; on an older core the LCD buses would be reset to the default pins and stop answering.
 
 U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp` had it on 22.
 
-`displayPoll()`, called every loop, checks one LCD every 500 ms (each LCD every 1 s) and redraws each line every 10 s to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn, and one missing at boot is looked for every 2 s. Each change is logged (`display: LCD U3 lost or reset, reconnecting`).
+`displayPoll()`, called every loop, checks one LCD every 500 ms (each LCD every 1 s) and redraws each line every 10 s to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn (it takes two bad checks in a row, so one glitch on the bus does nothing), and one missing at boot is looked for every 2 s. Each LCD write is checked afterwards; a failed one is not counted as shown. The log lines are `display: LCD U3 not found ...`, `display: LCD U3 lost or reset, reconnecting` and `display: LCD U3 write failed, reconnecting`. The I2C timeout is 20 ms, so a stuck bus cannot hold up the WebSocket and the buttons for long.
 
 ### Other boards
 
@@ -180,7 +184,7 @@ Then build and flash it with `pio run -e my_board -t upload` (in VS Code, pick t
 
 Pins to avoid: 6 to 11 (wired to the flash memory), 34 to 39 for buttons (no internal pull-up), and 0, 2, 5, 12 and 15 for buttons (the chip reads them at boot).
 
-On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo, `-DPIN_ONBOARD_LED=25` is enough for the LED and buttons: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`. The LCDs are in the demo too, so also move `PIN_LCD1_SDA` (21) and `PIN_LCD2_SDA` / `PIN_LCD2_SCL` (18, 19) to free pins; otherwise the demo drives the OLED power and LoRa lines as I2C.
+On the **Heltec WiFi LoRa 32 V2**, the onboard LED is GPIO 25, and these pins are wired to the OLED and the LoRa radio: 4, 15, 16 (OLED), 21 (OLED power), 0 (PRG button), 5, 14, 18, 19, 26, 27 (LoRa), 34, 35. The firmware does not use the OLED or the radio, but several PCB defaults (18, 19, 21, 25, 26, 27) are on these pins, so move them. For the current demo, `-DPIN_ONBOARD_LED=25` is enough for the LED and buttons: button A on 27 still works because the radio is not used, and 32 is free; to keep off the radio's pins, add `-DPIN_SURRENDER_A=13`. The LCDs are in the demo too, so also move `PIN_LCD1_SDA` (21) and `PIN_LCD2_SDA` / `PIN_LCD2_SCL` (18, 19) to free pins; otherwise the demo drives the OLED power and LoRa lines as I2C. An env with `board = heltec_wifi_lora_32_V2` refuses to build until those three LCD pins are set (see the commented `[env:heltec_v2]` in `platformio.ini`, whose pins are not bench-tested). The check cannot fire with the generic `esp32dev` board, which does not know it is a Heltec, so there the warning above is all there is.
 
 For the old `main.cpp` / `Definitions.h`:
 
