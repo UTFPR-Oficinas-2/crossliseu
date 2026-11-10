@@ -151,7 +151,7 @@ LCDs (`src/display.cpp`): two 16x2 LCDs with a PCF8574 I2C backpack, U3 on `Wire
 
 U3's SCL is 23 on the PCB (checked on the bench); the old `lcd_led_botao_01.cpp` had it on 22.
 
-`displayPoll()`, called every loop, redraws one LCD line every 500 ms (each line every 2 s) to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn, and one missing at boot is looked for every 2 s. Each change is logged (`display: LCD U3 lost or reset, reconnecting`).
+`displayPoll()`, called every loop, checks one LCD every 500 ms (each LCD every 1 s) and redraws each line every 10 s to repair a garbled screen. An LCD that stops answering or comes back from a reset (power glitch, loose 5 V wire) is set up again and redrawn, and one missing at boot is looked for every 2 s. Each change is logged (`display: LCD U3 lost or reset, reconnecting`).
 
 ### Other boards
 

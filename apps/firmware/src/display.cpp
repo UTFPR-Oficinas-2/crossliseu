@@ -38,9 +38,11 @@ constexpr uint32_t I2C_HZ = 100000;
 constexpr uint16_t I2C_TIMEOUT_MS = 20;
 
 // A cada CHECK_MS, displayPoll() cuida de uma linha de um LCD, em rodízio: cada
-// linha é redesenhada a cada 2 s e cada LCD verificado a cada 1 s. Redesenhar
+// LCD é verificado a cada 1 s e cada linha redesenhada a cada REPAIR_EVERY
+// rodízios de 2 s (10 s), só para consertar uma tela corrompida. Redesenhar
 // uma linha leva ~10 ms de I2C, então é uma por vez para não travar o loop().
 constexpr uint32_t CHECK_MS = 500;
+constexpr uint8_t REPAIR_EVERY = 5;
 
 // Na ligação padrão do módulo PCF8574, P2 é o E do LCD (LCD_E_MASK em pins.h). A
 // biblioteca sempre o deixa em 0 depois de escrever, e o PCF8574 volta de um reset
@@ -52,6 +54,7 @@ char wanted[2][LCD_COLS + 1];       // o que os dois LCDs devem mostrar
 long shownSeconds = -1;             // segundos do último showTime, para só formatar quando muda
 uint32_t lastCheckMs = 0;
 uint8_t nextCheck = 0;              // 0..3: LCD nextCheck / 2, linha nextCheck % 2
+uint8_t rotations = 0;              // rodízios completos desde o último reparo, 0..REPAIR_EVERY-1
 
 // Algum dispositivo responde neste endereço?
 bool probe(TwoWire& bus, uint8_t addr) {
@@ -165,6 +168,8 @@ void displayPoll() {
   Lcd& l = lcds[nextCheck / 2];
   const uint8_t row = nextCheck % 2;
   nextCheck = (nextCheck + 1) % 4;
+  const bool repair = rotations == 0;  // só no primeiro rodízio de cada REPAIR_EVERY
+  if (nextCheck == 0) rotations = (rotations + 1) % REPAIR_EVERY;
 
   if (!l.online) {
     if (row == 0) connect(l);  // um LCD fora tenta voltar a cada 2 s
@@ -176,7 +181,7 @@ void displayPoll() {
     connect(l);
     return;
   }
-  drawRow(l, row);  // conserta a linha se o conteúdo da tela se corrompeu
+  if (repair) drawRow(l, row);  // conserta a linha se o conteúdo da tela se corrompeu
 }
 
 void showTime(long ms) {
