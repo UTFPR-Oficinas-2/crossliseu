@@ -9,4 +9,5 @@ void arenaBegin();                                 // Wi-Fi + socket, a partir d
 void arenaLoop();                                  // a cada loop(): Wi-Fi, reconexão, liveness e quadros recebidos
 bool arenaConnected();                             // true entre o welcome e o fechamento do socket
 void onArenaState(void (*cb)(const ArenaState&));  // chamado a cada `state` válido
+const ArenaState& arenaState();                    // último state desta conexão; volta ao padrão (Idle) a cada welcome
 bool arenaSendSurrender(char side);                // 'A' ou 'B', com o matchId do último state; false se não conectado

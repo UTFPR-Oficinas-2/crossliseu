@@ -25,14 +25,11 @@ static constexpr long TEST_MATCH_MS = 3L * 60 * 1000;
 
 static DemoClock demo(TEST_MATCH_MS);  // contagem de teste dos LCDs (comandos "t" e "p")
 
-static ArenaState lastState;  // último `state` recebido, para a fita seguir a caixa
-
 // Teste à mão da fita (comando "l"): -1 = seguir a caixa; 0..6 = LedState fixo.
 static int manualLed = -1;
 static constexpr int LED_STATE_COUNT = 7;
 
-static void onState(const ArenaState& s) {
-  lastState = s;
+static void printState(const ArenaState& s) {
   Serial.printf("demo: robots A=\"%s\" B=\"%s\"\n", s.robotA, s.robotB);
 }
 
@@ -97,7 +94,7 @@ void setup() {
   showMessage("CROSSLISEU");
   showTime(TEST_MATCH_MS);
   buttonsBegin();
-  onArenaState(onState);
+  onArenaState(printState);
   arenaBegin();
   printHelp();
 }
@@ -107,7 +104,7 @@ void loop() {
   const bool connected = arenaConnected();
   digitalWrite(PIN_ONBOARD_LED, connected ? HIGH : LOW);
 
-  const LedState led = manualLed >= 0 ? static_cast<LedState>(manualLed) : ledStateFor(connected, lastState);
+  const LedState led = manualLed >= 0 ? static_cast<LedState>(manualLed) : ledStateFor(connected, arenaState());
   setLedState(led);
 
   const Press press = pollButtons();

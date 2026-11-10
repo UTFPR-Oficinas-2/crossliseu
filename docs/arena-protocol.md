@@ -316,6 +316,7 @@ void arenaBegin();                                 // Wi-Fi + socket, from confi
 void arenaLoop();                                  // every loop: Wi-Fi, reconnect, liveness, incoming frames
 bool arenaConnected();                             // true between welcome and close
 void onArenaState(void (*cb)(const ArenaState&));  // called on every valid `state`
+const ArenaState& arenaState();                    // last `state` of this connection; back to the default (idle) on each welcome
 bool arenaSendSurrender(char side);                // 'A' or 'B', with the last state's matchId; false if not connected
 ```
 
