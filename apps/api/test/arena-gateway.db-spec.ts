@@ -489,6 +489,19 @@ describe('/arena gateway (db)', () => {
             expect(stateOf(await within(opened.next(), 1000))).toEqual(IDLE);
         });
 
+        it('sends idle when the picked match is deleted with DELETE /matches/:id', async () => {
+            const fight = await seedFight();
+            const { box: opened } = await welcomedBox();
+            await pick(fight.id);
+            expect(stateOf(await within(opened.next(), 1000)).status).toBe(
+                'scheduled',
+            );
+
+            await http().delete(`/matches/${fight.id}`).set(auth()).expect(204);
+
+            expect(stateOf(await within(opened.next(), 1000))).toEqual(IDLE);
+        });
+
         it('a box connecting mid-fight gets ongoing with the time left', async () => {
             const fight = await seedFight();
             await seedOngoing(fight.id, new Date(Date.now() - 60_000));
