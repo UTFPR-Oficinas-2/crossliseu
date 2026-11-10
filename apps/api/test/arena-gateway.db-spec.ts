@@ -236,12 +236,19 @@ describe('/arena gateway (db)', () => {
         return found!.online;
     }
 
-    beforeAll(async () => {
+    /**
+     * Starts the app every test talks to. One app per process at a time: two apps in one process
+     * are not independent (see the restart test in fight.db-spec.ts), and once a second one is
+     * closed, POST /auth/login on the first answers 500.
+     */
+    async function startApp(): Promise<void> {
         app = await createTestApp();
         await app.listen(0);
         ds = dataSourceOf(app);
         url = urlOf(app);
-    });
+    }
+
+    beforeAll(startApp);
 
     beforeEach(async () => {
         await resetDatabase(ds);
@@ -394,15 +401,17 @@ describe('/arena gateway (db)', () => {
     });
 
     it('closes connected boxes with 1001 on shutdown', async () => {
-        const other = await createTestApp();
-        await other.listen(0);
-        const opened = await openBox(urlOf(other));
+        // Shuts the shared app down, then starts a new one for the tests after this one
+        const opened = await openBox(url);
         opened.ws.send(hello());
         await opened.next();
 
-        await other.close();
-
-        expect((await opened.closed).code).toBe(1001);
+        try {
+            await app.close();
+            expect((await opened.closed).code).toBe(1001);
+        } finally {
+            await startApp();
+        }
     });
     describe('state push', () => {
         it('sends idle right after welcome when the arena has no match', async () => {
