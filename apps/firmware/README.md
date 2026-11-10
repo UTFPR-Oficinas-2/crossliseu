@@ -89,7 +89,7 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 - The onboard LED (`PIN_ONBOARD_LED`, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
 - Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
 - Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
-- Both LCDs show `CROSSLISEU` / `03:00` after boot. In the serial monitor, `t` starts a 3-minute test countdown on them (`TEMPO RESTANTE`), `p` stops it and shows `PAUSADA`, and `1` / `2` show `showTime(185000)` / `showTime(94210)` (`03:05` / `01:35`).
+- Both LCDs show `CROSSLISEU` / `03:00` after boot. In the serial monitor, `t` starts a 3-minute test countdown on them (`TEMPO RESTANTE`), `p` pauses it and shows `PAUSADA` (a later `t` continues from where it stopped), and `1` / `2` show `showTime(185000)` / `showTime(94210)` (`03:05` / `01:35`).
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |
