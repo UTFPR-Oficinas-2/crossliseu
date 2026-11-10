@@ -24,6 +24,7 @@ import { SetCurrentMatchDto } from './dto/set-current-match.dto.js';
 import { Arena } from './entities/arena.entity.js';
 import { ArenaConnections } from './device/arena-connections.js';
 import { CloseCode } from './device/arena-protocol.js';
+import { ArenaStatePusher } from './device/arena-state-pusher.js';
 
 const MAX_DEVICE_ID_ATTEMPTS = 5;
 
@@ -37,6 +38,7 @@ export class ArenasService {
     constructor(
         private readonly arenasRepository: ArenasRepository,
         private readonly connections: ArenaConnections,
+        private readonly pusher: ArenaStatePusher,
     ) {}
 
     async findAll(userId: string): Promise<ArenaResponse[]> {
@@ -166,6 +168,7 @@ export class ArenasService {
             this.logger.warn(result, { arenaId, matchId: dto.matchId });
             throw toException(result);
         }
+        void this.pusher.push(arenaId);
 
         const arena = await this.arenasRepository.findOwned(arenaId, userId);
         if (!arena) {
@@ -193,6 +196,7 @@ export class ArenasService {
             this.logger.warn(result, { arenaId });
             throw lockedException(result);
         }
+        void this.pusher.push(arenaId);
 
         const arena = await this.arenasRepository.findOwned(arenaId, userId);
         if (!arena) {
@@ -230,6 +234,7 @@ export class ArenasService {
             this.logger.warn(result, { arenaId });
             throw lockedException(result);
         }
+        void this.pusher.push(arenaId);
     }
 
     /** Closes the box connected with now-invalid credentials, as a fresh login would be refused */

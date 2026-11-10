@@ -1,5 +1,6 @@
 import type { Logger } from '@nestjs/common';
 import type { AuthenticatedArena } from '../arenas.service.js';
+import type { SurrenderResult } from '../../matches/fight/fight.service.js';
 import {
     SOCKET_OPEN,
     type ArenaConnections,
@@ -12,6 +13,7 @@ import {
     HELLO_TIMEOUT_MS,
     parseFrame,
     parseHello,
+    parseSurrender,
     PING_INTERVAL_MS,
     PROTOCOL_VERSION,
     welcomeFrame,
@@ -26,6 +28,14 @@ export type ArenaSessionDeps = {
     /** Slots for running credential checks; acquire() is false when all are taken */
     checks: { acquire(): boolean; release(): void };
     logger: Pick<Logger, 'warn' | 'error'>;
+    /** Sends the arena's box its current `state`; never rejects */
+    pushState(arenaId: string): Promise<void>;
+    /** Decides a surrender press from the arena's box */
+    surrender(
+        arenaId: string,
+        matchId: string | null,
+        side: 'A' | 'B',
+    ): Promise<SurrenderResult>;
 };
 
 type State = 'awaiting_hello' | 'checking' | 'authenticated' | 'closed';
@@ -84,6 +94,8 @@ export class ArenaSession {
         if (this.state === 'authenticated') {
             if (frame.event === 'hello') {
                 this.sendError('already_authenticated', 'Already logged in');
+            } else if (frame.event === 'surrender') {
+                await this.surrender(frame.data);
             } else {
                 this.sendError(
                     'unknown_event',
@@ -175,6 +187,58 @@ export class ArenaSession {
         const previous = this.deps.connections.claim(arena.id, this.socket);
         previous?.close(CloseCode.Replaced, 'replaced');
         this.socket.send(welcomeFrame(arena.name));
+        void this.deps.pushState(arena.id);
+    }
+
+    /** A counted surrender gets no reply: the new `state` comes through the fight change */
+    private async surrender(data: unknown): Promise<void> {
+        const surrender = parseSurrender(data);
+        if (!surrender) {
+            this.sendError(
+                'invalid_data',
+                'Expected side A or B and a matchId',
+            );
+            return;
+        }
+        const arenaId = this.arena!.id;
+        let result: SurrenderResult;
+        try {
+            result = await this.deps.surrender(
+                arenaId,
+                surrender.matchId,
+                surrender.side,
+            );
+        } catch (error) {
+            this.deps.logger.error('surrender_failed', {
+                arenaId,
+                matchId: surrender.matchId,
+                side: surrender.side,
+                message: error instanceof Error ? error.message : String(error),
+            });
+            this.replyIfOpen(
+                'surrender_rejected',
+                'Could not check the surrender',
+            );
+            return;
+        }
+        if (result === 'not_current_match') {
+            this.replyIfOpen(
+                'surrender_rejected',
+                "Not this arena's current match",
+            );
+        } else if (result === 'not_ongoing') {
+            this.replyIfOpen('surrender_rejected', 'Match is not ongoing');
+        }
+    }
+
+    /** An error reply after an await: the socket may have gone meanwhile */
+    private replyIfOpen(
+        code: Parameters<typeof errorFrame>[0],
+        message: string,
+    ): void {
+        if (!this.isClosed()) {
+            this.sendError(code, message);
+        }
     }
 
     /**

@@ -57,6 +57,8 @@ describe('ArenaSession', () => {
         connections: ArenaConnections;
         checks: { acquire: Mock<() => boolean>; release: Mock<() => void> };
         logger: { warn: Mock<() => void>; error: Mock<() => void> };
+        pushState: Mock<ArenaSessionDeps['pushState']>;
+        surrender: Mock<ArenaSessionDeps['surrender']>;
     };
 
     function open(): { socket: FakeSocket; session: ArenaSession } {
@@ -90,6 +92,12 @@ describe('ArenaSession', () => {
                 release: vi.fn<() => void>(),
             },
             logger: { warn: vi.fn<() => void>(), error: vi.fn<() => void>() },
+            pushState: vi.fn<ArenaSessionDeps['pushState']>(() =>
+                Promise.resolve(),
+            ),
+            surrender: vi.fn<ArenaSessionDeps['surrender']>(() =>
+                Promise.resolve('done'),
+            ),
         };
     });
 
@@ -471,13 +479,162 @@ describe('ArenaSession', () => {
         it('answers other events after welcome with unknown_event', async () => {
             const { socket, session } = await welcomed();
 
-            await session.onMessage(frame('surrender', { side: 'A' }));
             await session.onMessage(frame('dance'));
+            await session.onMessage(frame('state'));
 
             expect(socket.sent).toEqual([
                 errorOf('unknown_event'),
                 errorOf('unknown_event'),
             ]);
+        });
+    });
+
+    describe('state', () => {
+        it('pushes state right after welcome', async () => {
+            const { socket, session } = open();
+            deps.pushState.mockImplementationOnce(() => {
+                // welcome is already out when the push starts
+                expect(socket.sent).toEqual([
+                    { event: 'welcome', data: { arenaName: 'Arena 01' } },
+                ]);
+                return Promise.resolve();
+            });
+
+            await session.onMessage(hello());
+
+            expect(deps.pushState).toHaveBeenCalledTimes(1);
+            expect(deps.pushState).toHaveBeenCalledWith('arena-1');
+        });
+
+        it('does not push state for a refused login', async () => {
+            const { session } = open();
+
+            await session.onMessage(hello({ token: 'nope' }));
+
+            expect(deps.pushState).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('surrender', () => {
+        it('surrender done sends nothing back', async () => {
+            const { socket, session } = await welcomed();
+
+            await session.onMessage(
+                frame('surrender', { side: 'B', matchId: 'm-1' }),
+            );
+
+            expect(deps.surrender).toHaveBeenCalledWith('arena-1', 'm-1', 'B');
+            expect(socket.sent).toEqual([]);
+        });
+
+        it('passes a null matchId through', async () => {
+            const { session } = await welcomed();
+
+            await session.onMessage(
+                frame('surrender', { side: 'A', matchId: null }),
+            );
+
+            expect(deps.surrender).toHaveBeenCalledWith('arena-1', null, 'A');
+        });
+
+        it.each([
+            ['not_current_match', "Not this arena's current match"],
+            ['not_ongoing', 'Match is not ongoing'],
+        ] as const)(
+            'surrender rejected (%s) answers surrender_rejected',
+            async (result, message) => {
+                deps.surrender.mockResolvedValueOnce(result);
+                const { socket, session } = await welcomed();
+
+                await session.onMessage(
+                    frame('surrender', { side: 'A', matchId: 'm-1' }),
+                );
+
+                expect(socket.sent).toEqual([
+                    {
+                        event: 'error',
+                        data: { code: 'surrender_rejected', message },
+                    },
+                ]);
+            },
+        );
+
+        it.each([
+            ['no data', undefined],
+            ['no matchId', { side: 'A' }],
+            ['a bad side', { side: 'C', matchId: 'm-1' }],
+            ['a numeric matchId', { side: 'A', matchId: 3 }],
+        ])(
+            'malformed surrender (%s) answers invalid_data and does not call deps.surrender',
+            async (_l, data) => {
+                const { socket, session } = await welcomed();
+
+                await session.onMessage(frame('surrender', data));
+
+                expect(socket.sent).toEqual([
+                    {
+                        event: 'error',
+                        data: {
+                            code: 'invalid_data',
+                            message: 'Expected side A or B and a matchId',
+                        },
+                    },
+                ]);
+                expect(deps.surrender).not.toHaveBeenCalled();
+            },
+        );
+
+        it('surrender before welcome answers not_authenticated', async () => {
+            const { socket, session } = open();
+
+            await session.onMessage(
+                frame('surrender', { side: 'A', matchId: 'm-1' }),
+            );
+
+            expect(socket.sent).toEqual([errorOf('not_authenticated')]);
+            expect(deps.surrender).not.toHaveBeenCalled();
+        });
+
+        it('a throwing deps.surrender answers surrender_rejected and logs error', async () => {
+            deps.surrender.mockRejectedValueOnce(new Error('db down'));
+            const { socket, session } = await welcomed();
+
+            await expect(
+                session.onMessage(
+                    frame('surrender', { side: 'A', matchId: 'm-1' }),
+                ),
+            ).resolves.toBeUndefined();
+
+            expect(socket.sent).toEqual([
+                {
+                    event: 'error',
+                    data: {
+                        code: 'surrender_rejected',
+                        message: 'Could not check the surrender',
+                    },
+                },
+            ]);
+            expect(deps.logger.error).toHaveBeenCalledWith(
+                'surrender_failed',
+                expect.objectContaining({
+                    arenaId: 'arena-1',
+                    message: 'db down',
+                }),
+            );
+        });
+
+        it('sends no reply when the socket closed during the surrender check', async () => {
+            const { socket, session } = await welcomed();
+            deps.surrender.mockImplementationOnce(() => {
+                socket.readyState = 2;
+                return Promise.resolve('not_ongoing');
+            });
+
+            await session.onMessage(
+                frame('surrender', { side: 'A', matchId: 'm-1' }),
+            );
+
+            expect(socket.sent).toEqual([]);
         });
     });
 
