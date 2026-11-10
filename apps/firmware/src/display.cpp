@@ -24,13 +24,14 @@ struct Lcd {
   bool online;                         // respondeu na última verificação
   char shown[2][LCD_COLS + 1];         // o que está na tela, para só reescrever o que mudou
   LinkMonitor link;                    // conta leituras ruins seguidas antes de dar o LCD por perdido
+  uint8_t fixedAddr;                   // LCD1_ADDR / LCD2_ADDR de pins.h; 0 = procurar na varredura
 };
 
 // Pinos em pins.h. Na PCB, o SCL do U3 é o 23 (conferido na bancada); o
 // lcd_led_botao_01.cpp antigo usava o 22.
 Lcd lcds[] = {
-    {"U3", &Wire, PIN_LCD1_SDA, PIN_LCD1_SCL, 0, nullptr, false, {}, {}},
-    {"U4", &Wire1, PIN_LCD2_SDA, PIN_LCD2_SCL, 0, nullptr, false, {}, {}},
+    {"U3", &Wire, PIN_LCD1_SDA, PIN_LCD1_SCL, 0, nullptr, false, {}, {}, LCD1_ADDR},
+    {"U4", &Wire1, PIN_LCD2_SDA, PIN_LCD2_SCL, 0, nullptr, false, {}, {}, LCD2_ADDR},
 };
 
 constexpr uint32_t I2C_HZ = 100000;
@@ -51,16 +52,32 @@ long shownSeconds = -1;             // segundos do último showTime, para só fo
 uint32_t lastCheckMs = 0;
 uint8_t nextCheck = 0;              // 0..3: LCD nextCheck / 2, linha nextCheck % 2
 
+// Algum dispositivo responde neste endereço?
+bool probe(TwoWire& bus, uint8_t addr) {
+  bus.beginTransmission(addr);
+  return bus.endTransmission() == 0;
+}
+
 // Endereço do módulo I2C do LCD (PCF8574: 0x20-0x27, PCF8574A: 0x38-0x3F), ou 0.
-uint8_t findLcd(TwoWire& bus) {
+// É o primeiro que responde; com report, avisa no log se outro também responde
+// (outro dispositivo no barramento pode ser confundido com o LCD).
+uint8_t findLcd(TwoWire& bus, const char* name, bool report) {
   const uint8_t ranges[][2] = {{0x20, 0x27}, {0x38, 0x3F}};
+  uint8_t found = 0;
   for (const auto& r : ranges) {
     for (uint8_t addr = r[0]; addr <= r[1]; addr++) {
-      bus.beginTransmission(addr);
-      if (bus.endTransmission() == 0) return addr;
+      if (!probe(bus, addr)) continue;
+      if (!found) {
+        found = addr;
+        if (!report) return found;
+      } else {
+        Serial.printf("display: %s bus has several devices (0x%02X 0x%02X), using 0x%02X; set LCD1_ADDR/LCD2_ADDR to choose\n",
+                      name, found, addr, found);
+        return found;
+      }
     }
   }
-  return 0;
+  return found;
 }
 
 void drawRow(Lcd& l, uint8_t row) {
@@ -70,8 +87,8 @@ void drawRow(Lcd& l, uint8_t row) {
 }
 
 // Procura o LCD no barramento, inicializa e desenha as duas linhas.
-bool connect(Lcd& l) {
-  const uint8_t addr = findLcd(*l.bus);
+bool connect(Lcd& l, bool report = false) {
+  const uint8_t addr = l.fixedAddr ? (probe(*l.bus, l.fixedAddr) ? l.fixedAddr : 0) : findLcd(*l.bus, l.name, report);
   if (!addr) return false;
   if (!l.lcd || l.addr != addr) {
     delete l.lcd;
@@ -113,7 +130,7 @@ void displayBegin() {
 
   for (Lcd& l : lcds) {
     l.bus->begin(l.sda, l.scl, I2C_HZ);
-    if (!connect(l)) Serial.printf("display: LCD %s not found (SDA %u, SCL %u)\n", l.name, l.sda, l.scl);
+    if (!connect(l, true)) Serial.printf("display: LCD %s not found (SDA %u, SCL %u)\n", l.name, l.sda, l.scl);
   }
   started = true;
   lastCheckMs = millis();

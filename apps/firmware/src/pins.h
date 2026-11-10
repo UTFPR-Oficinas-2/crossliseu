@@ -40,6 +40,14 @@
 #ifndef PIN_LCD2_SCL
 #define PIN_LCD2_SCL 19
 #endif
+// Endereço I2C de cada LCD (0x20-0x27 ou 0x38-0x3F). 0 = procurar na varredura do
+// boot; fixe o valor (-DLCD1_ADDR=0x27) quando outro dispositivo divide o barramento.
+#ifndef LCD1_ADDR
+#define LCD1_ADDR 0
+#endif
+#ifndef LCD2_ADDR
+#define LCD2_ADDR 0
+#endif
 // Bit do PCF8574 ligado ao E do LCD (P2 = 0x04 no módulo padrão), usado para
 // notar que o LCD resetou. Um módulo ligado de outro jeito usa -DLCD_E_MASK=0
 // para desligar essa checagem e ficar só com a resposta do LCD no barramento.
