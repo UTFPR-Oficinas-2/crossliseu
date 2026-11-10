@@ -7,11 +7,7 @@
 
 #include "arena.h"
 #include "buttons.h"
-
-// O DevKit genérico (esp32dev) não define LED_BUILTIN; o LED azul dele fica no GPIO 2.
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 2
-#endif
+#include "pins.h"
 
 static void printState(const ArenaState& s) {
   Serial.printf("demo: robots A=\"%s\" B=\"%s\"\n", s.robotA, s.robotB);
@@ -19,7 +15,7 @@ static void printState(const ArenaState& s) {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(PIN_ONBOARD_LED, OUTPUT);
   delay(500);
   Serial.println("\nCrossliseu arena box");
   buttonsBegin();
@@ -29,7 +25,7 @@ void setup() {
 
 void loop() {
   arenaLoop();
-  digitalWrite(LED_BUILTIN, arenaConnected() ? HIGH : LOW);
+  digitalWrite(PIN_ONBOARD_LED, arenaConnected() ? HIGH : LOW);
 
   const Press press = pollButtons();
   if (press != Press::None) Serial.printf("button: %c\n", press == Press::A ? 'A' : 'B');

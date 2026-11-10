@@ -1,16 +1,12 @@
-// Botões de desistência (#41). Pinos e ligação em README.md ("Pins").
+// Botões de desistência (#41). Pinos e nível de "apertado" em src/pins.h; ligação em README.md ("Pins").
 #include "buttons.h"
 
 #include <Arduino.h>
 
 #include "debouncer.h"
+#include "pins.h"
 
 namespace {
-
-// Os dois usam o pull-up interno do ESP32. Os contatos são diferentes, então o
-// nível de "apertado" também é.
-constexpr uint8_t PIN_A = 27;  // lado A, contato NO: apertado = LOW
-constexpr uint8_t PIN_B = 32;  // lado B, contato NC: apertado = HIGH
 
 constexpr uint32_t DEBOUNCE_MS = 30;  // leitura estável por 30 ms para valer
 
@@ -21,14 +17,14 @@ Debouncer debounceB(DEBOUNCE_MS);
 bool pendingA = false;
 bool pendingB = false;
 
-bool readA() { return digitalRead(PIN_A) == LOW; }
-bool readB() { return digitalRead(PIN_B) == HIGH; }
+bool readA() { return digitalRead(PIN_SURRENDER_A) == SURRENDER_A_PRESSED; }
+bool readB() { return digitalRead(PIN_SURRENDER_B) == SURRENDER_B_PRESSED; }
 
 }  // namespace
 
 void buttonsBegin() {
-  pinMode(PIN_A, INPUT_PULLUP);
-  pinMode(PIN_B, INPUT_PULLUP);
+  pinMode(PIN_SURRENDER_A, INPUT_PULLUP);
+  pinMode(PIN_SURRENDER_B, INPUT_PULLUP);
   delayMicroseconds(100);  // tempo para o pull-up subir antes da primeira leitura
 
   // Primeira leitura: só aprende o estado inicial, não conta como aperto.
