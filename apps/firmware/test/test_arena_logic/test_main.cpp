@@ -2,6 +2,7 @@
 // Rodam no computador: pio test -e native
 #include <unity.h>
 #include <ArduinoJson.h>
+#include <stdio.h>
 #include <string.h>
 #include <string>
 #include "arena_logic.h"
@@ -103,9 +104,9 @@ static void test_state_idle() {
 static void test_state_running() {
   ArenaState s;
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"running","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":180000,"endReason":null,"robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ongoing","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":180000,"endReason":null,"robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
                          s, text, sizeof text) == FrameKind::State);
-  TEST_ASSERT_TRUE(s.status == ArenaStatus::Running);
+  TEST_ASSERT_TRUE(s.status == ArenaStatus::Ongoing);
   TEST_ASSERT_EQUAL_STRING("6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33", s.matchId);
   TEST_ASSERT_TRUE(s.hasRemaining);
   TEST_ASSERT_EQUAL_INT32(180000, s.remainingMs);
@@ -116,11 +117,67 @@ static void test_state_running() {
 static void test_state_ended() {
   ArenaState s;
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ended","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":61530,"endReason":"surrender_B","robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"finished","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33","remainingMs":61530,"endReason":"surrender","robots":{"A":{"name":"Tritura"},"B":{"name":"Ferrugem"}}}})",
                          s, text, sizeof text) == FrameKind::State);
-  TEST_ASSERT_TRUE(s.status == ArenaStatus::Ended);
+  TEST_ASSERT_TRUE(s.status == ArenaStatus::Finished);
   TEST_ASSERT_EQUAL_INT32(61530, s.remainingMs);
-  TEST_ASSERT_TRUE(s.endReason == EndReason::SurrenderB);
+  TEST_ASSERT_TRUE(s.endReason == EndReason::Surrender);
+}
+
+// Um state com o status dado; os outros campos null.
+static FrameKind parseStatusOnly(const char* status, const char* endReason, ArenaState& s) {
+  char json[192];
+  char reason[48] = "null";
+  if (endReason) snprintf(reason, sizeof reason, "\"%s\"", endReason);
+  snprintf(json, sizeof json, R"({"event":"state","data":{"status":"%s","matchId":null,"remainingMs":null,"endReason":%s,"robots":null}})",
+           status, reason);
+  char text[64];
+  return parseServerFrame(json, strlen(json), s, text, sizeof text);
+}
+
+// Os nomes de docs/arena-protocol.md ("Statuses"), sem tradução.
+static void test_state_all_statuses() {
+  const char* names[] = {"idle", "scheduled", "ongoing", "paused", "finished"};
+  const ArenaStatus expected[] = {ArenaStatus::Idle, ArenaStatus::Scheduled, ArenaStatus::Ongoing, ArenaStatus::Paused,
+                                  ArenaStatus::Finished};
+  for (int i = 0; i < 5; i++) {
+    ArenaState s;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly(names[i], nullptr, s) == FrameKind::State, names[i]);
+    TEST_ASSERT_TRUE_MESSAGE(s.status == expected[i], names[i]);
+  }
+}
+
+// Os nomes de docs/arena-protocol.md ("End reasons").
+static void test_state_end_reasons() {
+  const char* names[] = {"time_out", "manual", "surrender"};
+  const EndReason expected[] = {EndReason::TimeOut, EndReason::Manual, EndReason::Surrender};
+  for (int i = 0; i < 3; i++) {
+    ArenaState s;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly("finished", names[i], s) == FrameKind::State, names[i]);
+    TEST_ASSERT_TRUE_MESSAGE(s.endReason == expected[i], names[i]);
+  }
+}
+
+// Os nomes antigos não valem mais: o quadro é recusado e o último state fica.
+static void test_state_old_status_rejected() {
+  const char* names[] = {"ready", "running", "ended"};
+  for (const char* name : names) {
+    ArenaState s;
+    s.status = ArenaStatus::Ongoing;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly(name, nullptr, s) != FrameKind::State, name);
+    TEST_ASSERT_TRUE_MESSAGE(s.status == ArenaStatus::Ongoing, name);
+  }
+}
+
+static void test_state_old_end_reason_rejected() {
+  const char* names[] = {"surrender_A", "surrender_B", "operator_ended"};
+  for (const char* name : names) {
+    ArenaState s;
+    s.status = ArenaStatus::Ongoing;
+    TEST_ASSERT_TRUE_MESSAGE(parseStatusOnly("finished", name, s) != FrameKind::State, name);
+    TEST_ASSERT_TRUE_MESSAGE(s.status == ArenaStatus::Ongoing, name);
+    TEST_ASSERT_TRUE_MESSAGE(s.endReason == EndReason::None, name);
+  }
 }
 
 static void test_state_unknown_status() {
@@ -133,7 +190,7 @@ static void test_state_unknown_status() {
 static void test_state_long_name() {
   std::string name;
   for (int i = 0; i < 40; i++) name += "\xC3\xA9";  // "é", 2 bytes
-  std::string json = R"({"event":"state","data":{"status":"ready","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
+  std::string json = R"({"event":"state","data":{"status":"scheduled","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
                      name + R"("},"B":{"name":"x"}}}})";
   ArenaState s;
   char text[64];
@@ -148,7 +205,7 @@ static void test_state_long_name_odd_cut() {
   // 31 bytes ASCII + "é": cortar em 32 partiria o "é"; deve ficar só o ASCII.
   std::string name(31, 'a');
   name += "\xC3\xA9";
-  std::string json = R"({"event":"state","data":{"status":"ready","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
+  std::string json = R"({"event":"state","data":{"status":"scheduled","matchId":"m","remainingMs":1000,"endReason":null,"robots":{"A":{"name":")" +
                      name + R"("},"B":{"name":"x"}}}})";
   ArenaState s;
   char text[64];
@@ -159,7 +216,7 @@ static void test_state_long_name_odd_cut() {
 static void test_state_long_match_id() {
   ArenaState s;
   char text[64];
-  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"ready","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33X","remainingMs":1000,"endReason":null,"robots":null}})",
+  TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"scheduled","matchId":"6f1c2a9e-0b7d-4a51-9d0e-2c8f4e1a7b33X","remainingMs":1000,"endReason":null,"robots":null}})",
                          s, text, sizeof text) == FrameKind::Bad);
 }
 
@@ -173,11 +230,11 @@ static void test_state_bad_not_applied() {
   // Um state inválido não pode alterar o último state válido.
   ArenaState s;
   strcpy(s.matchId, "keep");
-  s.status = ArenaStatus::Running;
+  s.status = ArenaStatus::Ongoing;
   char text[64];
   TEST_ASSERT_TRUE(parse(R"({"event":"state","data":{"status":"exploded","matchId":"other"}})", s, text, sizeof text) == FrameKind::Bad);
   TEST_ASSERT_EQUAL_STRING("keep", s.matchId);
-  TEST_ASSERT_TRUE(s.status == ArenaStatus::Running);
+  TEST_ASSERT_TRUE(s.status == ArenaStatus::Ongoing);
 }
 
 static void test_frame_error() {
@@ -261,6 +318,10 @@ int main() {
   RUN_TEST(test_state_idle);
   RUN_TEST(test_state_running);
   RUN_TEST(test_state_ended);
+  RUN_TEST(test_state_all_statuses);
+  RUN_TEST(test_state_end_reasons);
+  RUN_TEST(test_state_old_status_rejected);
+  RUN_TEST(test_state_old_end_reason_rejected);
   RUN_TEST(test_state_unknown_status);
   RUN_TEST(test_state_long_name);
   RUN_TEST(test_state_long_name_odd_cut);
