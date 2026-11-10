@@ -127,14 +127,14 @@ Line 1 is `showMessage`, line 2 is `showTime`. The display only draws what it is
 | `LedState` | Box state | Colour |
 | --- | --- | --- |
 | `NotConnected` | No `welcome` yet | Magenta, blinking (0.5 s on, 0.5 s off) |
-| `Connected` | `idle` | Blue → green → red, 1 s each, cycling |
-| `Ready` | `scheduled` | Pink in 5 brightness steps (20% to 100%, 1 s each), off 1 s, again: an F1 start |
-| `Running` | `ongoing` | White |
+| `Connected` | `idle` | Cyan |
+| `Ready` | `scheduled` | Blue in 5 brightness steps (20% to 100%, 1 s each), off 1 s, again: an F1 start |
+| `Running` | `ongoing` | Green |
 | `Paused` | `paused` | Yellow |
 | `Surrender` | `finished`, `surrender` | Red |
 | `Ended` | `finished`, `time_out` / `manual` | White, blinking (a chequered flag), until the operator closes the match |
 
-`ledStateFor(connected, state)` in `led_pattern.h` picks the `LedState` for the last `state`, for #42. The strip can't do a real F1 "lights out": the box doesn't know when the operator will press Start, so it jumps from pink to white when the server's `ongoing` arrives.
+Each state lights its own mix of the red, green and blue channels (red only for `Surrender`), so no two look alike at any brightness; `test_led` checks it. `ledStateFor(connected, state)` in `led_pattern.h` picks the `LedState` for the last `state`, for #42. The strip can't do a real F1 "lights out": the box doesn't know when the operator will press Start, so it jumps from blue to green when the server's `ongoing` arrives.
 
 ## Pins
 

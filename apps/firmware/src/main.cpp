@@ -27,7 +27,6 @@ static DemoClock demo(TEST_MATCH_MS);  // contagem de teste dos LCDs (comandos "
 
 // Teste à mão da fita (comando "l"): -1 = seguir a caixa; 0..6 = LedState fixo.
 static int manualLed = -1;
-static constexpr int LED_STATE_COUNT = 7;
 
 static void printState(const ArenaState& s) {
   Serial.printf("demo: robots A=\"%s\" B=\"%s\"\n", s.robotA, s.robotB);
