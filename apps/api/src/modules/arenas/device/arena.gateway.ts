@@ -3,6 +3,7 @@ import { OnGatewayConnection, WebSocketGateway } from '@nestjs/websockets';
 import type { WebSocket } from 'ws';
 import { Public } from '../../auth/public-decorator.js';
 import { ArenasService } from '../arenas.service.js';
+import { FightService } from '../../matches/fight/fight.service.js';
 import { ArenaConnections } from './arena-connections.js';
 import {
     CloseCode,
@@ -10,6 +11,7 @@ import {
     MAX_CONCURRENT_CHECKS,
 } from './arena-protocol.js';
 import { ArenaSession } from './arena-session.js';
+import { ArenaStatePusher } from './arena-state-pusher.js';
 
 /** How long shutdown waits for boxes to acknowledge the 1001 close before ws terminates them */
 const SHUTDOWN_GRACE_MS = 1_000;
@@ -32,6 +34,8 @@ export class ArenaGateway
     constructor(
         private readonly arenasService: ArenasService,
         private readonly connections: ArenaConnections,
+        private readonly pusher: ArenaStatePusher,
+        private readonly fight: FightService,
     ) {}
 
     handleConnection(client: WebSocket): void {
@@ -58,6 +62,9 @@ export class ArenaGateway
                 },
             },
             logger: this.logger,
+            pushState: (arenaId) => this.pusher.push(arenaId),
+            surrender: (arenaId, matchId, side) =>
+                this.fight.surrender(arenaId, matchId, side),
         });
         this.sockets.add(client);
 

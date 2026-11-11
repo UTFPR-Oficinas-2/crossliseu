@@ -4,6 +4,7 @@ import { ArenasService } from './arenas.service.js';
 import { Arena } from './entities/arena.entity.js';
 import { ArenaConnections } from './device/arena-connections.js';
 import type { DeviceSocket } from './device/arena-connections.js';
+import type { ArenaStatePusher } from './device/arena-state-pusher.js';
 import type { Match } from '../matches/entities/match.entity.js';
 import * as bcrypt from 'bcrypt';
 import type {
@@ -104,11 +105,13 @@ function setup(
         ),
     };
     const connections = new ArenaConnections();
+    const pusher = { push: vi.fn((_arenaId: string) => Promise.resolve()) };
     const service = new ArenasService(
         arenasRepository as unknown as ArenasRepository,
         connections,
+        pusher as unknown as ArenaStatePusher,
     );
-    return { service, arenasRepository, connections };
+    return { service, arenasRepository, connections, pusher };
 }
 
 describe('ArenasService.findAll', () => {
@@ -580,5 +583,62 @@ describe('ArenasService revokes a connected box', () => {
 
         expect(box.close).not.toHaveBeenCalled();
         expect(connections.isOnline(ARENA_1_ID)).toBe(true);
+    });
+});
+
+describe('ArenasService pushes the arena state to the box', () => {
+    it("setCurrentMatch, clearCurrentMatch and releaseCurrentMatch push the arena after 'done'", async () => {
+        const { service, pusher, arenasRepository } = setup([
+            arena(ARENA_1_ID, 'Arena 1', null),
+        ]);
+        // The push comes after the write
+        pusher.push.mockImplementation(() => {
+            expect(
+                arenasRepository.setCurrentMatch.mock.calls.length +
+                    arenasRepository.clearCurrentMatch.mock.calls.length,
+            ).toBe(pusher.push.mock.calls.length);
+            return Promise.resolve();
+        });
+
+        await service.setCurrentMatch(
+            ARENA_1_ID,
+            { matchId: MATCH_ID },
+            'user-a',
+        );
+        expect(pusher.push).toHaveBeenCalledTimes(1);
+        await service.clearCurrentMatch(ARENA_1_ID, 'user-a');
+        expect(pusher.push).toHaveBeenCalledTimes(2);
+        await service.releaseCurrentMatch(ARENA_1_ID);
+        expect(pusher.push).toHaveBeenCalledTimes(3);
+
+        expect(pusher.push.mock.calls).toEqual([
+            [ARENA_1_ID],
+            [ARENA_1_ID],
+            [ARENA_1_ID],
+        ]);
+    });
+
+    it('a refused pick pushes nothing', async () => {
+        const { service, pusher } = setup(
+            [arena(ARENA_1_ID, 'Arena 1', OTHER_MATCH_ID)],
+            {
+                setResult: 'arena_match_started',
+                lockedResult: 'arena_match_started',
+            },
+        );
+
+        await expect(
+            service.setCurrentMatch(
+                ARENA_1_ID,
+                { matchId: MATCH_ID },
+                'user-a',
+            ),
+        ).rejects.toThrow();
+        await expect(
+            service.clearCurrentMatch(ARENA_1_ID, 'user-a'),
+        ).rejects.toThrow();
+        await expect(service.releaseCurrentMatch(ARENA_1_ID)).rejects.toThrow();
+
+        expect(pusher.push).not.toHaveBeenCalled();
     });
 });

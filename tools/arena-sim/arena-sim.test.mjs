@@ -73,13 +73,13 @@ test('describeState summarises a state snapshot', () => {
     );
     assert.equal(
         describeState({
-            status: 'ended',
+            status: 'finished',
             matchId: '6f1c',
             remainingMs: 61530,
-            endReason: 'surrender_B',
+            endReason: 'surrender',
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
         }),
-        'ENDED 01:02 (surrender_B)  A=Tritura  B=Ferrugem  match=6f1c',
+        'FINISHED 01:02 (surrender)  A=Tritura  B=Ferrugem  match=6f1c',
     );
 });
 
