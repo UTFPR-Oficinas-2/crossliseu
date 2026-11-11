@@ -141,6 +141,8 @@ def main():
     mock_video = os.environ.get("CV_MOCK_VIDEO") or None
     if mock_video and not os.path.isfile(mock_video):
         raise SystemExit(f"CV_MOCK_VIDEO does not exist: {mock_video}")
+    if mock_video:
+        log.warning("MOCK MODE: every job runs on %s; results are NOT from the uploaded recording", mock_video)
 
     worker = Worker(url, storage, mock_video)
     # docker compose stop sends SIGTERM: stop consuming, and the current job's message stays
