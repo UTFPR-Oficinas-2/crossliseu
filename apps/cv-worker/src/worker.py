@@ -79,40 +79,55 @@ class Worker:
     def on_message(self, channel, method, properties, body):
         # The pipeline takes minutes; running it here would block the connection's heartbeats
         # and RabbitMQ would drop the worker mid-job. It runs in a thread and hands the ack back.
-        threading.Thread(target=self.process, args=(method, body), daemon=True).start()
+        # The thread keeps the channel the message came on: a delivery tag is only valid there.
+        threading.Thread(target=self.process, args=(channel, method, body), daemon=True).start()
 
-    def process(self, method, body):
+    def process(self, channel, method, body):
         tag, redelivered = method.delivery_tag, method.redelivered
         try:
             match_id, _ = parse_request(body)
-            self.threadsafe(lambda: publish(self.channel, {"matchId": match_id, "status": "running"}))
+            self.on_channel(channel, lambda: publish(channel, {"matchId": match_id, "status": "running"}))
             log.info("job %s started", match_id)
             started = time.monotonic()
             result = run_job(body, self.storage, self.mock_video)
             log.info("job %s done in %.1f s", match_id, time.monotonic() - started)
-            self.threadsafe(lambda: self.finish(tag, result))
+            self.on_channel(channel, lambda: self.finish(channel, tag, result))
         except PermanentJobError as error:
             log.error("job failed for good: %s %s", error.code, error)
             message = failed_message(body, error.code, str(error))
-            self.threadsafe(lambda: self.finish(tag, message))
+            self.on_channel(channel, lambda: self.finish(channel, tag, message))
         except Exception as error:  # transient: network, R2 or RabbitMQ hiccup
             if redelivered:
                 # Already retried once: give up instead of looping forever
                 log.exception("job failed again after a retry")
                 message = failed_message(body, "processing_failed", repr(error))
-                self.threadsafe(lambda: self.finish(tag, message))
+                self.on_channel(channel, lambda: self.finish(channel, tag, message))
             else:
                 log.exception("job failed; back to the queue for one retry")
-                self.threadsafe(lambda: self.channel.basic_nack(tag, requeue=True))
+                self.on_channel(channel, lambda: channel.basic_nack(tag, requeue=True))
 
-    def finish(self, tag, message):
+    def finish(self, channel, tag, message):
         """Publish the result, then ack: if the worker dies in between, the job is redone."""
-        publish(self.channel, message)
-        self.channel.basic_ack(tag)
+        publish(channel, message)
+        channel.basic_ack(tag)
 
-    def threadsafe(self, callback):
-        # pika channels are not thread safe: hand the call to the connection's own thread
-        self.connection.add_callback_threadsafe(callback)
+    def on_channel(self, channel, callback):
+        """Run `callback` on the connection's own thread (pika is not thread safe), if the channel
+        the message came on is still open. When the connection dropped mid-job, RabbitMQ has
+        already put the message back in the queue, and acking it on a newer channel would close
+        that channel; so the result is dropped and the job runs again."""
+        connection = channel.connection
+
+        def guarded():
+            if channel.is_open:
+                callback()
+            else:
+                log.warning("channel closed during the job; RabbitMQ will deliver it again")
+
+        try:
+            connection.add_callback_threadsafe(guarded)
+        except Exception:  # the connection itself is already closed
+            log.warning("connection closed during the job; RabbitMQ will deliver it again")
 
 
 def main():
