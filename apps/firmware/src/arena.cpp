@@ -19,6 +19,10 @@ namespace {
 constexpr uint32_t CONNECT_TIMEOUT_MS = 15000;    // TCP + TLS + upgrade sem CONNECTED
 constexpr uint32_t HANDSHAKE_TIMEOUT_MS = 15000;  // hello enviado sem welcome
 constexpr uint32_t LIVENESS_MS = 30000;           // nada do servidor (ping ou mensagem)
+// Wi-Fi caído por esse tempo: chama WiFi.begin() de novo. O setAutoReconnect do core
+// desiste depois de um WL_CONNECT_FAILED (por exemplo, um hotspot ainda religando) e
+// a caixa ficava sem rede até ser reiniciada.
+constexpr uint32_t WIFI_RETRY_MS = 10000;
 
 enum class Phase : uint8_t { WifiDown, Waiting, Connecting, Handshaking, Connected, Stopped };
 
@@ -213,7 +217,7 @@ void logWifiStatus(wl_status_t status) {
   const char* text;
   switch (status) {
     case WL_NO_SSID_AVAIL: text = "network not found (check WIFI_SSID, case-sensitive; the ESP32 only sees 2.4 GHz)"; break;
-    case WL_CONNECT_FAILED: text = "connect failed (check WIFI_PASSWORD)"; break;
+    case WL_CONNECT_FAILED: text = "connect failed (check WIFI_PASSWORD, or the network is still starting)"; break;
     case WL_CONNECTION_LOST: text = "connection lost"; break;
     default: text = "not connected"; break;
   }
@@ -235,6 +239,12 @@ void arenaLoop() {
       if (wifiUp) {
         Serial.printf("arena: wifi up %s\n", WiFi.localIP().toString().c_str());
         startAttempt();
+      } else if (millis() - phaseSince >= WIFI_RETRY_MS) {
+        // Não confia só no reconnect automático: tenta de novo a cada WIFI_RETRY_MS.
+        Serial.printf("arena: wifi still down after %lu s, trying again\n", (unsigned long)(WIFI_RETRY_MS / 1000));
+        WiFi.disconnect();
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+        enter(Phase::WifiDown);  // recomeça a contar os 10 s
       }
       return;
 

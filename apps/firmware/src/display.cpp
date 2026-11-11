@@ -52,6 +52,7 @@ constexpr uint8_t REPAIR_EVERY = 5;
 bool started = false;               // displayBegin() ligou os barramentos
 char wanted[2][LCD_COLS + 1];       // o que os dois LCDs devem mostrar
 long shownSeconds = -1;             // segundos do último showTime, para só formatar quando muda
+constexpr long NO_TIME = -2;        // shownSeconds depois de clearTime(): linha de baixo vazia
 uint32_t lastCheckMs = 0;
 uint8_t nextCheck = 0;              // 0..3: LCD nextCheck / 2, linha nextCheck % 2
 uint8_t rotations = 0;              // rodízios completos desde o último reparo, 0..REPAIR_EVERY-1
@@ -208,6 +209,14 @@ void showTime(long ms) {
   char line[LCD_COLS + 1];
   formatTime(ms, time);
   formatLine(time, line);
+  writeLine(1, line);
+}
+
+void clearTime() {
+  if (shownSeconds == NO_TIME) return;
+  shownSeconds = NO_TIME;
+  char line[LCD_COLS + 1];
+  formatLine("", line);
   writeLine(1, line);
 }
 

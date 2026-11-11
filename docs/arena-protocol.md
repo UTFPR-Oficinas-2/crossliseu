@@ -299,6 +299,7 @@ The firmware is split so the display, LED, button and network parts can be built
 void displayBegin();                    // sets up both LCDs; once in setup()
 void displayPoll();                     // every loop: redraws the LCDs and brings back one that was reset or unplugged
 void showTime(long ms);                 // draws ms as mm:ss, rounded up; ms <= 0 shows 00:00
+void clearTime();                       // empties the time line (not connected, idle)
 void showMessage(const char* text);     // status text, e.g. "SEM CONEXAO", "PREPARAR", "FIM DE TEMPO"
                                         // (screens per state: apps/firmware/README.md, "LCD screens")
 
