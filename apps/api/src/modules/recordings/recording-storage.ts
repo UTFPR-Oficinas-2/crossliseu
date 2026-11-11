@@ -66,6 +66,11 @@ export class R2RecordingStorage extends RecordingStorage {
         ? new S3Client({
               endpoint: this.settings.endpoint,
               region: 'auto', // R2 has no regions
+              // Recent SDK versions add a CRC32 checksum to every request by default, which
+              // lands in the presigned PUT URL as a parameter the browser never sends: only
+              // compute checksums when an operation requires them
+              requestChecksumCalculation: 'WHEN_REQUIRED',
+              responseChecksumValidation: 'WHEN_REQUIRED',
               credentials: {
                   accessKeyId: this.settings.accessKeyId,
                   secretAccessKey: this.settings.secretAccessKey,
