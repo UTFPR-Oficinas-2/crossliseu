@@ -12,7 +12,12 @@ const fight = {
     endReason: 'manual',
     robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
 };
-const operatorFight = { ...fight, closed: false, hasSelectedArena: true };
+const operatorFight = {
+    ...fight,
+    closed: false,
+    hasSelectedArena: true,
+    winnerSide: null,
+};
 
 function setup() {
     const service = {

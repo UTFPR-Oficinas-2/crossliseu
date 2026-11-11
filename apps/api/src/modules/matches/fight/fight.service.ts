@@ -28,6 +28,7 @@ interface Settled {
 export interface OperatorFightState extends FightState {
     closed: boolean;
     hasSelectedArena: boolean;
+    winnerSide: 'A' | 'B' | null;
 }
 
 export type SurrenderResult = 'done' | 'not_current_match' | 'not_ongoing';

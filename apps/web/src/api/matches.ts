@@ -78,6 +78,8 @@ export interface OperatorFightState {
   robots: { A: { name: string }; B: { name: string } }
   closed: boolean
   hasSelectedArena: boolean
+  /** Winning side when a surrender decided the fight */
+  winnerSide: 'A' | 'B' | null
 }
 
 export type FightCommand = 'start' | 'pause' | 'resume' | 'finish' | 'close'

@@ -12,6 +12,8 @@ import type { FightState } from './fight-state.js';
 export interface OperatorFightSnapshot extends Omit<FightState, 'remainingMs'> {
     events: ClockEvent[];
     hasSelectedArena: boolean;
+    /** Side of the winning robot, set when a surrender decided the fight */
+    winnerSide: 'A' | 'B' | null;
 }
 
 interface OperatorFightRow {
@@ -20,9 +22,22 @@ interface OperatorFightRow {
     endReason: Match['endReason'];
     robotA: string | null;
     robotB: string | null;
+    robotAId: string | null;
+    robotBId: string | null;
+    winnerRobotId: string | null;
     arenaId: string | null;
     eventType: MatchEventType | null;
     occurredAt: Date | null;
+}
+
+function winnerSide(row: OperatorFightRow): 'A' | 'B' | null {
+    if (row.winnerRobotId === null) {
+        return null;
+    }
+    if (row.winnerRobotId === row.robotAId) {
+        return 'A';
+    }
+    return row.winnerRobotId === row.robotBId ? 'B' : null;
 }
 
 export interface LockedFight {
@@ -153,6 +168,9 @@ export class FightRepository {
             .addSelect('fight.endReason', 'endReason')
             .addSelect('robotA.name', 'robotA')
             .addSelect('robotB.name', 'robotB')
+            .addSelect('robotA.id', 'robotAId')
+            .addSelect('robotB.id', 'robotBId')
+            .addSelect('fight.winnerRobotId', 'winnerRobotId')
             .addSelect('arena.id', 'arenaId')
             .addSelect('event.type', 'eventType')
             .addSelect('event.occurredAt', 'occurredAt')
@@ -181,6 +199,7 @@ export class FightRepository {
                     : [],
             ),
             hasSelectedArena: row.arenaId !== null,
+            winnerSide: winnerSide(row),
         };
     }
 

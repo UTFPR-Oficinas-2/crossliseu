@@ -130,6 +130,12 @@ function setup({
                           },
                           events: [...store.events],
                           hasSelectedArena: store.arenaPointer !== null,
+                          winnerSide: !store.match.winnerRobotId
+                              ? null
+                              : store.match.winnerRobotId ===
+                                  store.match.robotA?.id
+                                ? 'A'
+                                : 'B',
                       },
             ),
         ),
@@ -239,6 +245,7 @@ describe('FightService', () => {
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
             closed: false,
             hasSelectedArena: true,
+            winnerSide: null,
         });
     });
 

@@ -27,6 +27,7 @@ function snapshot(overrides: Partial<OperatorFightState> = {}): OperatorFightSta
     endReason: null,
     robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
     closed: false,
+    winnerSide: null,
     hasSelectedArena: true,
     ...overrides,
   }
@@ -61,7 +62,7 @@ describe('useFightControl', () => {
     vi.useRealTimers()
   })
 
-  it('loads initially and waits five seconds after the current read finishes before polling', async () => {
+  it('loads initially and waits one second after the current read finishes before polling', async () => {
     const initial = deferred<OperatorFightState>()
     get.mockReturnValueOnce(initial.promise)
     const fight = start()
@@ -73,25 +74,25 @@ describe('useFightControl', () => {
     await tick()
     expect(fight.loadState.value).toBe('ready')
     expect(fight.remainingMs.value).toBe(180_000)
-    await tick(4_999)
+    await tick(999)
     expect(get).toHaveBeenCalledTimes(1)
     await tick(1)
     expect(get).toHaveBeenCalledTimes(2)
   })
 
   it('interpolates running time to zero and waits for the server to report timeout', async () => {
+    const timeout = deferred<OperatorFightState>()
     get
       .mockResolvedValueOnce(snapshot({ status: 'ongoing', remainingMs: 2_500 }))
-      .mockResolvedValueOnce(
-        snapshot({ status: 'finished', remainingMs: 0, endReason: 'time_out' }),
-      )
+      .mockReturnValueOnce(timeout.promise)
     const fight = start()
     await tick(1_000)
     expect(fight.remainingMs.value).toBe(1_500)
     await tick(1_500)
     expect(fight.remainingMs.value).toBe(0)
     expect(fight.state.value?.status).toBe('ongoing')
-    await tick(2_500)
+    timeout.resolve(snapshot({ status: 'finished', remainingMs: 0, endReason: 'time_out' }))
+    await tick()
     expect(fight.state.value).toMatchObject({ status: 'finished', endReason: 'time_out' })
   })
 
@@ -99,17 +100,19 @@ describe('useFightControl', () => {
     get
       .mockResolvedValueOnce(snapshot({ status: 'ongoing', remainingMs: 30_000 }))
       .mockResolvedValueOnce(snapshot({ status: 'ongoing', remainingMs: 24_500 }))
-      .mockResolvedValueOnce(snapshot({ status: 'paused', remainingMs: 21_000 }))
+      .mockResolvedValue(snapshot({ status: 'paused', remainingMs: 21_000 }))
     const fight = start()
-    await tick(6_000)
-    expect(fight.remainingMs.value).toBe(23_500)
-    await tick(8_000)
+    await tick(1_000)
+    expect(fight.remainingMs.value).toBe(24_500)
+    await tick(500)
+    expect(fight.remainingMs.value).toBe(24_000)
+    await tick(500)
     expect(fight.state.value?.status).toBe('paused')
     expect(fight.remainingMs.value).toBe(21_000)
   })
 
   it.each(['scheduled', 'paused', 'finished'] as const)('keeps %s time fixed', async (status) => {
-    get.mockResolvedValueOnce(snapshot({ status, remainingMs: 95_600 }))
+    get.mockResolvedValue(snapshot({ status, remainingMs: 95_600 }))
     const fight = start()
     await tick(4_000)
     expect(fight.remainingMs.value).toBe(95_600)
@@ -119,7 +122,7 @@ describe('useFightControl', () => {
     const poll = deferred<OperatorFightState>()
     get.mockResolvedValueOnce(snapshot()).mockReturnValueOnce(poll.promise)
     const fight = start()
-    await tick(5_000)
+    await tick(1_000)
     const refresh = fight.refresh()
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
     document.dispatchEvent(new Event('visibilitychange'))
@@ -176,7 +179,7 @@ describe('useFightControl', () => {
     get.mockResolvedValueOnce(snapshot()).mockReturnValueOnce(poll.promise)
     post.mockReturnValueOnce(command.promise)
     const fight = start()
-    await tick(5_000)
+    await tick(1_000)
     const request = fight.command('start')
     expect(get.mock.calls[1]?.[1]?.aborted).toBe(true)
     expect(fight.busy.value).toBe(true)
@@ -203,7 +206,7 @@ describe('useFightControl', () => {
   it('keeps the last snapshot after a failed refresh and blocks commands until a successful read', async () => {
     get.mockResolvedValueOnce(snapshot()).mockRejectedValueOnce(new ApiError(500, 'bad read'))
     const fight = start()
-    await tick(5_000)
+    await tick(1_000)
     expect(fight.loadState.value).toBe('error')
     expect(fight.state.value?.status).toBe('scheduled')
     expect(fight.error.value).toBeTruthy()
@@ -252,7 +255,7 @@ describe('useFightControl', () => {
     expect(fight.uncertainCommand.value).toBe('close')
     expect(fight.confirmedCloseMatchId.value).toBeNull()
     await fight.command('close')
-    await tick(5_000)
+    await tick(1_000)
     expect(fight.uncertainCommand.value).toBeNull()
     expect(fight.confirmedCloseMatchId.value).toBe('m1')
     expect(post).toHaveBeenCalledTimes(1)
@@ -276,7 +279,7 @@ describe('useFightControl', () => {
     await fight.resumeControls()
     expect(fight.uncertainCommand.value).toBeNull()
     expect(fight.loadState.value).toBe('ready')
-    await tick(5_000)
+    await tick(1_000)
     expect(fight.state.value?.closed).toBe(true)
     expect(fight.confirmedCloseMatchId.value).toBeNull()
   })

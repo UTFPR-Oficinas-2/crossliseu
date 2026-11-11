@@ -60,6 +60,7 @@ const scheduled: OperatorFightState = {
   endReason: null,
   robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
   closed: false,
+  winnerSide: null,
   hasSelectedArena: true,
 }
 const finished: OperatorFightState = {
@@ -180,6 +181,15 @@ describe('MatchOperationView', () => {
     expect(wrapper.get('[role="timer"]').text()).toBe('01:15')
   })
 
+  it('shows which side surrendered', async () => {
+    get.mockResolvedValueOnce({ ...finished, endReason: 'surrender', winnerSide: 'A' })
+    const { wrapper } = await mountFight()
+
+    expect(wrapper.text()).toContain('Desistência do lado B')
+    expect(wrapper.get('.fight-card__side--b').text()).toContain('Desistiu')
+    expect(wrapper.get('.fight-card__side--a').text()).not.toContain('Desistiu')
+  })
+
   it('allows Start with a selected arena and an unavailable camera', async () => {
     cameraError.value = 'Câmera indisponível.'
     post.mockResolvedValueOnce({ ...scheduled, status: 'ongoing' })
@@ -212,7 +222,7 @@ describe('MatchOperationView', () => {
     const { button, link } = await mountFight()
     expect(button('Iniciar luta')).toBeDefined()
 
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(button('Iniciar luta')).toBeUndefined()
     expect(link('Selecionar arena')?.attributes('href')).toBe('/operator')
   })
@@ -228,7 +238,7 @@ describe('MatchOperationView', () => {
     expect(button('Iniciar luta')?.attributes('disabled')).toBeDefined()
     pending.resolve({ ...scheduled, status: 'ongoing' })
     await flushPromises()
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(button('Pausar')?.attributes('disabled')).toBeDefined()
     expect(wrapper.getComponent(FightRecorderPanel).element).toBe(recorder)
   })
@@ -280,7 +290,7 @@ describe('MatchOperationView', () => {
     await click('Fechar luta')
     expect(router.currentRoute.value.name).toBe('match-operation')
 
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(1_000)
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('operator')
     expect(post).toHaveBeenCalledTimes(1)
@@ -310,7 +320,7 @@ describe('MatchOperationView', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     get.mockResolvedValueOnce(finished).mockResolvedValueOnce(closed)
     const { wrapper, router, button } = await mountFight()
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(router.currentRoute.value.name).toBe('match-operation')
     expect(wrapper.text()).toContain('Luta fechada')
     expect(button('Fechar luta')).toBeUndefined()

@@ -52,6 +52,18 @@ const reasonLabel: Record<MatchEndReason, string> = {
   surrender: 'Desistência',
 }
 
+const loserSide = computed(() => {
+  const { winnerSide, endReason } = state.value ?? {}
+  return endReason === 'surrender' && winnerSide ? (winnerSide === 'A' ? 'B' : 'A') : null
+})
+const reasonText = computed(() => {
+  const reason = state.value?.endReason
+  if (!reason) return ''
+  return reason === 'surrender' && loserSide.value
+    ? `Desistência do lado ${loserSide.value}`
+    : reasonLabel[reason]
+})
+
 const status = computed(() => state.value?.status ?? 'scheduled')
 const display = computed(() => displayByStatus[status.value])
 const clock = computed(() => formatElapsed(Math.ceil(remainingMs.value / 1000)))
@@ -102,15 +114,18 @@ function confirmResumeControls() {
     <section class="fight-card" aria-label="Controle da luta">
       <div class="fight-card__status" role="status">
         <StatusPill :label="state.closed ? 'Luta fechada' : display.label" :tone="display.tone" />
-        <span v-if="state.endReason" class="text-overline">{{ reasonLabel[state.endReason] }}</span>
+        <span v-if="state.endReason" class="text-overline">{{ reasonText }}</span>
       </div>
 
       <div class="fight-card__scoreboard">
         <CompetitorTile
           class="fight-card__side fight-card__side--a"
+          :class="{ 'fight-card__side--surrendered': loserSide === 'A' }"
           side="A"
           :robot="state.robots.A.name"
-        />
+        >
+          <StatusPill v-if="loserSide === 'A'" label="Desistiu" tone="danger" />
+        </CompetitorTile>
         <div class="fight-card__clock" :class="`fight-card__clock--${state.status}`">
           <span class="text-overline">{{ display.timer }}</span>
           <span class="fight-card__time text-timer-l" role="timer" :aria-label="display.timer">{{
@@ -119,9 +134,12 @@ function confirmResumeControls() {
         </div>
         <CompetitorTile
           class="fight-card__side fight-card__side--b"
+          :class="{ 'fight-card__side--surrendered': loserSide === 'B' }"
           side="B"
           :robot="state.robots.B.name"
-        />
+        >
+          <StatusPill v-if="loserSide === 'B'" label="Desistiu" tone="danger" />
+        </CompetitorTile>
       </div>
 
       <div class="fight-card__controls">
@@ -261,6 +279,10 @@ function confirmResumeControls() {
 
 .fight-card__side :deep(.text-display-page) {
   font-size: clamp(var(--text-heading-l-size), 3.34vw, var(--text-display-page-size));
+}
+
+.fight-card__side--surrendered {
+  opacity: 0.7;
 }
 
 .fight-card__side--a {

@@ -3,7 +3,7 @@ import type { MaybeRefOrGetter } from 'vue'
 import { ApiError } from '@/api/client'
 import { getFightState, sendFightCommand, type FightCommand, type OperatorFightState } from '@/data'
 
-const POLL_INTERVAL_MS = 5_000
+const POLL_INTERVAL_MS = 1_000
 const REQUEST_TIMEOUT_MS = 10_000
 const COUNTDOWN_INTERVAL_MS = 100
 

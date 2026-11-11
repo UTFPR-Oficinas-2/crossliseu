@@ -8,6 +8,7 @@ const snapshot: OperatorFightState = {
   endReason: null,
   robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
   closed: false,
+  winnerSide: null,
   hasSelectedArena: true,
 }
 

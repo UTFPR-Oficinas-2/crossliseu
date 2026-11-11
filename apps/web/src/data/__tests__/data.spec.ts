@@ -398,6 +398,7 @@ describe('operator fight data', () => {
     endReason: 'manual',
     robots: { A: { name: 'Titã' }, B: { name: 'Volt' } },
     closed: false,
+    winnerSide: null,
     hasSelectedArena: true,
   }
 
