@@ -56,11 +56,13 @@ beforeEach(() => {
   openFails = null
   mediaDevices = {
     // `{ video: true }` is the permission probe; the exact-device call opens the preview
-    getUserMedia: vi.fn(async (constraints: { video: unknown }) => {
-      const isPreview = typeof constraints.video === 'object'
-      if (isPreview && openFails) throw openFails
-      return fakeStream()
-    }),
+    getUserMedia: vi.fn<(constraints: { video: unknown }) => Promise<MediaStream>>(
+      async (constraints) => {
+        const isPreview = typeof constraints.video === 'object'
+        if (isPreview && openFails) throw openFails
+        return fakeStream()
+      },
+    ),
     enumerateDevices: vi.fn(async () => [CAMERA_A, CAMERA_B]),
     addEventListener: vi.fn<(type: string, handler: () => Promise<void>) => void>(),
     removeEventListener: vi.fn<(type: string, handler: () => Promise<void>) => void>(),
