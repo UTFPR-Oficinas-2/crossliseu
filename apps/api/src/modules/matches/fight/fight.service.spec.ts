@@ -1060,6 +1060,64 @@ describe('FightService time-out timer', () => {
         );
     });
 
+    it('a sync in flight at shutdown does not arm a timer', async () => {
+        const { service, repo, armed } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        let release: () => void = () => {};
+        repo.findEvents.mockImplementationOnce(
+            () =>
+                new Promise<MatchEvent[]>((resolve) => {
+                    release = () => resolve([event('started', T0)]);
+                }),
+        );
+        const sync = (
+            service as unknown as { syncTimer(id: string): Promise<void> }
+        ).syncTimer(MATCH_ID);
+        await vi.waitFor(() => expect(repo.findEvents).toHaveBeenCalled());
+
+        service.onModuleDestroy();
+        release();
+        await sync;
+
+        expect(armed.has(MATCH_ID)).toBe(false);
+    });
+
+    it('a time-out that fails after shutdown does not arm a retry', async () => {
+        const { service, repo, armed, clock } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        const error = vi
+            .spyOn(service.logger, 'error')
+            .mockImplementation(() => {});
+        await service.restoreTimeOuts();
+        let fail: () => void = () => {};
+        repo.withLockedFight.mockImplementationOnce(
+            () =>
+                new Promise<never>((_, reject) => {
+                    fail = () => reject(new Error('pool closed'));
+                }),
+        );
+        clock.current = at(180_000);
+        armed.get(MATCH_ID)?.onFire();
+        await vi.waitFor(() => expect(repo.withLockedFight).toHaveBeenCalled());
+
+        service.onModuleDestroy();
+        fail();
+        await vi.waitFor(() =>
+            expect(error).toHaveBeenCalledWith(
+                'fight_timeout_failed',
+                expect.objectContaining({ matchId: MATCH_ID }),
+            ),
+        );
+
+        expect(armed.has(MATCH_ID)).toBe(false);
+    });
+
     it('a failing settle inside onTimeOut is logged, not thrown', async () => {
         const { service, repo, armed, clock } = setup({
             state: 'ongoing',

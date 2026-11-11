@@ -55,6 +55,8 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly syncGen = new Map<string, number>();
     /** Never reset, so a generation is never handed out twice, even after a cancel deletes the entry */
     private syncCounter = 0;
+    /** Set at shutdown: work still in flight must not arm timers that outlive the app */
+    private destroyed = false;
 
     constructor(
         private readonly repo: FightRepository,
@@ -75,6 +77,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
     }
 
     onModuleDestroy(): void {
+        this.destroyed = true;
         this.timer.cancelAll();
     }
 
@@ -293,13 +296,16 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
             this.timer.cancel(matchId);
             return;
         }
-        this.timer.arm(
-            matchId,
-            at.getTime() - this.clock.now().getTime(),
-            () => {
-                void this.onTimeOut(matchId);
-            },
-        );
+        this.armTimer(matchId, at.getTime() - this.clock.now().getTime());
+    }
+
+    private armTimer(matchId: string, delayMs: number): void {
+        if (this.destroyed) {
+            return;
+        }
+        this.timer.arm(matchId, delayMs, () => {
+            void this.onTimeOut(matchId);
+        });
     }
 
     /** After a commit: a timer failure must not turn a successful write into an error */
@@ -320,9 +326,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
      * try again later; `onTimeOut` settles what is due and re-syncs, or cancels if not ongoing.
      */
     private armRetry(matchId: string): void {
-        this.timer.arm(matchId, TIMER_RETRY_MS, () => {
-            void this.onTimeOut(matchId);
-        });
+        this.armTimer(matchId, TIMER_RETRY_MS);
     }
 
     private async onTimeOut(matchId: string): Promise<void> {
