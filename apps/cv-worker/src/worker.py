@@ -32,7 +32,20 @@ RESULT_QUEUE = "analysis.finished"
 MAX_ATTEMPTS = 2
 ATTEMPT_HEADER = "x-attempt"
 
+# Exists while the worker is connected and consuming; the container healthcheck looks for it
+HEALTH_FILE = os.environ.get("WORKER_HEALTH_FILE", "/tmp/worker-healthy")
+
 log = logging.getLogger("cv-worker")
+
+
+def set_healthy(healthy):
+    try:
+        if healthy:
+            open(HEALTH_FILE, "w").close()
+        elif os.path.exists(HEALTH_FILE):
+            os.remove(HEALTH_FILE)
+    except OSError as error:
+        log.warning("could not update %s: %s", HEALTH_FILE, error)
 
 
 def declare_queues(channel):
@@ -77,9 +90,12 @@ class Worker:
                 self.channel.basic_qos(prefetch_count=1)
                 self.channel.basic_consume(queue=REQUEST_QUEUE, on_message_callback=self.on_message)
                 log.info("waiting for jobs on %s (mock video: %s)", REQUEST_QUEUE, self.mock_video or "off")
+                set_healthy(True)
                 self.channel.start_consuming()
+                set_healthy(False)
                 return  # stop() was called
             except pika.exceptions.AMQPConnectionError as error:
+                set_healthy(False)
                 log.warning("RabbitMQ not reachable (%s); retrying in 5 s", error)
                 # Wakes up at once if stop() is called while waiting
                 self._stopping.wait(5)
@@ -182,6 +198,8 @@ def main():
     if mock_video:
         log.warning("MOCK MODE: every job runs on %s; results are NOT from the uploaded recording", mock_video)
 
+    # A restarted container keeps its filesystem: drop a marker left by the previous run
+    set_healthy(False)
     worker = Worker(url, storage, mock_video)
     # docker compose stop sends SIGTERM: stop consuming, and the current job's message stays
     # unacked, so RabbitMQ hands it to the next worker

@@ -42,7 +42,8 @@ services:
   # Analysis jobs between the API and the CV worker. No published ports: only
   # containers on this compose network can reach it.
   rabbitmq:
-    image: rabbitmq:4.1
+    # Pinned like postgres: bump it on purpose, the data volume outlives the image
+    image: rabbitmq:4.1.8
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-crossliseu}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
@@ -64,10 +65,18 @@ services:
     # see the API's secrets (JWT, database, admin seed).
     environment:
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-crossliseu}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@rabbitmq:5672/
-      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:?set R2_ENDPOINT_URL in .env}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID in .env}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY in .env}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET in .env}
+    # Healthy while the worker is connected and consuming (see HEALTH_FILE in worker.py), so
+    # `up --wait` fails the deploy when it cannot reach RabbitMQ instead of passing on "running"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/worker-healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       rabbitmq:
         condition: service_healthy
