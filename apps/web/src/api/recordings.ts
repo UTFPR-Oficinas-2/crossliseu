@@ -1,9 +1,6 @@
-// Fight recording upload (#20), against the routes of #45 in apps/api. The video itself never
-// goes through the API: these two calls only ask for permission and confirm the upload. The
+// Fight recording upload (#20), against `RecordingsController` in apps/api (#45). The video itself
+// never goes through the API: these two calls only ask for permission and confirm the upload. The
 // bytes go straight from the browser to R2 with `uploadToR2` (./r2-upload.ts).
-//
-// The route paths and bodies below are a proposal until #45 lands; if the API ends up different,
-// only this file changes.
 import { apiRequest } from './client'
 
 /** Answer of POST /matches/:id/recording/upload-url */
@@ -25,16 +22,18 @@ export interface ApiRecordingComplete {
 
 /**
  * Step 1. POST /matches/:id/recording/upload-url (JWT). `contentType` is part of the signature,
- * so the PUT in step 2 must send the same Content-Type.
+ * and so is `size` (bytes), so the PUT in step 2 must send the same Content-Type and exactly that
+ * many bytes.
  */
 export function requestUploadUrl(
   matchId: string,
   contentType: string,
+  size: number,
   token: string,
 ): Promise<ApiRecordingUploadUrl> {
   return apiRequest(`/matches/${encodeURIComponent(matchId)}/recording/upload-url`, {
     method: 'POST',
-    body: { contentType },
+    body: { contentType, size },
     token,
   })
 }

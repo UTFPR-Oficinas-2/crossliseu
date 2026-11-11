@@ -5,11 +5,14 @@
 export class UploadError extends Error {
   /** HTTP status from R2, or `0` when the request never got a response (network, CORS, abort) */
   readonly status: number
+  /** True when the upload was cancelled on purpose (AbortSignal), not when something failed */
+  readonly aborted: boolean
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, aborted = false) {
     super(message)
     this.name = 'UploadError'
     this.status = status
+    this.aborted = aborted
   }
 }
 
@@ -29,7 +32,7 @@ export function uploadToR2(url: string, file: Blob, options: UploadOptions = {})
 
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new UploadError(0, 'Envio cancelado.'))
+      reject(new UploadError(0, 'Envio cancelado.', true))
       return
     }
 
@@ -51,7 +54,7 @@ export function uploadToR2(url: string, file: Blob, options: UploadOptions = {})
       }
     }
     xhr.onerror = () => reject(new UploadError(0, 'Falha de rede durante o envio.'))
-    xhr.onabort = () => reject(new UploadError(0, 'Envio cancelado.'))
+    xhr.onabort = () => reject(new UploadError(0, 'Envio cancelado.', true))
 
     signal?.addEventListener('abort', () => xhr.abort(), { once: true })
 
