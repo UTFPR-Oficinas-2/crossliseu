@@ -236,10 +236,7 @@ export function useFightControl(
         reconcile = true
       } else if (cause.status === 409) {
         loadState.value = 'error'
-        commandError.value =
-          cause.message === 'match_arena_required'
-            ? 'Selecione uma arena antes de iniciar a luta.'
-            : 'O estado da luta mudou. Confira os controles disponíveis.'
+        commandError.value = 'O estado da luta mudou. Confira os controles disponíveis.'
         reconcile = true
       } else {
         commandError.value = 'Não foi possível executar o comando.'

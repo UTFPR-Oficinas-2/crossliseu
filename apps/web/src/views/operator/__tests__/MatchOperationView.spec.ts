@@ -207,24 +207,18 @@ describe('MatchOperationView', () => {
     expect(button('Pausar')).toBeDefined()
   })
 
-  it('links to arena selection on direct entry without an assignment', async () => {
+  it('starts a scheduled fight without an arena and still offers to select one', async () => {
     get.mockResolvedValueOnce({ ...scheduled, hasSelectedArena: false })
     const { button, link } = await mountFight()
-    expect(button('Iniciar luta')).toBeUndefined()
+    expect(button('Iniciar luta')).toBeDefined()
+    expect(button('Iniciar luta')?.attributes('disabled')).toBeUndefined()
     expect(link('Selecionar arena')?.attributes('href')).toBe('/operator')
   })
 
-  it('replaces Start with arena selection when polling finds the assignment gone', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    get
-      .mockResolvedValueOnce(scheduled)
-      .mockResolvedValueOnce({ ...scheduled, hasSelectedArena: false })
-    const { button, link } = await mountFight()
-    expect(button('Iniciar luta')).toBeDefined()
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(button('Iniciar luta')).toBeUndefined()
-    expect(link('Selecionar arena')?.attributes('href')).toBe('/operator')
+  it('does not offer arena selection once the fight has started', async () => {
+    get.mockResolvedValueOnce({ ...scheduled, status: 'ongoing', hasSelectedArena: false })
+    const { link } = await mountFight()
+    expect(link('Selecionar arena')).toBeUndefined()
   })
 
   it('disables controls during a command and after a failed refresh, retaining the recorder', async () => {

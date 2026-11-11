@@ -100,7 +100,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         command: FightCommand,
         userId: string,
     ): Promise<FightState> {
-        await this.executeCommand(matchId, command, userId, false);
+        await this.executeCommand(matchId, command, userId);
         return this.buildState(matchId);
     }
 
@@ -109,7 +109,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         command: FightCommand,
         userId: string,
     ): Promise<OperatorFightState> {
-        await this.executeCommand(matchId, command, userId, true);
+        await this.executeCommand(matchId, command, userId);
         return this.buildOperatorState(matchId);
     }
 
@@ -117,7 +117,6 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         matchId: string,
         command: FightCommand,
         userId: string,
-        requireSelectedArena: boolean,
     ): Promise<void> {
         const match = await this.repo.findWithRobots(matchId);
         if (
@@ -151,13 +150,6 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                     };
                 }
                 if (command === 'start') {
-                    if (requireSelectedArena && fight.arenaId === null) {
-                        return {
-                            error: 'match_arena_required',
-                            wrote: settled.wrote,
-                            arenaId: fight.arenaId,
-                        };
-                    }
                     await writes.updateMatch({
                         state: 'ongoing',
                         arenaId: fight.arenaId,

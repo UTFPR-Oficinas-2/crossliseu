@@ -218,9 +218,9 @@ describe('useFightControl', () => {
     expect(fight.error.value).toBeNull()
   })
 
-  it('reconciles a 409 without retrying Start after the assignment was removed', async () => {
+  it('reconciles a 409 without retrying Start', async () => {
     const reconciliation = deferred<OperatorFightState>()
-    post.mockRejectedValueOnce(new ApiError(409, 'match_arena_required'))
+    post.mockRejectedValueOnce(new ApiError(409, 'match_invalid_transition'))
     get.mockResolvedValueOnce(snapshot()).mockReturnValueOnce(reconciliation.promise)
     const fight = start()
     await tick()

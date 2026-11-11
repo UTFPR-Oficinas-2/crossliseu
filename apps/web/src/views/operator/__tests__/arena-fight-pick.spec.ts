@@ -143,8 +143,10 @@ describe('fightMeta', () => {
 })
 
 describe('actionHint', () => {
-  it('asks for both picks until there is an arena', () => {
-    expect(actionHint(null)).toBe('Escolha uma arena e uma luta.')
+  it('says the arena is optional until one is chosen', () => {
+    expect(actionHint(null)).toBe(
+      'Escolha uma luta. A arena é opcional: sem ela a luta roda só pela tela, sem a caixa.',
+    )
   })
 
   it('says the fight stays on the chosen arena', () => {

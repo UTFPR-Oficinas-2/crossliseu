@@ -310,21 +310,16 @@ describe('FightService', () => {
         });
     });
 
-    it('rejects operator Start if the assignment disappeared before the lock', async () => {
-        const { service, store } = setup({ arenaId: ARENA_ID });
-        expect((await service.operatorState(MATCH_ID)).hasSelectedArena).toBe(
-            true,
-        );
-        store.arenaPointer = null;
+    it('starts a fight that has no arena selected', async () => {
+        const { service, store } = setup({ arenaId: null });
 
-        await expect(
-            service.operatorCommand(MATCH_ID, 'start', USER_ID),
-        ).rejects.toMatchObject({
-            status: 409,
-            message: 'match_arena_required',
+        expect(
+            await service.operatorCommand(MATCH_ID, 'start', USER_ID),
+        ).toMatchObject({
+            status: 'ongoing',
+            hasSelectedArena: false,
         });
-        expect(store.match.state).toBe('scheduled');
-        expect(store.written).toEqual([]);
+        expect(store.written.map((entry) => entry.type)).toEqual(['started']);
     });
 
     it('starts an assigned fight even without a device connection', async () => {

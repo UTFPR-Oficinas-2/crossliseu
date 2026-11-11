@@ -67,7 +67,10 @@ const reasonText = computed(() => {
 const status = computed(() => state.value?.status ?? 'scheduled')
 const display = computed(() => displayByStatus[status.value])
 const clock = computed(() => formatElapsed(Math.ceil(remainingMs.value / 1000)))
-const needsArena = computed(() => status.value === 'scheduled' && !state.value?.hasSelectedArena)
+// An arena can only be attached before the fight starts
+const canSelectArena = computed(
+  () => status.value === 'scheduled' && !state.value?.closed && !state.value?.hasSelectedArena,
+)
 const disabled = computed(
   () => busy.value || !!uncertainCommand.value || loadState.value !== 'ready' || !auth.token,
 )
@@ -146,14 +149,12 @@ function confirmResumeControls() {
         <AppButton v-if="state.closed" :to="operatorHome" variant="secondary">
           Voltar à operação
         </AppButton>
-        <AppButton v-else-if="needsArena" :to="operatorHome">Selecionar arena</AppButton>
-        <AppButton
-          v-else-if="state.status === 'scheduled'"
-          :disabled="disabled"
-          @click="command('start')"
-        >
-          Iniciar luta
-        </AppButton>
+        <template v-else-if="state.status === 'scheduled'">
+          <AppButton :disabled="disabled" @click="command('start')">Iniciar luta</AppButton>
+          <AppButton v-if="canSelectArena" :to="operatorHome" variant="secondary">
+            Selecionar arena
+          </AppButton>
+        </template>
         <template v-else-if="state.status === 'ongoing' || state.status === 'paused'">
           <AppButton
             v-if="state.status === 'ongoing'"

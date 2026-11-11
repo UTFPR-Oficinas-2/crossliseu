@@ -184,9 +184,8 @@ const championshipHint = computed(() => {
 
 const selectedFight = computed(() => findPickableFight(matchId.value))
 
-const canOpen = computed(
-  () => !opening.value && selectedArena.value !== null && selectedFight.value !== null,
-)
+// The arena is optional: a fight can run from this screen alone, without an ESP32 box
+const canOpen = computed(() => !opening.value && selectedFight.value !== null)
 
 const RUN_VIEW_REFUSED = 'A luta foi aberta na arena, mas a tela dela não abriu. Use “Ir para a luta”.'
 
@@ -204,20 +203,22 @@ async function refreshAfterPick() {
 }
 
 async function openFight() {
-  if (!canOpen.value || !arenaId.value || !matchId.value) return
+  if (!canOpen.value || !matchId.value) return
   // The choice is locked while saving; these keep the pick sent to the server the one opened
   const arena = arenaId.value
   const fight = matchId.value
   opening.value = true
   pickError.value = ''
   try {
-    try {
-      await selectArenaMatch(arena, fight, token())
-    } catch (error) {
-      pickError.value = pickErrorMessage(error)
-      // Someone else may have changed the arenas or the fight
-      await refreshAfterPick()
-      return
+    if (arena) {
+      try {
+        await selectArenaMatch(arena, fight, token())
+      } catch (error) {
+        pickError.value = pickErrorMessage(error)
+        // Someone else may have changed the arenas or the fight
+        await refreshAfterPick()
+        return
+      }
     }
     const failure = await router.push({ name: 'match-operation', params: { matchId: fight } })
     if (isNavigationFailure(failure)) {
@@ -236,7 +237,7 @@ async function openFight() {
     <header class="operator-home__titles">
       <h1 class="operator-home__title text-display-page">Operação</h1>
       <p class="operator-home__muted text-body-m">
-        Escolha a arena e depois a luta que vai acontecer nela.
+        Escolha a luta. Se quiser usar a caixa de uma arena, escolha também a arena.
       </p>
     </header>
 
@@ -253,7 +254,12 @@ async function openFight() {
         <section class="operator-home__card">
           <fieldset class="operator-home__group" :disabled="opening">
             <legend class="operator-home__card-title text-heading-m">1 · Arena</legend>
-            <p class="operator-home__muted text-body-s">Cada arena roda uma luta por vez.</p>
+            <p class="operator-home__muted text-body-s">
+              Opcional: sem arena a luta roda só por esta tela. Cada arena roda uma luta por vez.
+            </p>
+            <AppButton v-if="arenaId" variant="ghost" @click="arenaId = null">
+              Rodar sem arena
+            </AppButton>
             <template v-for="{ arena, meta, pill, disabled } in arenaRows" :key="arena.id">
               <ChoiceItem
                 v-model="arenaId"
