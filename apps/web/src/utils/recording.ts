@@ -82,6 +82,18 @@ export function describeCameraError(error: unknown): string {
   }
 }
 
+/** Camera settings -> "1280 × 720 · 30 fps"; missing values are left out, nothing -> "" */
+export function describeVideoSignal(settings: {
+  width?: number
+  height?: number
+  frameRate?: number
+}): string {
+  const parts: string[] = []
+  if (settings.width && settings.height) parts.push(`${settings.width} × ${settings.height}`)
+  if (settings.frameRate) parts.push(`${Math.round(settings.frameRate)} fps`)
+  return parts.join(' · ')
+}
+
 const oneDecimal = new Intl.NumberFormat('pt-BR', {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
