@@ -167,6 +167,24 @@ Response `204`. The API reads the object from R2 before accepting it, then store
 | `409 recording_size_mismatch` | R2 has a different size than `size`: the upload did not finish |
 | `404 match_not_found` | Unknown match, or not the caller's |
 
+### `GET /matches/:id/recording`
+
+The uploaded video, with a presigned read URL made on each call (for the CV worker to download it, or the web app to play it). Response `200`:
+
+```json
+{
+  "key": "recordings/6f1c….mp4",
+  "contentType": "video/mp4",
+  "sizeBytes": 426782,
+  "uploadedAt": "2026-11-11T01:15:38.809Z",
+  "url": "https://<ACCOUNT_ID>.r2.cloudflarestorage.com/crossliseu-videos/recordings/6f1c….mp4?X-Amz-…",
+  "expiresAt": "2026-11-11T01:43:08.750Z"
+}
+```
+
+- The URL allows `GET` of that one object for 15 minutes; ask again for a new one.
+- `404 recording_not_found` while there is no confirmed upload (none yet, or one still in progress); `404 match_not_found` for an unknown match or one that is not the caller's.
+
 ## Web app
 
 **Done** (#20). The operator screen (`/operator/:matchId`) shows `FightRecorderPanel`; the same panel is on `/dev/components` (button *Abrir gravador*) for testing without signing in.
