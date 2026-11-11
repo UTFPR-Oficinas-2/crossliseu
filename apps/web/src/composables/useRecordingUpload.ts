@@ -1,7 +1,7 @@
 import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import { ApiError } from '@/api/client'
 import { UploadError, uploadToR2 } from '@/api/r2-upload'
-import { markUploaded, requestUploadUrl } from '@/api/recordings'
+import { confirmRecordingUpload, requestRecordingUpload } from '@/data'
 
 /**
  * idle       -> nothing sent yet
@@ -13,11 +13,13 @@ import { markUploaded, requestUploadUrl } from '@/api/recordings'
  */
 export type UploadState = 'idle' | 'requesting' | 'uploading' | 'completing' | 'done' | 'error'
 
+const CANCELLED = 'Envio cancelado.'
+
 /** Operator-facing message for a failure in any of the three steps */
 export function describeUploadError(error: unknown): string {
   if (error instanceof UploadError) {
     if (error.status === 403) return 'O link de envio expirou ou foi recusado. Tente de novo.'
-    if (error.message === 'Envio cancelado.') return error.message
+    if (error.message === CANCELLED) return error.message
     if (error.status === 0)
       return 'A conexão caiu durante o envio. Confira a internet e tente de novo.'
     return `O armazenamento recusou o vídeo (HTTP ${error.status}). Tente de novo.`
@@ -26,6 +28,8 @@ export function describeUploadError(error: unknown): string {
     if (error.status === 0) return 'Sem conexão com o servidor. Confira a internet e tente de novo.'
     if (error.status === 401) return 'Sua sessão expirou. Entre de novo e reenvie o vídeo.'
     if (error.status === 404) return 'Esta luta não foi encontrada no servidor.'
+    if (error.status === 501)
+      return 'O servidor ainda não recebe vídeos. Baixe o arquivo para não perder a gravação.'
     return `O servidor recusou o envio (HTTP ${error.status}).`
   }
   return 'Não foi possível enviar o vídeo.'
@@ -48,25 +52,35 @@ export function useRecordingUpload() {
     const current = new AbortController()
     controller = current
 
+    // The API steps can't be aborted mid-request, so a cancel is checked after each one
+    const throwIfCancelled = () => {
+      if (current.signal.aborted) throw new UploadError(0, CANCELLED)
+    }
+
     error.value = null
     progress.value = 0
     try {
       state.value = 'requesting'
-      const { url, key } = await requestUploadUrl(matchId, file.type, file.size, token)
+      const { url, key } = await requestRecordingUpload(matchId, file.type, file.size, token)
+      throwIfCancelled()
 
       state.value = 'uploading'
       await uploadToR2(url, file, {
         signal: current.signal,
         onProgress: (fraction) => (progress.value = fraction),
       })
+      throwIfCancelled()
 
       state.value = 'completing'
-      await markUploaded(matchId, { key, size: file.size }, token)
+      await confirmRecordingUpload(matchId, { key, size: file.size }, token)
+      // A reset meanwhile owns the state now. A plain cancel this late changes nothing: the
+      // video is already in R2 and the API knows it.
+      if (controller !== current) return false
 
       state.value = 'done'
       return true
     } catch (err) {
-      // A newer attempt replaced this one: leave the state to it
+      // A newer attempt or a reset replaced this one: leave the state to it
       if (controller !== current) return false
       error.value = describeUploadError(err)
       state.value = 'error'
@@ -83,6 +97,8 @@ export function useRecordingUpload() {
   /** Back to idle, e.g. when a new recording replaces the one that was sent */
   function reset() {
     cancel()
+    // Detach the cancelled attempt, so its catch block doesn't overwrite the idle state
+    controller = null
     state.value = 'idle'
     progress.value = 0
     error.value = null

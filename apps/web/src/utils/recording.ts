@@ -82,9 +82,26 @@ export function describeCameraError(error: unknown): string {
   }
 }
 
-/** 1536 -> "1,5 KB", 73400320 -> "70,0 MB" (one decimal, Brazilian comma) */
+/** Camera settings -> "1280 × 720 · 30 fps"; missing values are left out, nothing -> "" */
+export function describeVideoSignal(settings: {
+  width?: number
+  height?: number
+  frameRate?: number
+}): string {
+  const parts: string[] = []
+  if (settings.width && settings.height) parts.push(`${settings.width} × ${settings.height}`)
+  if (settings.frameRate) parts.push(`${Math.round(settings.frameRate)} fps`)
+  return parts.join(' · ')
+}
+
+const oneDecimal = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
+/** 1536 -> "1,5 KB", 73400320 -> "70,0 MB" (one decimal, pt-BR separators) */
 export function formatBytes(bytes: number): string {
   const megabytes = bytes / 1024 / 1024
-  if (megabytes >= 1) return `${megabytes.toFixed(1).replace('.', ',')} MB`
-  return `${(bytes / 1024).toFixed(1).replace('.', ',')} KB`
+  if (megabytes >= 1) return `${oneDecimal.format(megabytes)} MB`
+  return `${oneDecimal.format(bytes / 1024)} KB`
 }

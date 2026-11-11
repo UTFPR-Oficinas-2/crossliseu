@@ -1,18 +1,38 @@
 <script setup lang="ts">
-// Fight recording on the operator screen (#20). Pick the arena camera, watch the live preview,
-// record and stop, then send the file to R2 (presigned URL from the API, PUT straight to R2,
-// confirm to the API). The file can also be downloaded to check it.
-import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+// Fight recording on the operator screen (#20). Before the fight: pick the arena camera and check
+// the live preview. The recording follows the fight: it starts by itself when the fight starts and
+// stops by itself when it ends (no record / stop buttons). After the fight the file is sent to R2
+// (presigned URL from the API, PUT straight to R2, confirm to the API); downloading it is optional.
+//
+// Recording is OPTIONAL, like the ESP32 connection: with no camera (missing, denied, failed) the
+// fight starts and ends exactly the same, and nothing here blocks or reports an error for it.
+//
+// TODO(matches API): `fightPhase` is not connected to the real match yet. When the matches backend
+// exists, MatchOperationView must derive it from the match status (see the table there).
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
+import CameraPreview from '@/components/ui/CameraPreview.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import type { SelectOption } from '@/components/ui/select-field'
 import { useFightRecorder } from '@/composables/useFightRecorder'
 import { useRecordingUpload } from '@/composables/useRecordingUpload'
 import { useAuthStore } from '@/stores/auth'
-import { formatBytes, formatElapsed, recordingFileName } from '@/utils/recording'
+import {
+  describeVideoSignal,
+  formatBytes,
+  formatElapsed,
+  recordingFileName,
+} from '@/utils/recording'
 
-const { matchId } = defineProps<{ matchId: string }>()
+/**
+ * before  -> fight not started: preview only
+ * running -> fight in progress (including paused): recording
+ * ended   -> fight over: the video can be sent (or downloaded)
+ */
+export type FightPhase = 'before' | 'running' | 'ended'
+
+const { matchId, fightPhase } = defineProps<{ matchId: string; fightPhase: FightPhase }>()
 
 const {
   cameras,
@@ -24,6 +44,7 @@ const {
   recording,
   mimeType,
   loadCameras,
+  retry,
   start,
   stop,
 } = useFightRecorder()
@@ -35,10 +56,10 @@ const cameraOptions = computed<SelectOption[]>(() =>
   })),
 )
 
-// <video> needs the live stream as a property (srcObject), not as an attribute
-const preview = ref<HTMLVideoElement | null>(null)
-watchEffect(() => {
-  if (preview.value) preview.value.srcObject = stream.value
+// "1280 × 720 · 30 fps": what the camera actually delivers, read from the live track
+const signal = computed(() => {
+  const track = stream.value?.getVideoTracks()[0]
+  return track ? describeVideoSignal(track.getSettings()) : ''
 })
 
 // Download link for the finished file. The URL points at the Blob in memory, so the old one is
@@ -56,6 +77,24 @@ onBeforeUnmount(() => {
 
 const fileName = computed(() => recordingFileName(matchId, mimeType.value))
 const isRecording = computed(() => state.value === 'recording')
+
+// ---------- the recording follows the fight ----------
+// Both are safe without a camera: no live stream means no recording is started, and `stop` does
+// nothing when nothing is recording, so the fight never depends on the video.
+watch(
+  () => fightPhase,
+  (phase) => {
+    if (phase === 'running') {
+      if (stream.value) start()
+    } else if (phase === 'ended') void stop()
+  },
+)
+const showResult = computed(
+  () => fightPhase === 'ended' && recording.value !== null && state.value === 'stopped',
+)
+const notRecorded = computed(
+  () => fightPhase === 'ended' && recording.value === null && !isRecording.value,
+)
 
 // ---------- upload to R2 ----------
 const auth = useAuthStore()
@@ -104,8 +143,15 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
-// Navigating inside the app
+// Navigating inside the app. Going to another fight's operator route reuses the route, so it is
+// guarded too; MatchOperationView keys this panel by match, so the next fight starts empty.
 onBeforeRouteLeave(() => !hasUnsentVideo.value || window.confirm(leaveMessage))
+onBeforeRouteUpdate(
+  (to, from) =>
+    to.params.matchId === from.params.matchId ||
+    !hasUnsentVideo.value ||
+    window.confirm(leaveMessage),
+)
 
 function download() {
   if (!downloadUrl.value) return
@@ -148,24 +194,28 @@ onMounted(loadCameras)
       hint="A câmera não pode ser trocada durante a gravação."
     />
 
-    <video ref="preview" class="recorder__preview" autoplay muted playsinline />
+    <CameraPreview
+      :stream="stream"
+      :caption="isRecording ? 'Ao vivo' : 'Pré-visualização ao vivo'"
+      :signal="signal"
+      :recording="isRecording"
+      :elapsed="formatElapsed(elapsedSeconds)"
+    />
 
     <p v-if="error" class="recorder__error text-body-s" role="alert">
       {{ error }}
-      <AppButton variant="secondary" @click="loadCameras">Tentar de novo</AppButton>
+      <AppButton variant="secondary" @click="retry">Tentar de novo</AppButton>
     </p>
 
     <div class="recorder__controls">
       <span class="recorder__timer text-timer-l" aria-label="Tempo de gravação">
         {{ formatElapsed(elapsedSeconds) }}
       </span>
-      <AppButton v-if="!isRecording" :disabled="!stream || isSending" @click="start">
-        {{ state === 'stopped' ? 'Gravar de novo' : 'Gravar' }}
-      </AppButton>
-      <AppButton v-else variant="destructive" @click="stop">Parar</AppButton>
     </div>
 
-    <div v-if="recording && state === 'stopped'" class="recorder__result">
+    <p v-if="notRecorded" class="recorder__note text-body-s">Esta luta não foi gravada.</p>
+
+    <div v-if="showResult && recording" class="recorder__result">
       <dl class="recorder__facts text-body-s">
         <div>
           <dt>Arquivo</dt>
@@ -185,9 +235,10 @@ onMounted(loadCameras)
         </div>
       </dl>
       <div class="recorder__actions">
-        <AppButton variant="secondary" @click="download">Baixar</AppButton>
         <AppButton v-if="uploadState === 'idle'" @click="send">Enviar</AppButton>
         <AppButton v-else-if="uploadState === 'error'" @click="send">Tentar de novo</AppButton>
+        <!-- Optional: only to keep a copy; sending is the main action -->
+        <AppButton variant="ghost" @click="download">Baixar</AppButton>
       </div>
 
       <div v-if="uploadState !== 'idle'" class="recorder__upload" aria-live="polite">
@@ -236,16 +287,9 @@ onMounted(loadCameras)
   color: var(--color-muted);
 }
 
+/* Live, like a fight in progress (`Status / Pill` Accent); red is only for errors */
 .recorder__status--live {
-  color: var(--color-red);
-}
-
-.recorder__preview {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  object-fit: contain;
+  color: var(--color-orange);
 }
 
 .recorder__error {
@@ -266,6 +310,11 @@ onMounted(loadCameras)
 
 .recorder__timer {
   color: var(--color-text);
+}
+
+.recorder__note {
+  margin: 0;
+  color: var(--color-muted);
 }
 
 .recorder__result {

@@ -40,8 +40,14 @@ export function useFightRecorder() {
   let recorder: MediaRecorder | null = null
   let chunks: Blob[] = []
   let timer: ReturnType<typeof setInterval> | undefined
+  /** Callers of `stop()` waiting for the file */
+  let stopWaiters: ((blob: Blob | null) => void)[] = []
+  /** Stops the current recorder and marks the stop as asked for (set by `start`) */
+  let stopRecorder: (() => void) | null = null
+  /** Bumped by every `openCamera` and by `release`, so a late getUserMedia knows it is stale */
+  let openRequest = 0
 
-  /** Reads the camera list and keeps the current choice when that camera is still there */
+  /** Reads the camera list; keeps the current choice if that camera is still there */
   async function listCameras() {
     const devices = await navigator.mediaDevices.enumerateDevices()
     cameras.value = devices.filter((device) => device.kind === 'videoinput')
@@ -50,44 +56,55 @@ export function useFightRecorder() {
     if (!stillThere) cameraId.value = cameras.value[0]?.deviceId ?? ''
   }
 
-  /**
-   * Lists the cameras. Asks for permission first: without it, browsers hide camera names. Also the
-   * retry after a failed open: when the choice did not change, the watch below does not fire, so
-   * the preview is reopened here.
-   */
+  /** Lists the cameras. Asks for permission first: without it, browsers hide camera names. */
   async function loadCameras() {
     error.value = null
     try {
       const probe = await navigator.mediaDevices.getUserMedia({ video: true })
       probe.getTracks().forEach((track) => track.stop())
-
-      const before = cameraId.value
       await listCameras()
-
-      const canPreview = state.value === 'idle' || state.value === 'previewing'
-      if (cameraId.value === before && !stream.value && cameraId.value && canPreview) {
-        await openCamera(cameraId.value)
-      }
     } catch (err) {
       error.value = describeCameraError(err)
     }
   }
 
   /**
-   * Opens the chosen camera for the preview, closing the previous one. After a recording
-   * ("stopped") the state stays as it is: the unsent file is still there to send or download.
+   * A camera plugged in or out. With a camera open, permission is already granted, so only the
+   * list is read: probing the camera again mid-recording can fail (some cameras cannot be opened
+   * twice) or disturb the capture.
+   */
+  async function onDeviceChange() {
+    if (!stream.value) return loadCameras()
+    try {
+      await listCameras()
+    } catch (err) {
+      error.value = describeCameraError(err)
+    }
+  }
+
+  /**
+   * Opens the chosen camera for the preview, closing the previous one. A finished recording
+   * stays `stopped` (it is still unsent); only the preview behind it changes.
    */
   async function openCamera(deviceId: string) {
+    const request = ++openRequest
     stopStream()
     if (!deviceId) return
     error.value = null
     try {
-      stream.value = await navigator.mediaDevices.getUserMedia({
+      const next = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: deviceId }, ...RECORDING_VIDEO_CONSTRAINTS },
         audio: false, // the analysis only needs images; no audio keeps the file smaller
       })
+      // A newer call (or leaving the screen) replaced this one: free the camera at once
+      if (request !== openRequest) {
+        next.getTracks().forEach((track) => track.stop())
+        return
+      }
+      stream.value = next
       if (state.value !== 'stopped') state.value = 'previewing'
     } catch (err) {
+      if (request !== openRequest) return
       error.value = describeCameraError(err)
       if (state.value !== 'stopped') state.value = 'idle'
     }
@@ -98,60 +115,87 @@ export function useFightRecorder() {
     if (state.value !== 'recording') void openCamera(deviceId)
   })
 
-  let stopWaiters: ((blob: Blob | null) => void)[] = []
+  /** "Tentar de novo" after a camera error: list the cameras again and reopen the chosen one */
+  async function retry() {
+    await loadCameras()
+    if (!error.value && state.value !== 'recording') await openCamera(cameraId.value)
+  }
 
-  /** The recorder ended (stop button, or the browser stopped it): build the file from the pieces */
-  function finalize() {
+  /** Joins the pieces into the file. Runs on every stop: asked for, or by the browser itself. */
+  function finish(current: MediaRecorder, requested: boolean) {
+    if (recorder !== current) return // released while stopping
     clearInterval(timer)
-    recorder = null
-    if (chunks.length > 0) {
-      // Plain type ("video/mp4"): it is what the upload signs and what R2 stores
-      recording.value = new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
-      state.value = 'stopped'
-    } else {
-      // Nothing was recorded (e.g. the recorder failed at once): back to the live preview
-      recording.value = null
-      state.value = 'previewing'
-    }
+    // Plain type ("video/mp4"): it is what the upload signs and what R2 stores
+    const blob =
+      chunks.length > 0
+        ? new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
+        : null
     chunks = []
-    const waiters = stopWaiters
+    recording.value = blob
+    // Nothing was recorded (the recorder failed at once): there is no file to send, so go back
+    // to the live preview instead of offering an empty video
+    state.value = blob ? 'stopped' : 'previewing'
+    if (!blob && !error.value)
+      error.value = 'A gravação não capturou nenhuma imagem. Tente de novo.'
+    if (blob && !requested && !error.value) {
+      error.value =
+        'A gravação parou sozinha (a câmera foi desconectada?). O que foi gravado até aqui está abaixo.'
+    }
+    stopWaiters.forEach((resolve) => resolve(blob))
     stopWaiters = []
-    waiters.forEach((resolve) => resolve(recording.value))
+
+    // The camera was unplugged: its tracks are dead, so reopen the preview for the next recording
+    const tracks = stream.value?.getVideoTracks() ?? []
+    if (tracks.length > 0 && tracks.every((track) => track.readyState === 'ended')) {
+      void openCamera(cameraId.value)
+    }
   }
 
   function start() {
     if (!stream.value || state.value === 'recording') return
 
-    clearInterval(timer)
-    chunks = []
-    recording.value = null
-    elapsedSeconds.value = 0
-    error.value = null
-
+    const preferred = pickMimeType((type) => MediaRecorder.isTypeSupported(type))
+    let next: MediaRecorder
     try {
-      const preferred = pickMimeType((type) => MediaRecorder.isTypeSupported(type))
-      recorder = new MediaRecorder(stream.value, {
+      next = new MediaRecorder(stream.value, {
         ...(preferred ? { mimeType: preferred } : {}),
         videoBitsPerSecond: RECORDING_BITS_PER_SECOND,
       })
-      mimeType.value = recorder.mimeType || preferred || ''
+    } catch {
+      error.value = 'Não foi possível começar a gravação. Troque de câmera ou recarregue a página.'
+      return
+    }
 
-      // A piece of the video arrives every RECORDING_CHUNK_MS; they are joined when it stops
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.push(event.data)
-      }
-      // `onstop` fires after the last `ondataavailable`, so every piece is in `chunks` by then
-      recorder.onstop = finalize
-      recorder.onerror = () => {
-        clearInterval(timer)
-        error.value = 'A gravação foi interrompida por um erro do navegador.'
-        // The browser stops the recorder after an error, which ends in `finalize`
-      }
+    error.value = null
+    chunks = []
+    recording.value = null
+    elapsedSeconds.value = 0
+    stopWaiters = []
+    recorder = next
+    mimeType.value = next.mimeType || preferred || ''
 
-      recorder.start(RECORDING_CHUNK_MS)
+    let requested = false
+    // A piece of the video arrives every RECORDING_CHUNK_MS; they are joined when it stops
+    next.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data)
+    }
+    next.onerror = () => {
+      error.value = 'A gravação foi interrompida por um erro do navegador.'
+    }
+    // `onstop` fires after the last `ondataavailable`, so every piece is in `chunks` by then.
+    // It also fires when the browser stops by itself (error, camera unplugged).
+    next.onstop = () => finish(next, requested)
+    stopRecorder = () => {
+      requested = true
+      if (next.state !== 'inactive') next.stop()
+    }
+
+    try {
+      next.start(RECORDING_CHUNK_MS)
     } catch {
       recorder = null
-      error.value = 'Este navegador não conseguiu iniciar a gravação.'
+      stopRecorder = null
+      error.value = 'Não foi possível começar a gravação. Troque de câmera ou recarregue a página.'
       return
     }
     state.value = 'recording'
@@ -164,12 +208,10 @@ export function useFightRecorder() {
 
   /** Stops recording. Resolves with the video file once the last piece has arrived. */
   function stop(): Promise<Blob | null> {
-    const current = recorder
-    if (!current || current.state === 'inactive') return Promise.resolve(recording.value)
-
+    if (state.value !== 'recording') return Promise.resolve(recording.value)
     return new Promise((resolve) => {
       stopWaiters.push(resolve)
-      current.stop()
+      stopRecorder?.()
     })
   }
 
@@ -180,24 +222,17 @@ export function useFightRecorder() {
 
   /** Frees the camera (its light turns off) and stops the timer when leaving the screen */
   function release() {
+    openRequest++ // a getUserMedia still pending frees its camera when it resolves
     clearInterval(timer)
-    if (recorder && recorder.state !== 'inactive') recorder.stop()
+    const current = recorder
     recorder = null
+    stopRecorder = null
+    if (current && current.state !== 'inactive') current.stop()
     stopStream()
     navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
   }
 
-  // A camera plugged in or out updates the list by itself. With a camera open, permission is
-  // already granted, so only the list is read: probing the camera again mid-recording can fail
-  // (some cameras cannot be opened twice) or disturb the capture.
-  async function onDeviceChange() {
-    if (!stream.value) return loadCameras()
-    try {
-      await listCameras()
-    } catch (err) {
-      error.value = describeCameraError(err)
-    }
-  }
+  // A camera plugged in or out updates the list by itself
   navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange)
   onBeforeUnmount(release)
 
@@ -211,6 +246,7 @@ export function useFightRecorder() {
     recording,
     mimeType,
     loadCameras,
+    retry,
     start,
     stop,
   }

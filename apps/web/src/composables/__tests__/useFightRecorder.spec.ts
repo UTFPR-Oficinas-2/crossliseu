@@ -38,7 +38,8 @@ class FakeRecorder {
 }
 
 function fakeStream() {
-  return { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+  const track = { readyState: 'live', stop: vi.fn<() => void>() }
+  return { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream
 }
 
 let openFails: Error | null
@@ -63,7 +64,7 @@ beforeEach(() => {
         return fakeStream()
       },
     ),
-    enumerateDevices: vi.fn(async () => [CAMERA_A, CAMERA_B]),
+    enumerateDevices: vi.fn<() => Promise<unknown[]>>(async () => [CAMERA_A, CAMERA_B]),
     addEventListener: vi.fn<(type: string, handler: () => Promise<void>) => void>(),
     removeEventListener: vi.fn<(type: string, handler: () => Promise<void>) => void>(),
   }
@@ -114,7 +115,7 @@ describe('useFightRecorder', () => {
     expect(recorder.stream.value).toBeNull()
 
     openFails = null
-    await recorder.loadCameras()
+    await recorder.retry()
     await flushPromises()
 
     expect(recorder.stream.value).not.toBeNull()
