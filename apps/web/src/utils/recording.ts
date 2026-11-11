@@ -82,9 +82,14 @@ export function describeCameraError(error: unknown): string {
   }
 }
 
-/** 1536 -> "1,5 KB", 73400320 -> "70,0 MB" (one decimal, Brazilian comma) */
+const oneDecimal = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
+/** 1536 -> "1,5 KB", 73400320 -> "70,0 MB" (one decimal, pt-BR separators) */
 export function formatBytes(bytes: number): string {
   const megabytes = bytes / 1024 / 1024
-  if (megabytes >= 1) return `${megabytes.toFixed(1).replace('.', ',')} MB`
-  return `${(bytes / 1024).toFixed(1).replace('.', ',')} KB`
+  if (megabytes >= 1) return `${oneDecimal.format(megabytes)} MB`
+  return `${oneDecimal.format(bytes / 1024)} KB`
 }

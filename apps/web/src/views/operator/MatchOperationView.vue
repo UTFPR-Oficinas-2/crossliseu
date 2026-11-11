@@ -6,5 +6,6 @@ const { matchId } = defineProps<{ matchId: string }>()
 
 <template>
   <h1 class="text-heading-l">Operação da luta</h1>
-  <FightRecorderPanel :match-id="matchId" />
+  <!-- Keyed by match: another fight gets a fresh panel, never the previous fight's video -->
+  <FightRecorderPanel :key="matchId" :match-id="matchId" />
 </template>

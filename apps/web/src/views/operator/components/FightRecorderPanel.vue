@@ -3,7 +3,7 @@
 // record and stop, then send the file to R2 (presigned URL from the API, PUT straight to R2,
 // confirm to the API). The file can also be downloaded to check it.
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import type { SelectOption } from '@/components/ui/select-field'
@@ -24,6 +24,7 @@ const {
   recording,
   mimeType,
   loadCameras,
+  retry,
   start,
   stop,
 } = useFightRecorder()
@@ -104,8 +105,15 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
-// Navigating inside the app
+// Navigating inside the app. Going to another fight's operator route reuses the route, so it is
+// guarded too; MatchOperationView keys this panel by match, so the next fight starts empty.
 onBeforeRouteLeave(() => !hasUnsentVideo.value || window.confirm(leaveMessage))
+onBeforeRouteUpdate(
+  (to, from) =>
+    to.params.matchId === from.params.matchId ||
+    !hasUnsentVideo.value ||
+    window.confirm(leaveMessage),
+)
 
 function download() {
   if (!downloadUrl.value) return
@@ -152,7 +160,7 @@ onMounted(loadCameras)
 
     <p v-if="error" class="recorder__error text-body-s" role="alert">
       {{ error }}
-      <AppButton variant="secondary" @click="loadCameras">Tentar de novo</AppButton>
+      <AppButton variant="secondary" @click="retry">Tentar de novo</AppButton>
     </p>
 
     <div class="recorder__controls">
@@ -236,8 +244,9 @@ onMounted(loadCameras)
   color: var(--color-muted);
 }
 
+/* Live, like a fight in progress (`Status / Pill` Accent); red is only for errors */
 .recorder__status--live {
-  color: var(--color-red);
+  color: var(--color-orange);
 }
 
 .recorder__preview {

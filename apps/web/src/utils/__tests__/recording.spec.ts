@@ -84,4 +84,8 @@ describe('formatBytes', () => {
     expect(formatBytes(1536)).toBe('1,5 KB')
     expect(formatBytes(73_400_320)).toBe('70,0 MB')
   })
+
+  it('groups thousands the pt-BR way', () => {
+    expect(formatBytes(1234.5 * 1024 * 1024)).toBe('1.234,5 MB')
+  })
 })
