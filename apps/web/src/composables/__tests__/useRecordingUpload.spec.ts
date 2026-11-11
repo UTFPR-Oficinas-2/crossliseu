@@ -139,7 +139,9 @@ describe('describeUploadError', () => {
   it('explains R2 failures', () => {
     expect(describeUploadError(new UploadError(403, 'x'))).toMatch(/expirou/)
     expect(describeUploadError(new UploadError(0, 'x'))).toMatch(/conexão caiu/)
-    expect(describeUploadError(new UploadError(0, 'Envio cancelado.'))).toBe('Envio cancelado.')
+    expect(describeUploadError(new UploadError(0, 'any text', true))).toBe('Envio cancelado.')
+    // The same words without the flag are not a cancellation
+    expect(describeUploadError(new UploadError(0, 'Envio cancelado.'))).toMatch(/conexão caiu/)
     expect(describeUploadError(new UploadError(500, 'x'))).toMatch(/HTTP 500/)
   })
 

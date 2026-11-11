@@ -19,7 +19,7 @@ const CANCELLED = 'Envio cancelado.'
 export function describeUploadError(error: unknown): string {
   if (error instanceof UploadError) {
     if (error.status === 403) return 'O link de envio expirou ou foi recusado. Tente de novo.'
-    if (error.message === CANCELLED) return error.message
+    if (error.aborted) return CANCELLED
     if (error.status === 0)
       return 'A conexão caiu durante o envio. Confira a internet e tente de novo.'
     return `O armazenamento recusou o vídeo (HTTP ${error.status}). Tente de novo.`
@@ -54,7 +54,7 @@ export function useRecordingUpload() {
 
     // The API steps can't be aborted mid-request, so a cancel is checked after each one
     const throwIfCancelled = () => {
-      if (current.signal.aborted) throw new UploadError(0, CANCELLED)
+      if (current.signal.aborted) throw new UploadError(0, CANCELLED, true)
     }
 
     error.value = null
