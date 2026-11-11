@@ -94,6 +94,7 @@ Use these classes instead of setting font-family/size/weight in components.
 | `Card / Championship`                                | `ChampionshipCard.vue`                                    |
 | `Row / Fight` (`hasAction`)                          | `FightRow.vue`                                            |
 | `Competitor / Tile` (Side = A · B)                   | `CompetitorTile.vue` (`side: 'A' \| 'B'` prop)            |
+| `Camera / Preview` (`recording`)                     | `CameraPreview.vue` (`stream`, `caption`, `signal`, `recording`, `elapsed`) |
 | `Navigation / Public · App · Operator`               | `PublicNav.vue`, `AppNav.vue`, `OperatorNav.vue`          |
 | `Navigation / Mobile` · `Navigation / Operator · Mobile` | Same nav components below 768 px                      |
 
@@ -115,6 +116,17 @@ slots. Each component's Figma description repeats its Vue file and props.
   endpoint yet (arenas, operator match data, referee access) the `src/data/` function rejects with
   `not_implemented`; don't invent endpoints unless asked. Keep data loading in one place per view.
 - Don't add dependencies other than the `@fontsource` packages without asking.
+
+## Fight recording (operator)
+
+- `FightRecorderPanel` follows the fight through its `fightPhase` prop (`before | running | ended`):
+  camera preview only before, automatic recording while running, send / optional download after.
+  There are no manual record or stop buttons.
+- Recording is **optional**, like the ESP32 connection: no camera must never block starting or
+  ending a fight.
+- **Pending:** `fightPhase` is not connected to the API yet. `MatchOperationView` hardcodes
+  `'before'` until the matches backend exists; then map `scheduled` -> `before`,
+  `ongoing | paused` -> `running`, `finished` -> `ended`.
 
 ## Accessibility and layout
 

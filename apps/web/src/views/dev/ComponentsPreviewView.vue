@@ -13,6 +13,9 @@ import type { SelectOption } from '@/components/ui/select-field'
 import SidebarItem from '@/components/ui/SidebarItem.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import TabItem from '@/components/ui/TabItem.vue'
+import FightRecorderPanel, {
+  type FightPhase,
+} from '@/views/operator/components/FightRecorderPanel.vue'
 
 const buttonVariants = [
   { variant: 'primary', label: 'Criar campeonato' },
@@ -90,6 +93,16 @@ const fights = [
 
 const operatorExits = ref(0)
 const signOuts = ref(0)
+
+// The recorder asks for the camera as soon as it mounts, so it only mounts on demand
+const showRecorder = ref(false)
+// Stands in for the match status until the matches API exists
+const fightPhase = ref<FightPhase>('before')
+const fightPhases: { value: FightPhase; label: string }[] = [
+  { value: 'before', label: 'Antes da luta' },
+  { value: 'running', label: 'Luta em andamento' },
+  { value: 'ended', label: 'Luta encerrada' },
+]
 </script>
 
 <template>
@@ -324,6 +337,27 @@ const signOuts = ref(0)
       <p class="text-body-s preview__label">
         "Sair da operação" clicado {{ operatorExits }} vez(es)
       </p>
+    </section>
+
+    <section class="preview__section">
+      <h2 class="text-heading-m">Operator / Gravação da luta</h2>
+      <template v-if="showRecorder">
+        <div class="preview__row">
+          <AppButton
+            v-for="phase in fightPhases"
+            :key="phase.value"
+            :variant="fightPhase === phase.value ? 'primary' : 'secondary'"
+            @click="fightPhase = phase.value"
+          >
+            {{ phase.label }}
+          </AppButton>
+        </div>
+        <FightRecorderPanel match-id="preview" :fight-phase="fightPhase" />
+      </template>
+      <div v-else class="preview__row">
+        <AppButton variant="secondary" @click="showRecorder = true">Abrir gravador</AppButton>
+        <p class="text-body-s preview__label">Pede acesso à câmera ao abrir.</p>
+      </div>
     </section>
   </div>
 </template>

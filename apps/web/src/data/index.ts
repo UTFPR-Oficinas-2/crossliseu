@@ -315,3 +315,32 @@ export const getMatch: (id: string) => Promise<Match | null> = async () => {
 export const getRefereeAccess: (token: string) => Promise<RefereeAccess | null> = async () => {
   throw notImplemented()
 }
+
+// ---------- fight recording upload (#20) ----------
+// apps/api has no recording routes yet (#45). The calls are ready in `@/api/recordings`
+// (`requestUploadUrl`, `markUploaded`, see docs/recording-storage.md); once the routes land,
+// these two functions return those calls instead of rejecting.
+
+/** Where to PUT the video: a presigned R2 URL and the object key it creates */
+export interface RecordingUploadTarget {
+  url: string
+  key: string
+}
+
+/** Step 1 of the upload: POST /matches/:id/recording/upload-url (JWT). No API yet. */
+export const requestRecordingUpload: (
+  matchId: string,
+  contentType: string,
+  token: string,
+) => Promise<RecordingUploadTarget> = async () => {
+  throw notImplemented()
+}
+
+/** Step 3 of the upload: POST /matches/:id/recording/complete (JWT). No API yet. */
+export const confirmRecordingUpload: (
+  matchId: string,
+  upload: { key: string; size: number },
+  token: string,
+) => Promise<void> = async () => {
+  throw notImplemented()
+}

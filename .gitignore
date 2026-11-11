@@ -124,6 +124,9 @@ lerna-debug.log*
 *.pem
 *.key
 
+# Wrangler (Cloudflare CLI) local cache: holds the account id and owner's e-mail
+.wrangler/
+
 # temp directory
 .temp
 .tmp
