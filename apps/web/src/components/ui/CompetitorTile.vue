@@ -6,7 +6,7 @@ type Side = 'A' | 'B'
 const { side, team, robot, details } = defineProps<{
   side: Side
   /** Team name, shown after the side label: "Lado A · Equipe Volt" */
-  team: string
+  team?: string
   /** Robot name, shown large */
   robot: string
   /** Secondary line, e.g. "Peso 3 kg · Arrasto" */
@@ -20,7 +20,9 @@ const sideLabel = computed(() => `Lado ${side}`)
 <template>
   <article class="competitor-tile" :class="`competitor-tile--${side.toLowerCase()}`">
     <span class="competitor-tile__bar" aria-hidden="true" />
-    <p class="competitor-tile__overline text-overline">{{ sideLabel }} · {{ team }}</p>
+    <p class="competitor-tile__overline text-overline">
+      {{ sideLabel }}{{ team ? ` · ${team}` : '' }}
+    </p>
     <p class="competitor-tile__robot text-display-page">{{ robot }}</p>
     <p v-if="details || $slots.default" class="competitor-tile__details text-body-s">
       <slot>{{ details }}</slot>

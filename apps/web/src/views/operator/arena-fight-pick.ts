@@ -82,7 +82,8 @@ export function fightMeta(option: FightOption): string {
 
 /** Action bar text next to "Abrir luta" */
 export function actionHint(arena: Arena | null): string {
-  if (!arena) return 'Escolha uma arena e uma luta.'
+  if (!arena)
+    return 'Escolha uma luta. A arena é opcional: sem ela a luta roda só pela tela, sem a caixa.'
   return `A luta fica na ${arena.name} até você fechá-la. A caixa da arena passa a mostrar os nomes e o tempo.`
 }
 

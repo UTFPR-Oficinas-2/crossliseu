@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
+import type { FightCommand } from './fight/fight-transitions.js';
 import { FightService } from './fight/fight.service.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
@@ -54,8 +55,13 @@ export class MatchesController {
 
     @Public()
     @Get(':id/state')
-    state(@Param('id', ParseUUIDPipe) id: string) {
-        return this.fightService.state(id);
+    state(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Query('view') view?: string,
+    ) {
+        return view === 'operator'
+            ? this.fightService.operatorState(id)
+            : this.fightService.state(id);
     }
 
     @Post(':id/start')
@@ -63,8 +69,9 @@ export class MatchesController {
     start(
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUserId() userId: string,
+        @Query('view') view?: string,
     ) {
-        return this.fightService.command(id, 'start', userId);
+        return this.runFightCommand(id, 'start', userId, view);
     }
 
     @Post(':id/pause')
@@ -72,8 +79,9 @@ export class MatchesController {
     pause(
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUserId() userId: string,
+        @Query('view') view?: string,
     ) {
-        return this.fightService.command(id, 'pause', userId);
+        return this.runFightCommand(id, 'pause', userId, view);
     }
 
     @Post(':id/resume')
@@ -81,8 +89,9 @@ export class MatchesController {
     resume(
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUserId() userId: string,
+        @Query('view') view?: string,
     ) {
-        return this.fightService.command(id, 'resume', userId);
+        return this.runFightCommand(id, 'resume', userId, view);
     }
 
     @Post(':id/finish')
@@ -90,8 +99,9 @@ export class MatchesController {
     finish(
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUserId() userId: string,
+        @Query('view') view?: string,
     ) {
-        return this.fightService.command(id, 'finish', userId);
+        return this.runFightCommand(id, 'finish', userId, view);
     }
 
     @Post(':id/close')
@@ -99,8 +109,20 @@ export class MatchesController {
     close(
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUserId() userId: string,
+        @Query('view') view?: string,
     ) {
-        return this.fightService.command(id, 'close', userId);
+        return this.runFightCommand(id, 'close', userId, view);
+    }
+
+    private runFightCommand(
+        id: string,
+        command: FightCommand,
+        userId: string,
+        view?: string,
+    ) {
+        return view === 'operator'
+            ? this.fightService.operatorCommand(id, command, userId)
+            : this.fightService.command(id, command, userId);
     }
 
     @Patch(':id')

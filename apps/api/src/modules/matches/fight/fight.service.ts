@@ -25,6 +25,12 @@ interface Settled {
     wrote: boolean;
 }
 
+export interface OperatorFightState extends FightState {
+    closed: boolean;
+    hasSelectedArena: boolean;
+    winnerSide: 'A' | 'B' | null;
+}
+
 export type SurrenderResult = 'done' | 'not_current_match' | 'not_ongoing';
 
 /**
@@ -94,6 +100,24 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         command: FightCommand,
         userId: string,
     ): Promise<FightState> {
+        await this.executeCommand(matchId, command, userId);
+        return this.buildState(matchId);
+    }
+
+    async operatorCommand(
+        matchId: string,
+        command: FightCommand,
+        userId: string,
+    ): Promise<OperatorFightState> {
+        await this.executeCommand(matchId, command, userId);
+        return this.buildOperatorState(matchId);
+    }
+
+    private async executeCommand(
+        matchId: string,
+        command: FightCommand,
+        userId: string,
+    ): Promise<void> {
         const match = await this.repo.findWithRobots(matchId);
         if (
             !match ||
@@ -120,7 +144,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 if (!transition) {
                     // Returned, not thrown: a time-out settled above must still commit
                     return {
-                        ok: false,
+                        error: 'match_invalid_transition',
                         wrote: settled.wrote,
                         arenaId: fight.arenaId,
                     };
@@ -144,7 +168,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                     await writes.appendEvent(transition.event, now, userId);
                 }
                 // Read before the writes: close clears the pointer, yet that arena must hear of it
-                return { ok: true, wrote: true, arenaId: fight.arenaId };
+                return { error: null, wrote: true, arenaId: fight.arenaId };
             },
         );
         if (!result) {
@@ -155,17 +179,21 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
             this.events.emit({ matchId, arenaId: result.arenaId });
             await this.trySyncTimer(matchId);
         }
-        if (!result.ok) {
-            this.logger.warn('match_invalid_transition', { matchId, command });
-            throw new ConflictException('match_invalid_transition');
+        if (result.error) {
+            this.logger.warn(result.error, { matchId, command });
+            throw new ConflictException(result.error);
         }
-        return this.buildState(matchId);
     }
 
     /** Public. Settles first. 404 match_not_found. */
     async state(matchId: string): Promise<FightState> {
         await this.settle(matchId);
         return this.buildState(matchId);
+    }
+
+    async operatorState(matchId: string): Promise<OperatorFightState> {
+        await this.settle(matchId);
+        return this.buildOperatorState(matchId);
     }
 
     /**
@@ -385,6 +413,21 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 A: { name: match.robotA?.name ?? '' },
                 B: { name: match.robotB?.name ?? '' },
             },
+        };
+    }
+
+    private async buildOperatorState(
+        matchId: string,
+    ): Promise<OperatorFightState> {
+        const snapshot = await this.repo.findOperatorSnapshot(matchId);
+        if (!snapshot) {
+            throw this.notFound(matchId);
+        }
+        const { events, ...state } = snapshot;
+        return {
+            ...state,
+            remainingMs: remainingMs(state.status, events, this.clock.now()),
+            closed: events.some((event) => event.type === 'closed'),
         };
     }
 

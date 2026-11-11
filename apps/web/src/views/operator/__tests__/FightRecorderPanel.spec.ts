@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, shallowRef } from 'vue'
 import type { RecorderState } from '@/composables/useFightRecorder'
 import FightRecorderPanel from '../components/FightRecorderPanel.vue'
@@ -32,9 +32,14 @@ vi.mock('@/composables/useRecordingUpload', () => ({
     reset: vi.fn<() => unknown>(),
   }),
 }))
+type Guard = (to?: unknown, from?: unknown) => unknown
+const guards = vi.hoisted(() => ({
+  leave: undefined as (() => unknown) | undefined,
+  update: undefined as ((to: unknown, from: unknown) => unknown) | undefined,
+}))
 vi.mock('vue-router', () => ({
-  onBeforeRouteLeave: vi.fn<() => unknown>(),
-  onBeforeRouteUpdate: vi.fn<() => unknown>(),
+  onBeforeRouteLeave: (guard: () => unknown) => (guards.leave = guard),
+  onBeforeRouteUpdate: (guard: (to: unknown, from: unknown) => unknown) => (guards.update = guard),
 }))
 
 function mountPanel(fightPhase: 'before' | 'running' | 'ended' = 'before') {
@@ -57,11 +62,67 @@ beforeEach(() => {
   recorder.state.value = 'idle'
   recorder.error.value = null
   recorder.recording.value = null
-  recorder.start.mockReset()
+  recorder.start.mockReset().mockImplementation(() => {
+    recorder.state.value = 'recording'
+  })
   recorder.stop.mockReset().mockResolvedValue(null)
 })
 
 describe('FightRecorderPanel', () => {
+  enableAutoUnmount(afterEach)
+
+  it('starts on entry when the running fight already has a live preview', () => {
+    withCamera()
+    mountPanel('running')
+
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts when the first camera arrives during the fight and ignores duplicate stream updates', async () => {
+    mountPanel('running')
+    expect(recorder.start).not.toHaveBeenCalled()
+
+    withCamera()
+    await flushPromises()
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+
+    recorder.stream.value = { getVideoTracks: () => [] } as unknown as MediaStream
+    await flushPromises()
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not record a camera that finishes opening after the fight ends', async () => {
+    const wrapper = mountPanel('running')
+    await wrapper.setProps({ fightPhase: 'ended' })
+
+    withCamera()
+    await flushPromises()
+    expect(recorder.start).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('não foi gravada')
+  })
+
+  it('preserves the partial file through reconnection and shows it after Finish', async () => {
+    const wrapper = mountPanel('running')
+    withCamera()
+    await flushPromises()
+
+    const partial = new Blob(['partial footage'], { type: 'video/webm' })
+    recorder.stream.value = null
+    recorder.recording.value = partial
+    recorder.state.value = 'stopped'
+    await flushPromises()
+
+    recorder.stream.value = { getVideoTracks: () => [] } as unknown as MediaStream
+    await flushPromises()
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).not.toContain('Enviar')
+    await wrapper.setProps({ fightPhase: 'ended' })
+
+    expect(recorder.recording.value).toBe(partial)
+    expect(wrapper.text()).toContain('Enviar')
+    expect(wrapper.text()).toContain('Baixar')
+  })
+
   it('has no manual record button and no result before the fight', () => {
     withCamera()
     const wrapper = mountPanel('before')
@@ -120,5 +181,97 @@ describe('FightRecorderPanel', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('Enviar')
+  })
+})
+
+describe('FightRecorderPanel leaving with an unsent video', () => {
+  const window = (wrapper: ReturnType<typeof mountPanel>) => wrapper.find('[role="alertdialog"]')
+  const choose = (wrapper: ReturnType<typeof mountPanel>, label: string) =>
+    wrapper
+      .findAll('button')
+      .find((button) => button.text() === label)!
+      .trigger('click')
+
+  function withUnsentVideo() {
+    const wrapper = mountPanel('ended')
+    recorder.recording.value = new Blob(['x'], { type: 'video/mp4' })
+    recorder.state.value = 'stopped'
+    return wrapper
+  }
+
+  it('lets the operator leave without asking when there is nothing to lose', () => {
+    mountPanel('before')
+
+    expect((guards.leave as Guard)()).toBe(true)
+  })
+
+  it('opens a floating window instead of the browser dialog and waits for the answer', async () => {
+    const confirm = vi.spyOn(globalThis, 'confirm')
+    const wrapper = withUnsentVideo()
+    await flushPromises()
+
+    const answer = (guards.leave as Guard)() as Promise<boolean>
+    await flushPromises()
+
+    expect(window(wrapper).exists()).toBe(true)
+    expect(window(wrapper).text()).toContain('a gravação será perdida')
+    expect(confirm).not.toHaveBeenCalled()
+    await choose(wrapper, 'Sair e perder o vídeo')
+    expect(await answer).toBe(true)
+    expect(window(wrapper).exists()).toBe(false)
+  })
+
+  it('stays on the fight when the operator chooses to keep the video', async () => {
+    const wrapper = withUnsentVideo()
+    await flushPromises()
+
+    const answer = (guards.leave as Guard)() as Promise<boolean>
+    await flushPromises()
+    await choose(wrapper, 'Continuar na luta')
+
+    expect(await answer).toBe(false)
+    expect(window(wrapper).exists()).toBe(false)
+  })
+
+  it('treats Esc and a click outside the window as staying', async () => {
+    const wrapper = withUnsentVideo()
+    await flushPromises()
+
+    const first = (guards.leave as Guard)() as Promise<boolean>
+    await flushPromises()
+    await wrapper.get('.confirm-dialog').trigger('keydown', { key: 'Escape' })
+    expect(await first).toBe(false)
+
+    const second = (guards.leave as Guard)() as Promise<boolean>
+    await flushPromises()
+    await wrapper.get('.confirm-dialog').trigger('click')
+    expect(await second).toBe(false)
+  })
+
+  it('asks when going to another fight but not when staying on the same one', async () => {
+    const wrapper = withUnsentVideo()
+    await flushPromises()
+    const update = guards.update as Guard
+
+    expect(update({ params: { matchId: 'm1' } }, { params: { matchId: 'm1' } })).toBe(true)
+    const answer = update(
+      { params: { matchId: 'm2' } },
+      { params: { matchId: 'm1' } },
+    ) as Promise<boolean>
+    await flushPromises()
+
+    expect(window(wrapper).exists()).toBe(true)
+    await choose(wrapper, 'Continuar na luta')
+    expect(await answer).toBe(false)
+  })
+
+  it('asks while the fight is still being recorded', async () => {
+    recorder.state.value = 'recording'
+    const wrapper = mountPanel('running')
+
+    void (guards.leave as Guard)()
+    await flushPromises()
+
+    expect(window(wrapper).exists()).toBe(true)
   })
 })

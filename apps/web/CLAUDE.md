@@ -113,7 +113,7 @@ slots. Each component's Figma description repeats its Vue file and props.
 - Format dates and numbers with `Intl` using `pt-BR`.
 - Every page gets its data from the API through `src/data/` (which uses `src/api/`). No mocks, no
   demo data, no build-mode gates: what runs locally is what ships. Where `apps/api` has no
-  endpoint yet (arenas, operator match data, referee access) the `src/data/` function rejects with
+  endpoint yet (such as referee access) the `src/data/` function rejects with
   `not_implemented`; don't invent endpoints unless asked. Keep data loading in one place per view.
 - Don't add dependencies other than the `@fontsource` packages without asking.
 
@@ -124,8 +124,7 @@ slots. Each component's Figma description repeats its Vue file and props.
   There are no manual record or stop buttons.
 - Recording is **optional**, like the ESP32 connection: no camera must never block starting or
   ending a fight.
-- **Pending:** `fightPhase` is not connected to the API yet. `MatchOperationView` hardcodes
-  `'before'` until the matches backend exists; then map `scheduled` -> `before`,
+- `MatchOperationView` maps the operator snapshot to `fightPhase`: `scheduled` -> `before`,
   `ongoing | paused` -> `running`, `finished` -> `ended`.
 
 ## Accessibility and layout
@@ -135,8 +134,8 @@ slots. Each component's Figma description repeats its Vue file and props.
 - Red is only for destructive actions, errors, and a disconnected arena (`Status / Pill` Danger,
   as in `OperatorNav` and the OPE-01 picker). Orange is the primary action.
 - Referee pages are designed at 390 × 844. Use touch targets of at least 48 px and no hover-only UI.
-- Public, organizer and operator pages have desktop frames (1440) and phone frames (390,
-  `· celular`). Switch layouts at 768 px and keep everything fluid down to ~360 px.
+- Use desktop (1440) and phone (390, `· celular`) frames where available. The operator fight
+  frames are desktop-only. Switch layouts at 768 px and keep everything fluid down to ~360 px.
 
 ## Domain rules the UI must respect
 

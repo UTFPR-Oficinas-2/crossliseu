@@ -6,6 +6,39 @@ import { Match } from '../entities/match.entity.js';
 import { MatchEvent } from '../entities/match-event.entity.js';
 import type { MatchEventType } from '../entities/match-event.entity.js';
 import { Arena } from '../../arenas/entities/arena.entity.js';
+import type { ClockEvent } from './fight-clock.js';
+import type { FightState } from './fight-state.js';
+
+export interface OperatorFightSnapshot extends Omit<FightState, 'remainingMs'> {
+    events: ClockEvent[];
+    hasSelectedArena: boolean;
+    /** Side of the winning robot, set when a surrender decided the fight */
+    winnerSide: 'A' | 'B' | null;
+}
+
+interface OperatorFightRow {
+    matchId: string;
+    status: Match['state'];
+    endReason: Match['endReason'];
+    robotA: string | null;
+    robotB: string | null;
+    robotAId: string | null;
+    robotBId: string | null;
+    winnerRobotId: string | null;
+    arenaId: string | null;
+    eventType: MatchEventType | null;
+    occurredAt: Date | null;
+}
+
+function winnerSide(row: OperatorFightRow): 'A' | 'B' | null {
+    if (row.winnerRobotId === null) {
+        return null;
+    }
+    if (row.winnerRobotId === row.robotAId) {
+        return 'A';
+    }
+    return row.winnerRobotId === row.robotBId ? 'B' : null;
+}
 
 export interface LockedFight {
     /** Locked FOR UPDATE, without relations */
@@ -122,6 +155,52 @@ export class FightRepository {
             where: { id: matchId },
             relations: { robotA: true, robotB: true },
         });
+    }
+
+    /** One statement so concurrent Finish or Close cannot split the match from its events. */
+    async findOperatorSnapshot(
+        matchId: string,
+    ): Promise<OperatorFightSnapshot | null> {
+        const rows = await this.repository
+            .createQueryBuilder('fight')
+            .select('fight.id', 'matchId')
+            .addSelect('fight.state', 'status')
+            .addSelect('fight.endReason', 'endReason')
+            .addSelect('robotA.name', 'robotA')
+            .addSelect('robotB.name', 'robotB')
+            .addSelect('robotA.id', 'robotAId')
+            .addSelect('robotB.id', 'robotBId')
+            .addSelect('fight.winnerRobotId', 'winnerRobotId')
+            .addSelect('arena.id', 'arenaId')
+            .addSelect('event.type', 'eventType')
+            .addSelect('event.occurredAt', 'occurredAt')
+            .leftJoin('fight.robotA', 'robotA')
+            .leftJoin('fight.robotB', 'robotB')
+            // TypeORM excludes soft-deleted arenas from the join.
+            .leftJoin(Arena, 'arena', 'arena.currentMatchId = fight.id')
+            .leftJoin(MatchEvent, 'event', 'event.matchId = fight.id')
+            .where('fight.id = :matchId', { matchId })
+            .getRawMany<OperatorFightRow>();
+        const row = rows[0];
+        if (!row) {
+            return null;
+        }
+        return {
+            matchId: row.matchId,
+            status: row.status,
+            endReason: row.endReason,
+            robots: {
+                A: { name: row.robotA ?? '' },
+                B: { name: row.robotB ?? '' },
+            },
+            events: rows.flatMap(({ eventType, occurredAt }) =>
+                eventType && occurredAt
+                    ? [{ type: eventType, occurredAt }]
+                    : [],
+            ),
+            hasSelectedArena: row.arenaId !== null,
+            winnerSide: winnerSide(row),
+        };
     }
 
     /** Events of one match, by occurred_at */

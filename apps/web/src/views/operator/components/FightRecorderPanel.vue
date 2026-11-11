@@ -7,12 +7,11 @@
 // Recording is OPTIONAL, like the ESP32 connection: with no camera (missing, denied, failed) the
 // fight starts and ends exactly the same, and nothing here blocks or reports an error for it.
 //
-// TODO(matches API): `fightPhase` is not connected to the real match yet. When the matches backend
-// exists, MatchOperationView must derive it from the match status (see the table there).
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import CameraPreview from '@/components/ui/CameraPreview.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import type { SelectOption } from '@/components/ui/select-field'
 import { useFightRecorder } from '@/composables/useFightRecorder'
@@ -79,15 +78,22 @@ const fileName = computed(() => recordingFileName(matchId, mimeType.value))
 const isRecording = computed(() => state.value === 'recording')
 
 // ---------- the recording follows the fight ----------
-// Both are safe without a camera: no live stream means no recording is started, and `stop` does
-// nothing when nothing is recording, so the fight never depends on the video.
+// A camera can arrive after a reload or reconnect. Keep the first file if capture already stopped.
 watch(
-  () => fightPhase,
-  (phase) => {
-    if (phase === 'running') {
-      if (stream.value) start()
-    } else if (phase === 'ended') void stop()
+  [() => fightPhase, stream],
+  ([phase, liveStream]) => {
+    if (phase === 'ended') {
+      if (isRecording.value) void stop()
+    } else if (
+      phase === 'running' &&
+      liveStream &&
+      state.value === 'previewing' &&
+      !recording.value
+    ) {
+      start()
+    }
   },
+  { immediate: true },
 )
 const showResult = computed(
   () => fightPhase === 'ended' && recording.value !== null && state.value === 'stopped',
@@ -134,23 +140,38 @@ function send() {
 const hasUnsentVideo = computed(
   () => isRecording.value || (recording.value !== null && uploadState.value !== 'done'),
 )
-const leaveMessage = 'O vídeo da luta ainda não foi enviado e será perdido. Sair mesmo assim?'
+const leaveMessage =
+  'O vídeo da luta ainda não foi enviado. Se você sair agora, a gravação será perdida.'
+
+// In-app window for navigating away; the router waits for the answer
+const pendingLeave = shallowRef<((leave: boolean) => void) | null>(null)
+function askToLeave(): Promise<boolean> {
+  pendingLeave.value?.(false)
+  return new Promise((resolve) => {
+    pendingLeave.value = resolve
+  })
+}
+function answerLeave(leave: boolean) {
+  const resolve = pendingLeave.value
+  pendingLeave.value = null
+  resolve?.(leave)
+}
 
 // Closing or reloading the tab: the browser shows its own confirmation
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (hasUnsentVideo.value) event.preventDefault()
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
-onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  answerLeave(false)
+})
 
 // Navigating inside the app. Going to another fight's operator route reuses the route, so it is
 // guarded too; MatchOperationView keys this panel by match, so the next fight starts empty.
-onBeforeRouteLeave(() => !hasUnsentVideo.value || window.confirm(leaveMessage))
+onBeforeRouteLeave(() => !hasUnsentVideo.value || askToLeave())
 onBeforeRouteUpdate(
-  (to, from) =>
-    to.params.matchId === from.params.matchId ||
-    !hasUnsentVideo.value ||
-    window.confirm(leaveMessage),
+  (to, from) => to.params.matchId === from.params.matchId || !hasUnsentVideo.value || askToLeave(),
 )
 
 function download() {
@@ -166,6 +187,15 @@ onMounted(loadCameras)
 
 <template>
   <section class="recorder" aria-labelledby="recorder-title">
+    <ConfirmDialog
+      :open="pendingLeave !== null"
+      title="Sair sem enviar o vídeo?"
+      :message="leaveMessage"
+      confirm-label="Sair e perder o vídeo"
+      cancel-label="Continuar na luta"
+      @confirm="answerLeave(true)"
+      @cancel="answerLeave(false)"
+    />
     <header class="recorder__header">
       <h2 id="recorder-title" class="text-heading-m">Gravação da luta</h2>
       <span

@@ -83,6 +83,7 @@
 
   /* Layers */
   --z-menu: 10; /* open select menus sit above the rest of the form */
+  --z-modal: 100; /* confirmation windows cover the whole page */
 
   /* Focus and states (not defined in Figma; shared so they stay consistent) */
   --focus-ring-width: 2px;
@@ -184,4 +185,5 @@
   --text-timer-l-size: 44px;
   --text-timer-l-line-height: 1;
   --text-timer-l-tracking: 0;
+  --text-timer-xl-size: 64px;
 }

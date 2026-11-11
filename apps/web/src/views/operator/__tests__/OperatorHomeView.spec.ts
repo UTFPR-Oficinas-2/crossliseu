@@ -165,7 +165,7 @@ describe('OperatorHomeView', () => {
     expect(wrapper.text()).toContain('2 lutas programadas')
   })
 
-  it('keeps "Abrir luta" disabled until an arena and a fight are chosen', async () => {
+  it('keeps "Abrir luta" disabled until a fight is chosen, with or without an arena', async () => {
     const { wrapper } = await mountAt('/operator')
 
     expect(openButton(wrapper).attributes('disabled')).toBeDefined()
@@ -173,6 +173,35 @@ describe('OperatorHomeView', () => {
     expect(openButton(wrapper).attributes('disabled')).toBeDefined()
     await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
     expect(openButton(wrapper).attributes('disabled')).toBeUndefined()
+  })
+
+  it('opens the run view without an arena and without touching any arena', async () => {
+    const { wrapper, router } = await mountAt('/operator')
+
+    expect(wrapper.text()).toContain('Opcional')
+    await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
+    expect(openButton(wrapper).attributes('disabled')).toBeUndefined()
+    await openButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(selectArenaMatch).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/operator/m1')
+  })
+
+  it('lets the operator drop a chosen arena and run without one', async () => {
+    const { wrapper, router } = await mountAt('/operator')
+
+    await choose(wrapper, '1 · Arena', 'Arena 01')
+    await choose(wrapper, '2 · Luta', 'Marte × Cobalto')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Rodar sem arena')!
+      .trigger('click')
+    await openButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(selectArenaMatch).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/operator/m1')
   })
 
   it('assigns the fight to the arena and opens its run view', async () => {

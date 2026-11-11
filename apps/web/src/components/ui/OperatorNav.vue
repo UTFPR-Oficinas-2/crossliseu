@@ -2,6 +2,7 @@
 // Figma: `Navigation / Operator` (node 23:421, phone 153:1543). Top bar shown while the operator
 // runs a fight: the fight context and the arena box connection on the left, the exit on the right.
 // The arena status is shown, never used to block anything.
+import { computed } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 
@@ -16,6 +17,10 @@ const { arena, championship, robotA, robotB, arenaConnected } = defineProps<{
   arenaConnected: boolean
 }>()
 
+const context = computed(() =>
+  [arena, championship, [robotA, robotB].filter(Boolean).join(' × ')].filter(Boolean).join(' · '),
+)
+
 const emit = defineEmits<{
   exit: []
 }>()
@@ -26,10 +31,9 @@ const emit = defineEmits<{
     <div class="operator-nav__left">
       <p class="operator-nav__brand text-heading-m">Crossliseu</p>
       <span class="operator-nav__mode text-mono-s">OPERAÇÃO</span>
-      <p class="operator-nav__context text-body-m">
-        {{ arena }} · {{ championship }} · {{ robotA }} × {{ robotB }}
-      </p>
+      <p v-if="context" class="operator-nav__context text-body-m">{{ context }}</p>
       <StatusPill
+        v-if="arena"
         :label="arenaConnected ? 'Arena conectada' : 'Arena não conectada'"
         :tone="arenaConnected ? 'success' : 'danger'"
       />
