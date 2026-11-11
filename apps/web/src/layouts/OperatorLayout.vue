@@ -2,7 +2,7 @@
 // Figma: `11 / Operador · Preparação` (node 23:431). Shared frame for the operator screens:
 // `Navigation / Operator`, the `Operator / Steps` indicator and the content padding. The page
 // content (preparation, running, closing) is rendered by the child route.
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppNav from '@/components/ui/AppNav.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
@@ -33,55 +33,88 @@ const auth = useAuthStore()
 
 const match = ref<MatchSummary | null>(null)
 const championship = ref<Championship | null>(null)
-const arena = ref<Arena | null>(null)
+const arenas = shallowRef<Arena[]>([])
 const robots = ref<Robot[]>([])
+const liveStatus = ref<MatchState | null>(null)
+const hasSelectedArena = ref<boolean | null>(null)
 
-// Data loading lives here. A failed load leaves the layout empty (every step reads as upcoming)
-// instead of throwing into the router. The fight's arena is the one whose current match it is:
-// the server keeps that link, so a reload finds the same arena again. Arenas load on their own:
-// failing them only loses the arena badge, not the fight.
+const arena = computed(() => {
+  if (hasSelectedArena.value !== false) {
+    const current = arenas.value.find(
+      (candidate) => candidate.currentMatchId === route.params.matchId,
+    )
+    if (current) return current
+  }
+  // A closed fight can still show the arena it was played on.
+  if (hasSelectedArena.value === null || liveStatus.value === 'finished') {
+    return arenas.value.find((candidate) => candidate.id === match.value?.arenaId) ?? null
+  }
+  return null
+})
+
 let loadId = 0
 async function load(matchId: string) {
   const current = ++loadId
-  let loaded: [MatchSummary | null, Championship | null, Arena[], Robot[]]
   try {
-    // The picker route (`/operator`) has no match
-    const loadedMatch = matchId ? await getMatchSummary(matchId) : null
-    loaded = loadedMatch
-      ? [
-          loadedMatch,
-          ...(await Promise.all([
-            getChampionship(loadedMatch.championshipId),
-            getArenas(auth.token ?? '').catch((error: unknown) => {
-              console.error('Could not load the arenas', error)
-              return []
-            }),
-            getRobots(loadedMatch.championshipId),
-          ])),
-        ]
-      : [null, null, [], []]
+    const loadedMatch = await getMatchSummary(matchId)
+    if (!loadedMatch || current !== loadId) return
+    const [loadedChampionship, loadedRobots] = await Promise.all([
+      getChampionship(loadedMatch.championshipId),
+      getRobots(loadedMatch.championshipId),
+    ])
+    if (current !== loadId) return
+    match.value = loadedMatch
+    championship.value = loadedChampionship
+    robots.value = loadedRobots
   } catch (error) {
-    console.error('Could not load the match', error)
-    loaded = [null, null, [], []]
+    if (current === loadId) console.error('Could not load the match', error)
   }
-  // Ignore a stale response if the route changed while loading
-  if (current !== loadId) return
-  const [loadedMatch, loadedChampionship, arenas, loadedRobots] = loaded
-  match.value = loadedMatch
-  championship.value = loadedChampionship
-  // Close clears the arena's currentMatchId, so prefer the arena the fight ran on
-  arena.value =
-    (loadedMatch?.arenaId
-      ? arenas.find((a) => a.id === loadedMatch.arenaId)
-      : arenas.find((a) => a.currentMatchId === loadedMatch?.id)) ?? null
-  robots.value = loadedRobots
+}
+
+// The fight snapshot reports assignment, while the authenticated arena list carries the name
+// and connectivity. Refresh that context with each new snapshot and ignore old route reads.
+let nextArenaRead = 0
+let activeArenaRead: number | undefined
+async function refreshArenas() {
+  if (activeArenaRead !== undefined) return
+  const current = ++nextArenaRead
+  activeArenaRead = current
+  try {
+    const loadedArenas = await getArenas(auth.token ?? '')
+    if (current === activeArenaRead) arenas.value = loadedArenas
+  } catch (error) {
+    if (current === activeArenaRead) {
+      arenas.value = []
+      console.error('Could not load the arenas', error)
+    }
+  } finally {
+    if (current === activeArenaRead) activeArenaRead = undefined
+  }
 }
 
 watch(
   () => route.params.matchId,
-  (matchId) => load(String(matchId ?? '')),
+  (matchId) => {
+    loadId++
+    activeArenaRead = undefined
+    match.value = null
+    championship.value = null
+    arenas.value = []
+    robots.value = []
+    liveStatus.value = null
+    hasSelectedArena.value = null
+    if (matchId) {
+      void load(String(matchId))
+      void refreshArenas()
+    }
+  },
   { immediate: true },
 )
+
+onScopeDispose(() => {
+  loadId++
+  activeArenaRead = undefined
+})
 
 const robotName = (id: string | undefined) => robots.value.find((r) => r.id === id)?.name ?? ''
 const robotNames = computed(() => ({
@@ -94,9 +127,16 @@ const arenaConnected = computed(() => arena.value?.online ?? false)
 
 // -1 when there is no match, so every step reads as upcoming
 const currentStepIndex = computed(() => {
-  const state = match.value?.state
+  const state = liveStatus.value ?? match.value?.state
   return state ? steps.findIndex((s) => s.id === stepByState[state]) : -1
 })
+
+function updateFightStatus(matchId: string, status: MatchState, selectedArena: boolean) {
+  if (route.params.matchId !== matchId) return
+  liveStatus.value = status
+  hasSelectedArena.value = selectedArena
+  void refreshArenas()
+}
 
 function stepStatus(index: number): StepStatus {
   if (index < currentStepIndex.value) return 'done'
@@ -152,7 +192,7 @@ const handleSignOut = useSignOut()
         </ol>
       </nav>
 
-      <RouterView />
+      <RouterView @fight-status="updateFightStatus" />
     </main>
   </div>
 </template>
@@ -207,8 +247,7 @@ const handleSignOut = useSignOut()
   overflow-wrap: break-word;
 }
 
-/* Figma only shows the preparation state. Done steps keep the orange line (progress already
-   made) but use the muted label, so only the current step reads as active. */
+/* Keep completed steps visible while highlighting the current step's label. */
 .operator-steps__item--done .operator-steps__line,
 .operator-steps__item--current .operator-steps__line {
   background: var(--color-orange);
@@ -216,5 +255,15 @@ const handleSignOut = useSignOut()
 
 .operator-steps__item--current .operator-steps__label {
   color: var(--color-text);
+}
+
+@media (max-width: 767px) {
+  .operator-steps {
+    align-items: stretch;
+  }
+
+  .operator-steps__item {
+    padding-inline: var(--space-2);
+  }
 }
 </style>

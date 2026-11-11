@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, type RouteComponent } from 'vue-router'
 
 import AppNav from '@/components/ui/AppNav.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
@@ -54,7 +54,7 @@ const robot = (id: string, name: string): Robot => ({
   modifiedAt: at,
 })
 
-async function mountAt(path: string) {
+async function mountAt(path: string, operation: RouteComponent = stub) {
   setActivePinia(createPinia())
   const router = createRouter({
     history: createMemoryHistory(),
@@ -67,7 +67,7 @@ async function mountAt(path: string) {
         component: OperatorLayout,
         children: [
           { path: '', name: 'operator', component: stub },
-          { path: ':matchId', name: 'match-operation', component: stub },
+          { path: ':matchId', name: 'match-operation', component: operation },
         ],
       },
     ],
@@ -106,6 +106,45 @@ describe('OperatorLayout', () => {
       arenaConnected: false,
     })
     expect(wrapper.find('[aria-current="step"]').text()).toBe('1 · Preparação')
+  })
+
+  it('updates the current step when the operator view observes a new fight status', async () => {
+    const wrapper = await mountAt('/operator/m1', {
+      template: `<button @click="$emit('fight-status', 'm1', 'finished')">Finish</button>`,
+    })
+    await wrapper.get('main button').trigger('click')
+
+    expect(wrapper.get('[aria-current="step"]').text()).toBe('3 · Encerramento')
+  })
+
+  it('refreshes the assigned arena and its connectivity while staying on the same fight', async () => {
+    const wrapper = await mountAt('/operator/m1', {
+      template: `<button @click="$emit('fight-status', 'm1', 'scheduled', true)">Poll</button>`,
+    })
+    expect(wrapper.getComponent(OperatorNav).props('arena')).toBe('Arena 1')
+
+    vi.mocked(getArenas).mockResolvedValueOnce([
+      { ...arenas[1]!, id: 'a2', name: 'Arena 2', online: true },
+    ])
+    await wrapper.get('main button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.getComponent(OperatorNav).props()).toMatchObject({
+      arena: 'Arena 2',
+      arenaConnected: true,
+    })
+  })
+
+  it('clears the arena name and connection badge when the latest snapshot loses the assignment', async () => {
+    const wrapper = await mountAt('/operator/m1', {
+      template: `<button @click="$emit('fight-status', 'm1', 'scheduled', false)">Poll</button>`,
+    })
+    expect(wrapper.getComponent(OperatorNav).props('arena')).toBe('Arena 1')
+    await wrapper.get('main button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.getComponent(OperatorNav).props('arena')).toBe('')
+    expect(wrapper.text()).not.toContain('Arena não conectada')
   })
 
   it('finds the arena by arenaId after Close cleared its current match', async () => {

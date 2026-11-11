@@ -20,6 +20,7 @@ import {
   type ApiArena,
 } from '@/api/arenas'
 import { login } from '@/api/auth'
+import { markUploaded, requestUploadUrl } from '@/api/recordings'
 import {
   createMatch as postMatch,
   deleteMatch as removeMatch,
@@ -230,7 +231,7 @@ export async function deleteMatch(id: string, token: string): Promise<void> {
   return removeMatch(id, token)
 }
 
-// apps/api has no operator match data or referee access yet. These reject with a clear
+// The richer match and referee views have no data source yet. These reject with a clear
 // error instead of inventing endpoints; replace each with a request once the API provides it.
 const notImplemented = () => new ApiError(501, 'not_implemented', ['not_implemented'])
 
@@ -316,32 +317,28 @@ export const getRefereeAccess: (token: string) => Promise<RefereeAccess | null> 
   throw notImplemented()
 }
 
-// ---------- fight recording upload (#20) ----------
-// apps/api has no recording routes yet (#45). The calls are ready in `@/api/recordings`
-// (`requestUploadUrl`, `markUploaded`, see docs/recording-storage.md); once the routes land,
-// these two functions return those calls instead of rejecting.
-
-/** Where to PUT the video: a presigned R2 URL and the object key it creates */
+// The video itself goes directly to R2. The API authorizes and confirms the upload.
 export interface RecordingUploadTarget {
   url: string
   key: string
 }
 
-/** Step 1 of the upload: POST /matches/:id/recording/upload-url (JWT). No API yet. */
-export const requestRecordingUpload: (
+export async function requestRecordingUpload(
   matchId: string,
   contentType: string,
   size: number,
   token: string,
-) => Promise<RecordingUploadTarget> = async () => {
-  throw notImplemented()
+): Promise<RecordingUploadTarget> {
+  const { url, key } = await requestUploadUrl(matchId, contentType, size, token)
+  return { url, key }
 }
 
-/** Step 3 of the upload: POST /matches/:id/recording/complete (JWT). No API yet. */
-export const confirmRecordingUpload: (
-  matchId: string,
-  upload: { key: string; size: number },
-  token: string,
-) => Promise<void> = async () => {
-  throw notImplemented()
-}
+export const confirmRecordingUpload = markUploaded
+
+// The operator snapshot already matches the view's data model.
+export {
+  getFightState,
+  sendFightCommand,
+  type FightCommand,
+  type OperatorFightState,
+} from '@/api/matches'

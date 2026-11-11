@@ -7,8 +7,6 @@
 // Recording is OPTIONAL, like the ESP32 connection: with no camera (missing, denied, failed) the
 // fight starts and ends exactly the same, and nothing here blocks or reports an error for it.
 //
-// TODO(matches API): `fightPhase` is not connected to the real match yet. When the matches backend
-// exists, MatchOperationView must derive it from the match status (see the table there).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -79,15 +77,22 @@ const fileName = computed(() => recordingFileName(matchId, mimeType.value))
 const isRecording = computed(() => state.value === 'recording')
 
 // ---------- the recording follows the fight ----------
-// Both are safe without a camera: no live stream means no recording is started, and `stop` does
-// nothing when nothing is recording, so the fight never depends on the video.
+// A camera can arrive after a reload or reconnect. Keep the first file if capture already stopped.
 watch(
-  () => fightPhase,
-  (phase) => {
-    if (phase === 'running') {
-      if (stream.value) start()
-    } else if (phase === 'ended') void stop()
+  [() => fightPhase, stream],
+  ([phase, liveStream]) => {
+    if (phase === 'ended') {
+      if (isRecording.value) void stop()
+    } else if (
+      phase === 'running' &&
+      liveStream &&
+      state.value === 'previewing' &&
+      !recording.value
+    ) {
+      start()
+    }
   },
+  { immediate: true },
 )
 const showResult = computed(
   () => fightPhase === 'ended' && recording.value !== null && state.value === 'stopped',

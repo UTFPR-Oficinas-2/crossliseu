@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, shallowRef } from 'vue'
 import type { RecorderState } from '@/composables/useFightRecorder'
 import FightRecorderPanel from '../components/FightRecorderPanel.vue'
@@ -57,11 +57,67 @@ beforeEach(() => {
   recorder.state.value = 'idle'
   recorder.error.value = null
   recorder.recording.value = null
-  recorder.start.mockReset()
+  recorder.start.mockReset().mockImplementation(() => {
+    recorder.state.value = 'recording'
+  })
   recorder.stop.mockReset().mockResolvedValue(null)
 })
 
 describe('FightRecorderPanel', () => {
+  enableAutoUnmount(afterEach)
+
+  it('starts on entry when the running fight already has a live preview', () => {
+    withCamera()
+    mountPanel('running')
+
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts when the first camera arrives during the fight and ignores duplicate stream updates', async () => {
+    mountPanel('running')
+    expect(recorder.start).not.toHaveBeenCalled()
+
+    withCamera()
+    await flushPromises()
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+
+    recorder.stream.value = { getVideoTracks: () => [] } as unknown as MediaStream
+    await flushPromises()
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not record a camera that finishes opening after the fight ends', async () => {
+    const wrapper = mountPanel('running')
+    await wrapper.setProps({ fightPhase: 'ended' })
+
+    withCamera()
+    await flushPromises()
+    expect(recorder.start).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('não foi gravada')
+  })
+
+  it('preserves the partial file through reconnection and shows it after Finish', async () => {
+    const wrapper = mountPanel('running')
+    withCamera()
+    await flushPromises()
+
+    const partial = new Blob(['partial footage'], { type: 'video/webm' })
+    recorder.stream.value = null
+    recorder.recording.value = partial
+    recorder.state.value = 'stopped'
+    await flushPromises()
+
+    recorder.stream.value = { getVideoTracks: () => [] } as unknown as MediaStream
+    await flushPromises()
+    expect(recorder.start).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).not.toContain('Enviar')
+    await wrapper.setProps({ fightPhase: 'ended' })
+
+    expect(recorder.recording.value).toBe(partial)
+    expect(wrapper.text()).toContain('Enviar')
+    expect(wrapper.text()).toContain('Baixar')
+  })
+
   it('has no manual record button and no result before the fight', () => {
     withCamera()
     const wrapper = mountPanel('before')

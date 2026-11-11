@@ -32,6 +32,8 @@ vi.mock('@/api/matches', () => ({
   createMatch: vi.fn<typeof matchesApi.createMatch>(),
   updateMatch: vi.fn<typeof matchesApi.updateMatch>(),
   deleteMatch: vi.fn<typeof matchesApi.deleteMatch>(),
+  getFightState: vi.fn<typeof matchesApi.getFightState>(),
+  sendFightCommand: vi.fn<typeof matchesApi.sendFightCommand>(),
 }))
 
 import {
@@ -48,7 +50,15 @@ import {
   listMyChampionships,
   type ApiChampionship,
 } from '@/api/championships'
-import { createMatch as postMatch, getMatchById, listMatches, type ApiMatch } from '@/api/matches'
+import {
+  createMatch as postMatch,
+  getMatchById,
+  listMatches,
+  getFightState as fetchFightState,
+  sendFightCommand as postFightCommand,
+  type ApiMatch,
+  type OperatorFightState,
+} from '@/api/matches'
 import { createRobot as postRobot, listRobots, type ApiRobot } from '@/api/robots'
 import {
   addArena,
@@ -61,6 +71,10 @@ import {
   getArenas,
   getChampionship,
   getMatch,
+  getFightState,
+  requestRecordingUpload,
+  confirmRecordingUpload,
+  sendFightCommand,
   getManagedChampionships,
   getMatchSummaries,
   getMatchSummary,
@@ -373,5 +387,76 @@ describe('@/data', () => {
     expect(await getMatchSummary('missing')).toBeNull()
     expect(await getMatchSummary('not-a-uuid')).toBeNull()
     await expect(getMatchSummary('m1')).rejects.toMatchObject({ status: 500 })
+  })
+})
+
+describe('operator fight data', () => {
+  const finished: OperatorFightState = {
+    matchId: 'm1',
+    status: 'finished',
+    remainingMs: 40_000,
+    endReason: 'manual',
+    robots: { A: { name: 'Titã' }, B: { name: 'Volt' } },
+    closed: false,
+    hasSelectedArena: true,
+  }
+
+  it('preserves the selected arena and the closed flag on reads and commands', async () => {
+    const signal = new AbortController().signal
+    const closed = { ...finished, closed: true, hasSelectedArena: false }
+    vi.mocked(fetchFightState).mockResolvedValueOnce(finished)
+    vi.mocked(postFightCommand).mockResolvedValueOnce(closed)
+
+    expect(await getFightState('m1', signal)).toEqual(finished)
+    expect(await sendFightCommand('m1', 'close', 'token', signal)).toEqual(closed)
+    expect(fetchFightState).toHaveBeenCalledWith('m1', signal)
+    expect(postFightCommand).toHaveBeenCalledWith('m1', 'close', 'token', signal)
+  })
+
+  it('propagates the API error for state reads and commands', async () => {
+    const missing = new ApiError(404, 'match_not_found')
+    const conflict = new ApiError(409, 'match_invalid_transition')
+    vi.mocked(fetchFightState).mockRejectedValueOnce(missing)
+    vi.mocked(postFightCommand).mockRejectedValueOnce(conflict)
+
+    await expect(getFightState('m1')).rejects.toBe(missing)
+    await expect(sendFightCommand('m1', 'close', 'token')).rejects.toBe(conflict)
+  })
+})
+
+describe('fight recording data', () => {
+  it('requests and confirms the upload of a retained recording through the API', async () => {
+    const target = { url: 'https://storage.invalid/upload', key: 'recordings/m1.webm' }
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json(target))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetch)
+    try {
+      expect(await requestRecordingUpload('m1', 'video/webm', 25, 'jwt')).toEqual(target)
+      await expect(
+        confirmRecordingUpload('m1', { key: target.key, size: 25 }, 'jwt'),
+      ).resolves.toBeUndefined()
+      expect(fetch).toHaveBeenNthCalledWith(
+        1,
+        expect.stringMatching(/\/matches\/m1\/recording\/upload-url$/),
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ Authorization: 'Bearer jwt' }),
+          body: JSON.stringify({ contentType: 'video/webm', size: 25 }),
+        }),
+      )
+      expect(fetch).toHaveBeenNthCalledWith(
+        2,
+        expect.stringMatching(/\/matches\/m1\/recording\/complete$/),
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ Authorization: 'Bearer jwt' }),
+          body: JSON.stringify({ key: target.key, size: 25 }),
+        }),
+      )
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

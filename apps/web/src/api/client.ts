@@ -38,10 +38,12 @@ interface RequestOptions {
   body?: unknown
   /** JWT from `POST /auth/login`, required by every non-public route */
   token?: string
+  signal?: AbortSignal
+  cache?: RequestCache
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, token } = options
+  const { method = 'GET', body, token, signal, cache } = options
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = `Bearer ${token}`
@@ -51,6 +53,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers,
+      signal,
+      cache,
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (error) {

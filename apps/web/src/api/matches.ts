@@ -1,5 +1,4 @@
-// `MatchesController` in apps/api (`@Controller('matches')`). Only scheduling lives here: list,
-// create, and edit or delete while the match is `scheduled`.
+// Scheduling and operator fight endpoints from MatchesController in apps/api.
 import { apiRequest } from './client'
 import type { ApiRobot } from './robots'
 import type { MatchEndReason, MatchState, WeightClass } from '@/types'
@@ -69,4 +68,36 @@ export function updateMatch(id: string, body: ApiUpdateMatch, token: string): Pr
 /** DELETE /matches/:id (JWT). 204, soft delete. 409 `match_not_editable` unless scheduled. */
 export function deleteMatch(id: string, token: string): Promise<void> {
   return apiRequest(`/matches/${encodeURIComponent(id)}`, { method: 'DELETE', token })
+}
+
+export interface OperatorFightState {
+  matchId: string
+  status: MatchState
+  remainingMs: number
+  endReason: MatchEndReason | null
+  robots: { A: { name: string }; B: { name: string } }
+  closed: boolean
+  hasSelectedArena: boolean
+}
+
+export type FightCommand = 'start' | 'pause' | 'resume' | 'finish' | 'close'
+
+export function getFightState(id: string, signal?: AbortSignal): Promise<OperatorFightState> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/state?view=operator`, {
+    signal,
+    cache: 'no-store',
+  })
+}
+
+export function sendFightCommand(
+  id: string,
+  command: FightCommand,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OperatorFightState> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/${command}?view=operator`, {
+    method: 'POST',
+    token,
+    signal,
+  })
 }

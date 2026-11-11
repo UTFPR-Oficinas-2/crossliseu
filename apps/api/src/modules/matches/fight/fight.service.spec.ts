@@ -116,6 +116,23 @@ function setup({
             Promise.resolve(missing ? null : store.match),
         ),
         findEvents: vi.fn(() => Promise.resolve([...store.events])),
+        findOperatorSnapshot: vi.fn(() =>
+            Promise.resolve(
+                missing
+                    ? null
+                    : {
+                          matchId: store.match.id,
+                          status: store.match.state,
+                          endReason: store.match.endReason,
+                          robots: {
+                              A: { name: store.match.robotA?.name ?? '' },
+                              B: { name: store.match.robotB?.name ?? '' },
+                          },
+                          events: [...store.events],
+                          hasSelectedArena: store.arenaPointer !== null,
+                      },
+            ),
+        ),
         withLockedFight: vi.fn(
             async (
                 id: string,
@@ -211,6 +228,119 @@ function setup({
 }
 
 describe('FightService', () => {
+    it('reports a scheduled match with its live assignment', async () => {
+        const { service } = setup({ arenaId: ARENA_ID });
+
+        expect(await service.operatorState(MATCH_ID)).toEqual({
+            matchId: MATCH_ID,
+            status: 'scheduled',
+            remainingMs: 180_000,
+            endReason: null,
+            robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            closed: false,
+            hasSelectedArena: true,
+        });
+    });
+
+    it('reports the frozen result before and after Close', async () => {
+        const { service, store } = setup({
+            state: 'finished',
+            arenaId: ARENA_ID,
+            events: [event('started', T0), event('finished', at(60_000))],
+            now: at(180_000),
+        });
+        store.match.endReason = 'manual';
+
+        expect(await service.operatorState(MATCH_ID)).toMatchObject({
+            status: 'finished',
+            remainingMs: 120_000,
+            endReason: 'manual',
+            closed: false,
+            hasSelectedArena: true,
+        });
+        expect(
+            await service.operatorCommand(MATCH_ID, 'close', USER_ID),
+        ).toMatchObject({
+            status: 'finished',
+            remainingMs: 120_000,
+            endReason: 'manual',
+            closed: true,
+            hasSelectedArena: false,
+        });
+    });
+
+    it('reports one committed snapshot if Finish and Close land after the settle read', async () => {
+        const { service, repo, store } = setup({
+            state: 'ongoing',
+            arenaId: ARENA_ID,
+            events: [event('started', T0)],
+            now: at(90_000),
+        });
+        repo.findEvents.mockImplementationOnce(() => {
+            const beforeCommit = [...store.events];
+            store.match.state = 'finished';
+            store.match.endReason = 'surrender';
+            store.events.push(
+                event('finished', at(80_000)),
+                event('closed', at(81_000)),
+            );
+            store.arenaPointer = null;
+            return Promise.resolve(beforeCommit);
+        });
+        // An independent match read would observe the old row.
+        repo.findWithRobots.mockResolvedValueOnce(
+            Object.assign(cloneMatch(store.match), {
+                state: 'ongoing' as const,
+            }),
+        );
+
+        expect(await service.operatorState(MATCH_ID)).toMatchObject({
+            status: 'finished',
+            remainingMs: 100_000,
+            endReason: 'surrender',
+            closed: true,
+            hasSelectedArena: false,
+        });
+    });
+
+    it('rejects operator Start if the assignment disappeared before the lock', async () => {
+        const { service, store } = setup({ arenaId: ARENA_ID });
+        expect((await service.operatorState(MATCH_ID)).hasSelectedArena).toBe(
+            true,
+        );
+        store.arenaPointer = null;
+
+        await expect(
+            service.operatorCommand(MATCH_ID, 'start', USER_ID),
+        ).rejects.toMatchObject({
+            status: 409,
+            message: 'match_arena_required',
+        });
+        expect(store.match.state).toBe('scheduled');
+        expect(store.written).toEqual([]);
+    });
+
+    it('starts an assigned fight even without a device connection', async () => {
+        const { service, store } = setup({ arenaId: ARENA_ID });
+
+        expect(
+            await service.operatorCommand(MATCH_ID, 'start', USER_ID),
+        ).toMatchObject({
+            status: 'ongoing',
+            hasSelectedArena: true,
+        });
+        expect(store.written.map((entry) => entry.type)).toEqual(['started']);
+    });
+
+    it('does not allow a non-owner to issue an operator command', async () => {
+        const { service, store } = setup({ arenaId: ARENA_ID, owner: false });
+
+        await expect(
+            service.operatorCommand(MATCH_ID, 'start', USER_ID),
+        ).rejects.toThrow(new NotFoundException('match_not_found'));
+        expect(store.written).toEqual([]);
+    });
+
     it('start writes started at now with the operator, sets ongoing and the picked arena', async () => {
         const { service, store } = setup({ arenaId: ARENA_ID, now: at(1000) });
 
