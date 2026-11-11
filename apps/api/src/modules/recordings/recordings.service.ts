@@ -59,6 +59,7 @@ export class RecordingsService {
     async requestUploadUrl(
         matchId: string,
         contentType: RecordingContentType,
+        size: number,
         userId: string,
     ) {
         await this.assertOwned(matchId, userId);
@@ -67,6 +68,7 @@ export class RecordingsService {
         const url = await this.storage.presignUpload(
             key,
             contentType,
+            size,
             UPLOAD_URL_TTL_SECONDS,
         );
 

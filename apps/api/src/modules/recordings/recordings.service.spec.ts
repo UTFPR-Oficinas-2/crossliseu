@@ -17,16 +17,27 @@ const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const KEY = `recordings/${MATCH_ID}.mp4`;
+const SIZE = 5000;
 
 /** R2 stand-in: remembers what was signed and which objects "exist" */
 class FakeStorage extends RecordingStorage {
-    signed: { key: string; contentType: string; expiresIn: number }[] = [];
+    signed: {
+        key: string;
+        contentType: string;
+        size: number;
+        expiresIn: number;
+    }[] = [];
     readSigned: { key: string; expiresIn: number }[] = [];
     objects = new Map<string, number>();
     deleted: string[] = [];
 
-    async presignUpload(key: string, contentType: string, expiresIn: number) {
-        this.signed.push({ key, contentType, expiresIn });
+    async presignUpload(
+        key: string,
+        contentType: string,
+        size: number,
+        expiresIn: number,
+    ) {
+        this.signed.push({ key, contentType, size, expiresIn });
         return `https://r2.example/${key}?signature=fake`;
     }
 
@@ -156,6 +167,7 @@ describe('RecordingsService.requestUploadUrl', () => {
         const answer = await service.requestUploadUrl(
             MATCH_ID,
             'video/mp4',
+            SIZE,
             USER_ID,
         );
 
@@ -166,6 +178,7 @@ describe('RecordingsService.requestUploadUrl', () => {
             {
                 key: answer.key,
                 contentType: 'video/mp4',
+                size: SIZE,
                 expiresIn: UPLOAD_URL_TTL_SECONDS,
             },
         ]);
@@ -192,11 +205,13 @@ describe('RecordingsService.requestUploadUrl', () => {
         const first = await service.requestUploadUrl(
             MATCH_ID,
             'video/mp4',
+            SIZE,
             USER_ID,
         );
         const second = await service.requestUploadUrl(
             MATCH_ID,
             'video/mp4',
+            SIZE,
             USER_ID,
         );
 
@@ -210,6 +225,7 @@ describe('RecordingsService.requestUploadUrl', () => {
         const answer = await service.requestUploadUrl(
             MATCH_ID,
             'video/webm',
+            SIZE,
             USER_ID,
         );
 
@@ -223,7 +239,7 @@ describe('RecordingsService.requestUploadUrl', () => {
         const { service, storage, videos } = setup({ owner: false });
 
         await expect(
-            service.requestUploadUrl(MATCH_ID, 'video/mp4', USER_ID),
+            service.requestUploadUrl(MATCH_ID, 'video/mp4', SIZE, USER_ID),
         ).rejects.toEqual(new NotFoundException('match_not_found'));
         expect(storage.signed).toEqual([]);
         expect(videos.requestUpload).not.toHaveBeenCalled();
@@ -233,7 +249,7 @@ describe('RecordingsService.requestUploadUrl', () => {
         const { service } = setup({ missingMatch: true });
 
         await expect(
-            service.requestUploadUrl(MATCH_ID, 'video/mp4', USER_ID),
+            service.requestUploadUrl(MATCH_ID, 'video/mp4', SIZE, USER_ID),
         ).rejects.toEqual(new NotFoundException('match_not_found'));
     });
 });
@@ -278,6 +294,7 @@ describe('RecordingsService.complete', () => {
         const { key } = await service.requestUploadUrl(
             MATCH_ID,
             'video/webm',
+            SIZE,
             USER_ID,
         );
         storage.objects.set(key, 5000);
@@ -302,6 +319,7 @@ describe('RecordingsService.complete', () => {
         const { key } = await service.requestUploadUrl(
             MATCH_ID,
             'video/mp4',
+            SIZE,
             USER_ID,
         );
         storage.objects.set(key, 99);
@@ -320,6 +338,7 @@ describe('RecordingsService.complete', () => {
         const { key } = await service.requestUploadUrl(
             MATCH_ID,
             'video/mp4',
+            SIZE,
             USER_ID,
         );
 
@@ -332,7 +351,7 @@ describe('RecordingsService.complete', () => {
     it('refuses the old key after a re-record was requested', async () => {
         const { service, storage } = setup({ existing: uploadedVideo() });
         storage.objects.set(KEY, 73_400_320);
-        await service.requestUploadUrl(MATCH_ID, 'video/mp4', USER_ID);
+        await service.requestUploadUrl(MATCH_ID, 'video/mp4', SIZE, USER_ID);
 
         await expect(
             service.complete(MATCH_ID, { key: KEY, size: 73_400_320 }, USER_ID),

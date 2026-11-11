@@ -52,7 +52,7 @@ export function useRecordingUpload() {
     progress.value = 0
     try {
       state.value = 'requesting'
-      const { url, key } = await requestUploadUrl(matchId, file.type, token)
+      const { url, key } = await requestUploadUrl(matchId, file.type, file.size, token)
 
       state.value = 'uploading'
       await uploadToR2(url, file, {

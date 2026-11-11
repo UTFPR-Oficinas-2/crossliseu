@@ -31,7 +31,7 @@ describe('useRecordingUpload', () => {
     const { state, progress, error, upload } = useRecordingUpload()
     expect(await upload('m1', video, 't')).toBe(true)
 
-    expect(requestUploadUrl).toHaveBeenCalledWith('m1', 'video/mp4', 't')
+    expect(requestUploadUrl).toHaveBeenCalledWith('m1', 'video/mp4', video.size, 't')
     expect(vi.mocked(uploadToR2).mock.calls[0]?.[0]).toBe(presigned.url)
     expect(vi.mocked(uploadToR2).mock.calls[0]?.[1]).toBe(video)
     expect(markUploaded).toHaveBeenCalledWith('m1', { key: presigned.key, size: video.size }, 't')

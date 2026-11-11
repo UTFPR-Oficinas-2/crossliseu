@@ -18,10 +18,14 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
  * one is R2RecordingStorage (the same pattern as Clock in the matches module).
  */
 export abstract class RecordingStorage {
-    /** URL that allows one PUT of `key` with exactly this Content-Type, for `expiresInSeconds` */
+    /**
+     * URL that allows one PUT of `key` with exactly this Content-Type and exactly `sizeBytes`
+     * bytes, for `expiresInSeconds`
+     */
     abstract presignUpload(
         key: string,
         contentType: string,
+        sizeBytes: number,
         expiresInSeconds: number,
     ): Promise<string>;
 
@@ -80,6 +84,7 @@ export class R2RecordingStorage extends RecordingStorage {
     async presignUpload(
         key: string,
         contentType: string,
+        sizeBytes: number,
         expiresInSeconds: number,
     ) {
         const { client, bucket } = this.configured();
@@ -89,12 +94,13 @@ export class R2RecordingStorage extends RecordingStorage {
                 Bucket: bucket,
                 Key: key,
                 ContentType: contentType,
+                ContentLength: sizeBytes,
             }),
             {
                 expiresIn: expiresInSeconds,
-                // Without this the SDK leaves Content-Type out of the signature, and the URL
-                // accepts any type: signing it makes R2 refuse a PUT with another one (403)
-                signableHeaders: new Set(['content-type']),
+                // Without this the SDK leaves these out of the signature, and the URL accepts any
+                // type or size: signing them makes R2 refuse a PUT with another one (403)
+                signableHeaders: new Set(['content-type', 'content-length']),
             },
         );
     }
@@ -128,7 +134,9 @@ export class R2RecordingStorage extends RecordingStorage {
     async deleteObject(key: string) {
         const { client, bucket } = this.configured();
         // S3/R2 answer 204 for a missing key too
-        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+        await client.send(
+            new DeleteObjectCommand({ Bucket: bucket, Key: key }),
+        );
     }
 
     private configured() {
