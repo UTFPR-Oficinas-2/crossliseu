@@ -15,11 +15,7 @@ const commandsByStatus: Record<OperatorFightState['status'], readonly FightComma
 }
 
 function permitsCommand(state: OperatorFightState, command: FightCommand): boolean {
-  return (
-    !state.closed &&
-    commandsByStatus[state.status].includes(command) &&
-    (command !== 'start' || state.hasSelectedArena)
-  )
+  return !state.closed && commandsByStatus[state.status].includes(command)
 }
 
 function observesTransition(command: FightCommand, state: OperatorFightState): boolean {

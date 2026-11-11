@@ -187,7 +187,8 @@ const selectedFight = computed(() => findPickableFight(matchId.value))
 // The arena is optional: a fight can run from this screen alone, without an ESP32 box
 const canOpen = computed(() => !opening.value && selectedFight.value !== null)
 
-const RUN_VIEW_REFUSED = 'A luta foi aberta na arena, mas a tela dela não abriu. Use “Ir para a luta”.'
+const RUN_VIEW_REFUSED =
+  'A luta foi aberta na arena, mas a tela dela não abriu. Use “Ir para a luta”.'
 
 /** Shows the current arenas and fights, dropping a choice that is no longer usable */
 async function refreshAfterPick() {

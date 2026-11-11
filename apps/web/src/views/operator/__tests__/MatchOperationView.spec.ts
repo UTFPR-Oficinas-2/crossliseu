@@ -215,6 +215,22 @@ describe('MatchOperationView', () => {
     expect(link('Selecionar arena')?.attributes('href')).toBe('/operator')
   })
 
+  it('sends Start when the operator clicks it without an arena', async () => {
+    get.mockResolvedValueOnce({ ...scheduled, hasSelectedArena: false })
+    post.mockResolvedValueOnce({ ...scheduled, status: 'ongoing', hasSelectedArena: false })
+    const { button, click } = await mountFight()
+
+    await click('Iniciar luta')
+
+    expect(post).toHaveBeenCalledExactlyOnceWith(
+      'm1',
+      'start',
+      expect.any(String),
+      expect.any(AbortSignal),
+    )
+    expect(button('Pausar')).toBeDefined()
+  })
+
   it('does not offer arena selection once the fight has started', async () => {
     get.mockResolvedValueOnce({ ...scheduled, status: 'ongoing', hasSelectedArena: false })
     const { link } = await mountFight()

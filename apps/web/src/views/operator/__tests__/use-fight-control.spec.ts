@@ -229,11 +229,10 @@ describe('useFightControl', () => {
     expect(get).toHaveBeenCalledTimes(2)
     await fight.command('start')
     expect(post).toHaveBeenCalledTimes(1)
-    reconciliation.resolve(snapshot({ hasSelectedArena: false }))
+    reconciliation.resolve(snapshot())
     await result
     expect(fight.uncertainCommand.value).toBeNull()
-    expect(fight.state.value?.hasSelectedArena).toBe(false)
-    await fight.command('start')
+    expect(fight.state.value?.status).toBe('scheduled')
     expect(post).toHaveBeenCalledTimes(1)
   })
 
