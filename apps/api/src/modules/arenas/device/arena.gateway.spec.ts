@@ -2,7 +2,9 @@ import 'reflect-metadata';
 import { EventEmitter } from 'node:events';
 import type { WebSocket } from 'ws';
 import type { ArenasService } from '../arenas.service.js';
+import type { FightService } from '../../matches/fight/fight.service.js';
 import { ArenaConnections } from './arena-connections.js';
+import type { ArenaStatePusher } from './arena-state-pusher.js';
 import { MAX_CONCURRENT_CHECKS } from './arena-protocol.js';
 import { ArenaGateway } from './arena.gateway.js';
 
@@ -46,6 +48,8 @@ describe('ArenaGateway', () => {
     }
 
     let authenticateDevice: ReturnType<typeof vi.fn>;
+    let push: ReturnType<typeof vi.fn>;
+    let surrender: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
         clients = [];
@@ -56,10 +60,28 @@ describe('ArenaGateway', () => {
                     : null,
             ),
         );
+        push = vi.fn(() => Promise.resolve());
+        surrender = vi.fn(() => Promise.resolve('done'));
         gateway = new ArenaGateway(
             { authenticateDevice } as unknown as ArenasService,
             new ArenaConnections(),
+            { push } as unknown as ArenaStatePusher,
+            { surrender } as unknown as FightService,
         );
+    });
+
+    it('pushes state after welcome and hands surrenders to the fight service', async () => {
+        const box = connect();
+        box.sendHello();
+        await flush();
+
+        expect(push).toHaveBeenCalledWith('arena-1');
+
+        const press = { event: 'surrender', data: { side: 'A', matchId: 'm' } };
+        box.emit('message', Buffer.from(JSON.stringify(press)), false);
+        await flush();
+
+        expect(surrender).toHaveBeenCalledWith('arena-1', 'm', 'A');
     });
 
     afterEach(() => {

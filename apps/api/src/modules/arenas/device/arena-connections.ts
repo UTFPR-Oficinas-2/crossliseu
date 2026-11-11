@@ -64,6 +64,16 @@ export class ArenaConnections {
         }
     }
 
+    /** Sends a text frame to the arena's socket if it is open; returns whether it did */
+    send(arenaId: string, text: string): boolean {
+        const socket = this.sockets.get(arenaId);
+        if (socket?.readyState !== SOCKET_OPEN) {
+            return false;
+        }
+        socket.send(text);
+        return true;
+    }
+
     isOnline(arenaId: string): boolean {
         return this.sockets.has(arenaId);
     }
