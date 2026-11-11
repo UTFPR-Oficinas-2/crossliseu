@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { FightService } from './fight.service.js';
+import { FightService, TIMER_RETRY_MS } from './fight.service.js';
 import type {
     FightRepository,
     FightWrites,
@@ -966,7 +966,13 @@ describe('FightService time-out timer', () => {
                 'fight_timer_sync_failed',
                 expect.objectContaining({ matchId: 'other-id' }),
             );
-            expect(timer.arm).toHaveBeenCalledTimes(1);
+            // The failed match gets a retry, the other its real deadline
+            expect(timer.arm).toHaveBeenCalledTimes(2);
+            expect(timer.arm).toHaveBeenCalledWith(
+                'other-id',
+                TIMER_RETRY_MS,
+                expect.any(Function),
+            );
             expect(timer.arm).toHaveBeenCalledWith(
                 MATCH_ID,
                 150_000,
@@ -984,6 +990,74 @@ describe('FightService time-out timer', () => {
 
             expect(timer.arm).not.toHaveBeenCalled();
         });
+    });
+
+    it('retries the time-out after settle fails', async () => {
+        const { service, repo, armed, clock, store } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        vi.spyOn(service.logger, 'error').mockImplementation(() => {});
+        await service.restoreTimeOuts();
+        repo.withLockedFight.mockRejectedValueOnce(new Error('db down'));
+
+        clock.current = at(180_000);
+        armed.get(MATCH_ID)?.onFire();
+        await vi.waitFor(() =>
+            expect(armed.get(MATCH_ID)?.delayMs).toBe(TIMER_RETRY_MS),
+        );
+        armed.get(MATCH_ID)?.onFire();
+
+        await vi.waitFor(() => expect(store.match.state).toBe('finished'));
+        await vi.waitFor(() => expect(armed.has(MATCH_ID)).toBe(false));
+        expect(store.match.endReason).toBe('time_out');
+    });
+
+    it('keeps retrying while settle keeps failing', async () => {
+        const { service, repo, armed, clock, store, timer } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(1000),
+        });
+        vi.spyOn(service.logger, 'error').mockImplementation(() => {});
+        await service.restoreTimeOuts();
+        repo.withLockedFight
+            .mockRejectedValueOnce(new Error('db down'))
+            .mockRejectedValueOnce(new Error('db down'));
+        clock.current = at(180_000);
+        armed.get(MATCH_ID)?.onFire();
+        await vi.waitFor(() =>
+            expect(armed.get(MATCH_ID)?.delayMs).toBe(TIMER_RETRY_MS),
+        );
+        timer.arm.mockClear();
+
+        // The retry fails too
+        armed.get(MATCH_ID)?.onFire();
+        await vi.waitFor(() =>
+            expect(timer.arm).toHaveBeenCalledWith(
+                MATCH_ID,
+                TIMER_RETRY_MS,
+                expect.any(Function),
+            ),
+        );
+        armed.get(MATCH_ID)?.onFire();
+
+        await vi.waitFor(() => expect(store.match.state).toBe('finished'));
+    });
+
+    it('a failed sync after a write arms a retry that arms the timer', async () => {
+        const { service, repo, armed } = setup();
+        vi.spyOn(service.logger, 'error').mockImplementation(() => {});
+        repo.findEvents.mockRejectedValueOnce(new Error('db down'));
+
+        await service.command(MATCH_ID, 'start', USER_ID);
+        expect(armed.get(MATCH_ID)?.delayMs).toBe(TIMER_RETRY_MS);
+
+        armed.get(MATCH_ID)?.onFire();
+        await vi.waitFor(() =>
+            expect(armed.get(MATCH_ID)?.delayMs).toBe(180_000),
+        );
     });
 
     it('a failing settle inside onTimeOut is logged, not thrown', async () => {

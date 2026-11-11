@@ -40,6 +40,9 @@ function eventTime(wanted: Date, events: readonly MatchEvent[]): Date {
     return new Date(Math.max(wanted.getTime(), last + 1));
 }
 
+/** How long to wait before trying again after a time-out or timer sync failed */
+export const TIMER_RETRY_MS = 5_000;
+
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
@@ -308,7 +311,18 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 matchId,
                 message: errorMessage(error),
             });
+            this.armRetry(matchId);
         }
+    }
+
+    /**
+     * After a failure the timer holds no valid deadline (it forgets itself before firing), so
+     * try again later; `onTimeOut` settles what is due and re-syncs, or cancels if not ongoing.
+     */
+    private armRetry(matchId: string): void {
+        this.timer.arm(matchId, TIMER_RETRY_MS, () => {
+            void this.onTimeOut(matchId);
+        });
     }
 
     private async onTimeOut(matchId: string): Promise<void> {
@@ -321,6 +335,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 matchId,
                 message: errorMessage(error),
             });
+            this.armRetry(matchId);
         }
     }
 
