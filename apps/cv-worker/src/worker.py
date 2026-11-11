@@ -26,6 +26,12 @@ from object_storage import ObjectStorage, R2Settings
 REQUEST_QUEUE = "analysis.requested"
 RESULT_QUEUE = "analysis.finished"
 
+# A job that fails for a transient reason runs at most this many times. The count travels in the
+# `x-attempt` header of the message. `method.redelivered` can't be used for it: RabbitMQ also sets
+# it after a crash or a SIGTERM, which is not a failed attempt.
+MAX_ATTEMPTS = 2
+ATTEMPT_HEADER = "x-attempt"
+
 log = logging.getLogger("cv-worker")
 
 
@@ -54,10 +60,11 @@ class Worker:
         self.mock_video = mock_video
         self.connection = None
         self.channel = None
+        self._stopping = threading.Event()
 
     def run_forever(self):
         """Connect (retrying while RabbitMQ starts) and consume until stopped."""
-        while True:
+        while not self._stopping.is_set():
             try:
                 self.connection = pika.BlockingConnection(pika.URLParameters(self.url))
                 self.channel = self.connection.channel()
@@ -70,9 +77,11 @@ class Worker:
                 return  # stop() was called
             except pika.exceptions.AMQPConnectionError as error:
                 log.warning("RabbitMQ not reachable (%s); retrying in 5 s", error)
-                time.sleep(5)
+                # Wakes up at once if stop() is called while waiting
+                self._stopping.wait(5)
 
     def stop(self):
+        self._stopping.set()
         if self.connection and self.connection.is_open:
             self.connection.add_callback_threadsafe(self.channel.stop_consuming)
 
@@ -80,10 +89,19 @@ class Worker:
         # The pipeline takes minutes; running it here would block the connection's heartbeats
         # and RabbitMQ would drop the worker mid-job. It runs in a thread and hands the ack back.
         # The thread keeps the channel the message came on: a delivery tag is only valid there.
-        threading.Thread(target=self.process, args=(channel, method, body), daemon=True).start()
+        threading.Thread(target=self.process, args=(channel, method, properties, body), daemon=True).start()
 
-    def process(self, channel, method, body):
-        tag, redelivered = method.delivery_tag, method.redelivered
+    @staticmethod
+    def attempts(properties):
+        """How many times this job has run, counting the delivery in hand (1 on the first)."""
+        headers = getattr(properties, "headers", None) or {}
+        try:
+            return max(1, int(headers.get(ATTEMPT_HEADER, 1)))
+        except (TypeError, ValueError):
+            return 1
+
+    def process(self, channel, method, properties, body):
+        tag = method.delivery_tag
         try:
             match_id, _ = parse_request(body)
             self.on_channel(channel, lambda: publish(channel, {"matchId": match_id, "status": "running"}))
@@ -97,14 +115,30 @@ class Worker:
             message = failed_message(body, error.code, str(error))
             self.on_channel(channel, lambda: self.finish(channel, tag, message))
         except Exception as error:  # transient: network, R2 or RabbitMQ hiccup
-            if redelivered:
-                # Already retried once: give up instead of looping forever
-                log.exception("job failed again after a retry")
+            attempt = self.attempts(properties)
+            if attempt >= MAX_ATTEMPTS:
+                # Out of attempts: give up instead of looping forever
+                log.exception("job failed on attempt %d of %d; giving up", attempt, MAX_ATTEMPTS)
                 message = failed_message(body, "processing_failed", repr(error))
                 self.on_channel(channel, lambda: self.finish(channel, tag, message))
             else:
-                log.exception("job failed; back to the queue for one retry")
-                self.on_channel(channel, lambda: channel.basic_nack(tag, requeue=True))
+                log.exception("job failed on attempt %d of %d; queued for another try", attempt, MAX_ATTEMPTS)
+                self.on_channel(channel, lambda: self.retry(channel, tag, body, attempt + 1))
+
+    def retry(self, channel, tag, body, attempt):
+        """Queue the same request again with its attempt count, then ack the one that failed:
+        if the worker dies in between, the job is simply run again."""
+        channel.basic_publish(
+            exchange="",
+            routing_key=REQUEST_QUEUE,
+            body=body,
+            properties=pika.BasicProperties(
+                content_type="application/json",
+                delivery_mode=pika.DeliveryMode.Persistent,
+                headers={ATTEMPT_HEADER: attempt},
+            ),
+        )
+        channel.basic_ack(tag)
 
     def finish(self, channel, tag, message):
         """Publish the result, then ack: if the worker dies in between, the job is redone."""
