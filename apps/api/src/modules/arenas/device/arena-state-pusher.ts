@@ -71,8 +71,10 @@ export class ArenaStatePusher implements OnModuleInit, OnModuleDestroy {
                 matchId === null
                     ? stateFrame(null)
                     : stateFrame(await this.fight.state(matchId));
-            // False when the box went away meanwhile: nothing to do
-            this.connections.send(arenaId, frame);
+            // False when the box went away meanwhile; its next welcome carries the state
+            if (!this.connections.send(arenaId, frame)) {
+                this.logger.debug('arena_state_push_dropped', { arenaId });
+            }
         } catch (error) {
             this.logger.warn('arena_state_push_failed', {
                 arenaId,

@@ -76,6 +76,19 @@ describe('ArenaStatePusher', () => {
         pusher.logger.warn = warn;
     });
 
+    it('logs at debug when the box went away before the frame was sent', async () => {
+        const debug = vi.fn();
+        pusher.logger.debug = debug;
+        vi.spyOn(connections, 'send').mockReturnValue(false);
+
+        await pusher.push(ARENA_ID);
+
+        expect(debug).toHaveBeenCalledWith('arena_state_push_dropped', {
+            arenaId: ARENA_ID,
+        });
+        expect(warn).not.toHaveBeenCalled();
+    });
+
     it('sends idle when the arena has no current match', async () => {
         findCurrentMatchId.mockResolvedValueOnce(null);
 
