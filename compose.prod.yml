@@ -39,6 +39,40 @@ services:
       - "127.0.0.1:8010:8080"
     restart: unless-stopped
 
+  # Analysis jobs between the API and the CV worker. No published ports: only
+  # containers on this compose network can reach it.
+  rabbitmq:
+    image: rabbitmq:4.1
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-crossliseu}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  cv-worker:
+    image: ghcr.io/utfpr-oficinas-2/crossliseu-cv-worker:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/cv-worker
+    init: true
+    # Only what the worker needs: it decodes user-uploaded video, so it must not
+    # see the API's secrets (JWT, database, admin seed).
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crossliseu}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@rabbitmq:5672/
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
     # Pin the minor version; bump it on purpose (same major keeps the data compatible)
     image: postgres:18.6-trixie
@@ -61,3 +95,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
