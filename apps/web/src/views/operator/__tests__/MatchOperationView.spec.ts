@@ -309,7 +309,7 @@ describe('MatchOperationView', () => {
   it('keeps the closed fight and the unsent video when navigation is canceled', async () => {
     get.mockResolvedValueOnce(finished)
     post.mockResolvedValueOnce(closed)
-    vi.mocked(window.confirm).mockReturnValueOnce(true).mockReturnValueOnce(false)
+    vi.mocked(window.confirm).mockReturnValueOnce(true)
     const { wrapper, router, click, link, button } = await mountFight()
     video.value = new Blob(['partial video'], { type: 'video/webm' })
     await flushPromises()
@@ -317,7 +317,12 @@ describe('MatchOperationView', () => {
     await click('Fechar luta')
 
     expect(router.currentRoute.value.name).toBe('match-operation')
-    expect(window.confirm).toHaveBeenLastCalledWith(expect.stringContaining('vídeo'))
+    // The unsent video is guarded by the in-app window, not by a native dialog
+    expect(window.confirm).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[role="alertdialog"]').text()).toContain('a gravação será perdida')
+    await click('Continuar na luta')
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(router.currentRoute.value.name).toBe('match-operation')
     expect(wrapper.text()).toContain('Luta fechada')
     expect(link('Voltar à operação')?.attributes('href')).toBe('/operator')
     expect(button('Fechar luta')).toBeUndefined()
