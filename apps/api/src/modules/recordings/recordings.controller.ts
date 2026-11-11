@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    Get,
     HttpCode,
     HttpStatus,
     Param,
@@ -21,6 +22,15 @@ import { RecordingsService } from './recordings.service.js';
 @Controller('matches')
 export class RecordingsController {
     constructor(private readonly recordingsService: RecordingsService) {}
+
+    /** The uploaded video, with a presigned read URL (play or download) */
+    @Get(':id/recording')
+    getRecording(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.recordingsService.getRecording(id, userId);
+    }
 
     /** Step 1: a presigned R2 URL for one PUT of this match's video */
     @Post(':id/recording/upload-url')

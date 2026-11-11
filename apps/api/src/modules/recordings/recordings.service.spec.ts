@@ -7,6 +7,7 @@ import { MatchVideo } from './entities/match-video.entity.js';
 import type { MatchVideosRepository } from './match-videos.repository.js';
 import { RecordingStorage } from './recording-storage.js';
 import {
+    READ_URL_TTL_SECONDS,
     RecordingsService,
     UPLOAD_URL_TTL_SECONDS,
     recordingKey,
@@ -20,11 +21,17 @@ const KEY = `recordings/${MATCH_ID}.mp4`;
 /** R2 stand-in: remembers what was signed and which objects "exist" */
 class FakeStorage extends RecordingStorage {
     signed: { key: string; contentType: string; expiresIn: number }[] = [];
+    readSigned: { key: string; expiresIn: number }[] = [];
     objects = new Map<string, number>();
 
     async presignUpload(key: string, contentType: string, expiresIn: number) {
         this.signed.push({ key, contentType, expiresIn });
         return `https://r2.example/${key}?signature=fake`;
+    }
+
+    async presignDownload(key: string, expiresIn: number) {
+        this.readSigned.push({ key, expiresIn });
+        return `https://r2.example/${key}?read-signature=fake`;
     }
 
     async objectSize(key: string) {
@@ -231,5 +238,65 @@ describe('RecordingsService.complete', () => {
         await expect(
             service.complete(MATCH_ID, { key: KEY, size: 1 }, USER_ID),
         ).rejects.toEqual(new NotFoundException('match_not_found'));
+    });
+});
+
+describe('RecordingsService.getRecording', () => {
+    function uploadedVideo(): MatchVideo {
+        const video = uploadingVideo();
+        video.status = 'uploaded';
+        video.sizeBytes = 73_400_320;
+        video.uploadedAt = new Date('2026-11-10T22:15:37Z');
+        return video;
+    }
+
+    it('returns the video with a fresh read URL', async () => {
+        const { service, storage } = setup({ existing: uploadedVideo() });
+        const before = Date.now();
+
+        const answer = await service.getRecording(MATCH_ID, USER_ID);
+
+        expect(storage.readSigned).toEqual([
+            { key: KEY, expiresIn: READ_URL_TTL_SECONDS },
+        ]);
+        expect(answer).toMatchObject({
+            key: KEY,
+            contentType: 'video/mp4',
+            sizeBytes: 73_400_320,
+            uploadedAt: new Date('2026-11-10T22:15:37Z'),
+            url: `https://r2.example/${KEY}?read-signature=fake`,
+        });
+        expect(new Date(answer.expiresAt).getTime()).toBeGreaterThanOrEqual(
+            before + READ_URL_TTL_SECONDS * 1000,
+        );
+    });
+
+    it('answers 404 recording_not_found when nothing was uploaded', async () => {
+        const { service, storage } = setup();
+
+        await expect(service.getRecording(MATCH_ID, USER_ID)).rejects.toEqual(
+            new NotFoundException('recording_not_found'),
+        );
+        expect(storage.readSigned).toEqual([]);
+    });
+
+    it('answers 404 recording_not_found while an upload is still in progress', async () => {
+        const { service } = setup({ existing: uploadingVideo() });
+
+        await expect(service.getRecording(MATCH_ID, USER_ID)).rejects.toEqual(
+            new NotFoundException('recording_not_found'),
+        );
+    });
+
+    it('answers 404 match_not_found for a match in someone else championship', async () => {
+        const { service, storage } = setup({
+            owner: false,
+            existing: uploadedVideo(),
+        });
+
+        await expect(service.getRecording(MATCH_ID, USER_ID)).rejects.toEqual(
+            new NotFoundException('match_not_found'),
+        );
+        expect(storage.readSigned).toEqual([]);
     });
 });

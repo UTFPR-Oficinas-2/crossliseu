@@ -1,0 +1,6 @@
+# Files that run inside Linux containers must keep LF line endings, even on a Windows checkout
+# with core.autocrlf=true. A CRLF Dockerfile turns the dev-entrypoint heredoc's "#!/bin/sh" into
+# "#!/bin/sh\r", and the container fails with "exec dev-entrypoint failed: No such file or
+# directory".
+Dockerfile text eol=lf
+*.sh       text eol=lf

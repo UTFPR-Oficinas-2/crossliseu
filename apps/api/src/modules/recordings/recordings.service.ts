@@ -17,6 +17,9 @@ import { RecordingStorage } from './recording-storage.js';
 /** How long an upload URL works: long enough to start a ~90 MB upload, short if it leaks */
 export const UPLOAD_URL_TTL_SECONDS = 15 * 60;
 
+/** How long a read URL works: enough to start playing or downloading; ask again for a new one */
+export const READ_URL_TTL_SECONDS = 15 * 60;
+
 const EXTENSIONS: Record<RecordingContentType, string> = {
     'video/mp4': 'mp4',
     'video/webm': 'webm',
@@ -120,6 +123,37 @@ export class RecordingsService {
         video.sizeBytes = storedSize;
         video.uploadedAt = new Date();
         await this.videos.save(video);
+    }
+
+    /**
+     * The uploaded video of a match, with a presigned read URL made on each call. Owner-only, like
+     * the upload. 404 recording_not_found while there is no confirmed upload (none yet, or one
+     * still in progress).
+     */
+    async getRecording(matchId: string, userId: string) {
+        await this.assertOwned(matchId, userId);
+
+        const video = await this.videos.findByMatch(matchId);
+        if (!video || video.status !== 'uploaded') {
+            this.logger.warn('recording_not_found', { matchId });
+            throw new NotFoundException('recording_not_found');
+        }
+
+        const url = await this.storage.presignDownload(
+            video.objectKey,
+            READ_URL_TTL_SECONDS,
+        );
+
+        return {
+            key: video.objectKey,
+            contentType: video.contentType,
+            sizeBytes: video.sizeBytes,
+            uploadedAt: video.uploadedAt,
+            url,
+            expiresAt: new Date(
+                Date.now() + READ_URL_TTL_SECONDS * 1000,
+            ).toISOString(),
+        };
     }
 
     private async assertOwned(matchId: string, userId: string) {

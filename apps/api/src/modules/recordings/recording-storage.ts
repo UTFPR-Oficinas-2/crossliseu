@@ -4,6 +4,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+    GetObjectCommand,
     HeadObjectCommand,
     NotFound,
     PutObjectCommand,
@@ -20,6 +21,12 @@ export abstract class RecordingStorage {
     abstract presignUpload(
         key: string,
         contentType: string,
+        expiresInSeconds: number,
+    ): Promise<string>;
+
+    /** URL that allows GET of `key` (download or play) for `expiresInSeconds` */
+    abstract presignDownload(
+        key: string,
         expiresInSeconds: number,
     ): Promise<string>;
 
@@ -85,6 +92,15 @@ export class R2RecordingStorage extends RecordingStorage {
                 // accepts any type: signing it makes R2 refuse a PUT with another one (403)
                 signableHeaders: new Set(['content-type']),
             },
+        );
+    }
+
+    async presignDownload(key: string, expiresInSeconds: number) {
+        const { client, bucket } = this.configured();
+        return getSignedUrl(
+            client,
+            new GetObjectCommand({ Bucket: bucket, Key: key }),
+            { expiresIn: expiresInSeconds },
         );
     }
 
