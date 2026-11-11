@@ -74,6 +74,9 @@ export class R2RecordingStorage extends RecordingStorage {
         ? new S3Client({
               endpoint: this.settings.endpoint,
               region: 'auto', // R2 has no regions
+              // Without this the SDK puts a CRC32 of the (empty) body in the presigned URL, which
+              // would not match the video the browser sends
+              requestChecksumCalculation: 'WHEN_REQUIRED',
               credentials: {
                   accessKeyId: this.settings.accessKeyId,
                   secretAccessKey: this.settings.secretAccessKey,
