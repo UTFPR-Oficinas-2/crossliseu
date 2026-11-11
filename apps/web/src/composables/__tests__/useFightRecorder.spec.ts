@@ -62,8 +62,8 @@ beforeEach(() => {
       return fakeStream()
     }),
     enumerateDevices: vi.fn(async () => [CAMERA_A, CAMERA_B]),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
+    addEventListener: vi.fn<(type: string, handler: () => Promise<void>) => void>(),
+    removeEventListener: vi.fn<(type: string, handler: () => Promise<void>) => void>(),
   }
   Object.defineProperty(navigator, 'mediaDevices', { value: mediaDevices, configurable: true })
   vi.stubGlobal('MediaRecorder', FakeRecorder)
