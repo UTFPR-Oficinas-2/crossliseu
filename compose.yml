@@ -68,7 +68,55 @@ services:
       timeout: 5s
       retries: 10
 
+  # Analysis jobs between the API and the CV worker (queues analysis.requested / .finished).
+  # Management UI: http://localhost:15672 (RABBITMQ_USER / RABBITMQ_PASSWORD)
+  rabbitmq:
+    image: rabbitmq:4.1-management
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-crossliseu}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-crossliseu}
+
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  cv-worker:
+    build:
+      context: ./apps/cv-worker
+    init: true
+
+    # Only what the worker needs: it decodes user-uploaded video, so it must not see the API's
+    # secrets (JWT, database, admin seed), which a plain `env_file: ./.env` would hand over.
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crossliseu}:${RABBITMQ_PASSWORD:-crossliseu}@rabbitmq:5672/
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      # Mock mode is opt-in (dev only): when set, every job runs the pipeline on this test video
+      # instead of the recording, and the results are NOT from the uploaded video. Empty or unset
+      # means real processing.
+      CV_MOCK_VIDEO: ${CV_MOCK_VIDEO:-}
+
+    volumes:
+      - ./apps/cv-worker/data/videos:/app/data/videos:ro
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   api_node_modules:
   web_node_modules:
+  rabbitmq_data:

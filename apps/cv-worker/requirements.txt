@@ -1,3 +1,6 @@
 opencv-python
 numpy
 matplotlib
+# R2 and RabbitMQ, to run src/worker.py locally (the container uses requirements-worker.txt)
+boto3
+pika
