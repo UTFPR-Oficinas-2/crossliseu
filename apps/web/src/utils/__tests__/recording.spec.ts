@@ -3,6 +3,7 @@ import {
   baseMimeType,
   describeCameraError,
   fileExtension,
+  describeVideoSignal,
   formatBytes,
   formatElapsed,
   pickMimeType,
@@ -83,5 +84,22 @@ describe('formatBytes', () => {
   it('uses KB below one megabyte and MB from there on, with a comma', () => {
     expect(formatBytes(1536)).toBe('1,5 KB')
     expect(formatBytes(73_400_320)).toBe('70,0 MB')
+  })
+
+  it('groups thousands the pt-BR way', () => {
+    expect(formatBytes(1234.5 * 1024 * 1024)).toBe('1.234,5 MB')
+  })
+})
+
+describe('describeVideoSignal', () => {
+  it('shows the size and the rounded frame rate', () => {
+    expect(describeVideoSignal({ width: 1280, height: 720, frameRate: 29.97 })).toBe(
+      '1280 × 720 · 30 fps',
+    )
+  })
+
+  it('leaves out what the camera does not report', () => {
+    expect(describeVideoSignal({ width: 1280, height: 720 })).toBe('1280 × 720')
+    expect(describeVideoSignal({})).toBe('')
   })
 })

@@ -40,6 +40,12 @@ export function useFightRecorder() {
   let recorder: MediaRecorder | null = null
   let chunks: Blob[] = []
   let timer: ReturnType<typeof setInterval> | undefined
+  /** Callers of `stop()` waiting for the file */
+  let stopWaiters: ((blob: Blob | null) => void)[] = []
+  /** Stops the current recorder and marks the stop as asked for (set by `start`) */
+  let stopRecorder: (() => void) | null = null
+  /** Bumped by every `openCamera` and by `release`, so a late getUserMedia knows it is stale */
+  let openRequest = 0
 
   /** Lists the cameras. Asks for permission first: without it, browsers hide camera names. */
   async function loadCameras() {
@@ -59,20 +65,31 @@ export function useFightRecorder() {
     }
   }
 
-  /** Opens the chosen camera for the preview, closing the previous one */
+  /**
+   * Opens the chosen camera for the preview, closing the previous one. A finished recording
+   * stays `stopped` (it is still unsent); only the preview behind it changes.
+   */
   async function openCamera(deviceId: string) {
+    const request = ++openRequest
     stopStream()
     if (!deviceId) return
     error.value = null
     try {
-      stream.value = await navigator.mediaDevices.getUserMedia({
+      const next = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: deviceId }, ...RECORDING_VIDEO_CONSTRAINTS },
         audio: false, // the analysis only needs images; no audio keeps the file smaller
       })
-      state.value = 'previewing'
+      // A newer call (or leaving the screen) replaced this one: free the camera at once
+      if (request !== openRequest) {
+        next.getTracks().forEach((track) => track.stop())
+        return
+      }
+      stream.value = next
+      if (state.value !== 'stopped') state.value = 'previewing'
     } catch (err) {
+      if (request !== openRequest) return
       error.value = describeCameraError(err)
-      state.value = 'idle'
+      if (state.value !== 'stopped') state.value = 'idle'
     }
   }
 
@@ -81,29 +98,82 @@ export function useFightRecorder() {
     if (state.value !== 'recording') void openCamera(deviceId)
   })
 
+  /** "Tentar de novo" after a camera error: list the cameras again and reopen the chosen one */
+  async function retry() {
+    await loadCameras()
+    if (!error.value && state.value !== 'recording') await openCamera(cameraId.value)
+  }
+
+  /** Joins the pieces into the file. Runs on every stop: asked for, or by the browser itself. */
+  function finish(current: MediaRecorder, requested: boolean) {
+    if (recorder !== current) return // released while stopping
+    clearInterval(timer)
+    // Plain type ("video/mp4"): it is what the upload signs and what R2 stores
+    const blob = new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
+    chunks = []
+    recording.value = blob
+    state.value = 'stopped'
+    if (!requested && !error.value) {
+      error.value =
+        'A gravação parou sozinha (a câmera foi desconectada?). O que foi gravado até aqui está abaixo.'
+    }
+    stopWaiters.forEach((resolve) => resolve(blob))
+    stopWaiters = []
+
+    // The camera was unplugged: its tracks are dead, so reopen the preview for the next recording
+    const tracks = stream.value?.getVideoTracks() ?? []
+    if (tracks.length > 0 && tracks.every((track) => track.readyState === 'ended')) {
+      void openCamera(cameraId.value)
+    }
+  }
+
   function start() {
     if (!stream.value || state.value === 'recording') return
 
+    const preferred = pickMimeType((type) => MediaRecorder.isTypeSupported(type))
+    let next: MediaRecorder
+    try {
+      next = new MediaRecorder(stream.value, {
+        ...(preferred ? { mimeType: preferred } : {}),
+        videoBitsPerSecond: RECORDING_BITS_PER_SECOND,
+      })
+    } catch {
+      error.value = 'Não foi possível começar a gravação. Troque de câmera ou recarregue a página.'
+      return
+    }
+
+    error.value = null
     chunks = []
     recording.value = null
     elapsedSeconds.value = 0
+    stopWaiters = []
+    recorder = next
+    mimeType.value = next.mimeType || preferred || ''
 
-    const preferred = pickMimeType((type) => MediaRecorder.isTypeSupported(type))
-    recorder = new MediaRecorder(stream.value, {
-      ...(preferred ? { mimeType: preferred } : {}),
-      videoBitsPerSecond: RECORDING_BITS_PER_SECOND,
-    })
-    mimeType.value = recorder.mimeType || preferred || ''
-
+    let requested = false
     // A piece of the video arrives every RECORDING_CHUNK_MS; they are joined when it stops
-    recorder.ondataavailable = (event) => {
+    next.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data)
     }
-    recorder.onerror = () => {
+    next.onerror = () => {
       error.value = 'A gravação foi interrompida por um erro do navegador.'
     }
+    // `onstop` fires after the last `ondataavailable`, so every piece is in `chunks` by then.
+    // It also fires when the browser stops by itself (error, camera unplugged).
+    next.onstop = () => finish(next, requested)
+    stopRecorder = () => {
+      requested = true
+      if (next.state !== 'inactive') next.stop()
+    }
 
-    recorder.start(RECORDING_CHUNK_MS)
+    try {
+      next.start(RECORDING_CHUNK_MS)
+    } catch {
+      recorder = null
+      stopRecorder = null
+      error.value = 'Não foi possível começar a gravação. Troque de câmera ou recarregue a página.'
+      return
+    }
     state.value = 'recording'
 
     const startedAt = performance.now()
@@ -114,21 +184,10 @@ export function useFightRecorder() {
 
   /** Stops recording. Resolves with the video file once the last piece has arrived. */
   function stop(): Promise<Blob | null> {
-    const current = recorder
-    if (!current || current.state === 'inactive') return Promise.resolve(recording.value)
-
+    if (state.value !== 'recording') return Promise.resolve(recording.value)
     return new Promise((resolve) => {
-      // `onstop` fires after the last `ondataavailable`, so every piece is in `chunks` by then
-      current.onstop = () => {
-        clearInterval(timer)
-        // Plain type ("video/mp4"): it is what the upload signs and what R2 stores
-        const blob = new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
-        chunks = []
-        recording.value = blob
-        state.value = 'stopped'
-        resolve(blob)
-      }
-      current.stop()
+      stopWaiters.push(resolve)
+      stopRecorder?.()
     })
   }
 
@@ -139,9 +198,12 @@ export function useFightRecorder() {
 
   /** Frees the camera (its light turns off) and stops the timer when leaving the screen */
   function release() {
+    openRequest++ // a getUserMedia still pending frees its camera when it resolves
     clearInterval(timer)
-    if (recorder && recorder.state !== 'inactive') recorder.stop()
+    const current = recorder
     recorder = null
+    stopRecorder = null
+    if (current && current.state !== 'inactive') current.stop()
     stopStream()
     navigator.mediaDevices?.removeEventListener('devicechange', loadCameras)
   }
@@ -160,6 +222,7 @@ export function useFightRecorder() {
     recording,
     mimeType,
     loadCameras,
+    retry,
     start,
     stop,
   }
