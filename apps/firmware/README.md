@@ -30,7 +30,7 @@ pio device monitor           # serial monitor at 115200; Ctrl+C to quit
 
 `src/` is the code that gets built; it needs a `config.h` (see [Configuration](#configuration)). Build output goes to `.pio/` (git-ignored).
 
-The protocol logic (`lib/ArenaLogic`), the button debounce (`lib/Buttons`), the LCD text (`lib/Display`) and the strip colours (`lib/Led`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
+The protocol logic (`lib/ArenaLogic`), the button debounce (`lib/Buttons`), the LCD text (`lib/Display`), the strip colours (`lib/Led`) and the LCD screen for each state (`lib/Box`) have unit tests that run on the computer, without the board. They need a host C++ compiler (on macOS, the Xcode Command Line Tools):
 
 ```sh
 pio test -e native
@@ -84,13 +84,14 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 
 ## Connection
 
-`src/arena.cpp` connects the box to the API's [`/arena` WebSocket](../../docs/arena-protocol.md); other modules use only the functions in `src/arena.h` (listed under "Firmware modules" in the protocol doc). Until the display and strip exist (#42), `src/main.cpp` is a demo:
+`src/arena.cpp` connects the box to the API's [`/arena` WebSocket](../../docs/arena-protocol.md); other modules use only the functions in `src/arena.h` (listed under "Firmware modules" in the protocol doc). `src/main.cpp` joins it to the other modules (#42); the box only shows the last `state` and reports presses, and the server decides everything:
 
+- The LCDs show the screen for the box state (see [LCD screens](#lcd-screens)). While `ongoing`, the time counts down from the last `state`'s `remainingMs` (minus the time since it arrived) and stops at `00:00` until the server sends `finished`. Every `state` (start, pause, resume, reconnect) resyncs it.
+- The LED strip shows the colour for the box state (see [Strip states](#strip-states)).
+- Each press of a surrender button sends `surrender` for that side and logs `box: button A -> surrender sent`. While not connected, the press is dropped (`... dropped (not connected)`). The box shows the surrender only when the server's `state` says so.
+- While not connected, the LCDs show `SEM CONEXAO` and the strip blinks magenta. After reconnecting, the server's `state` brings the fight back.
 - The onboard LED (`PIN_ONBOARD_LED`, GPIO 2 on the DevKit) is on while the box is connected (after `welcome`).
-- Typing `a` or `b` in the serial monitor sends `surrender` for side A or B.
-- Each press of a physical surrender button prints `button: A` or `button: B` (it does not send anything yet; that is #42).
-- Both LCDs show `CROSSLISEU` / `03:00` after boot. In the serial monitor, `t` starts a 3-minute test countdown on them (`TEMPO RESTANTE`), `p` pauses it and shows `PAUSADA` (a later `t` continues from where it stopped), and `1` / `2` show `showTime(185000)` / `showTime(94210)` (`03:05` / `01:35`).
-- The LED strip follows the box (see [Strip states](#strip-states)): not connected, idle, and each `state` the server sends. In the serial monitor, `l` moves it to the next state by hand (to test on the bench); after the last one it follows the box again.
+- For the bench, in the serial monitor: `a` / `b` send `surrender` like the buttons, and `l` moves the strip to the next state by hand; after the last one it follows the box again.
 - The serial log shows each step, prefixed `arena:`: Wi-Fi, connecting, `welcome`, each `state`, and every close with its code and the next retry. The token is never printed.
 
 | Close | The box |
@@ -105,7 +106,7 @@ To test the arena flow without the hardware, the simulator in [`tools/arena-sim`
 
 ## LCD screens
 
-Line 1 is `showMessage`, line 2 is `showTime`. The display only draws what it is given; the integration (#42) picks the screen from each `state`. These are the texts agreed for the box (the LCD has no accents; `showMessage` drops them, so `DESISTÊNCIA` shows as `DESISTENCIA`):
+Line 1 is `showMessage`, line 2 is `showTime` (or `clearTime` when it is empty). The display only draws what it is given; `src/main.cpp` picks the screen for the last `state` with `boxScreenFor()` in [`lib/Box/src/box_screen.h`](lib/Box/src/box_screen.h). These are the texts agreed for the box (the LCD has no accents; `showMessage` drops them, so `DESISTÊNCIA` shows as `DESISTENCIA`):
 
 | Box state | Line 1 | Line 2 |
 | --- | --- | --- |
@@ -134,7 +135,7 @@ Line 1 is `showMessage`, line 2 is `showTime`. The display only draws what it is
 | `Surrender` | `finished`, `surrender` | Red |
 | `Ended` | `finished`, `time_out` / `manual` | White, blinking (a chequered flag), until the operator closes the match |
 
-Each state lights its own mix of the red, green and blue channels (red only for `Surrender`), so no two look alike at any brightness; `test_led` checks it. `ledStateFor(connected, state)` in `led_pattern.h` picks the `LedState` for the last `state`, for #42. The strip can't do a real F1 "lights out": the box doesn't know when the operator will press Start, so it jumps from blue to green when the server's `ongoing` arrives.
+Each state lights its own mix of the red, green and blue channels (red only for `Surrender`), so no two look alike at any brightness; `test_led` checks it. `ledStateFor(connected, state)` in `led_pattern.h` picks the `LedState` for the last `state`. The strip can't do a real F1 "lights out": the box doesn't know when the operator will press Start, so it jumps from blue to green when the server's `ongoing` arrives.
 
 ## Pins
 
@@ -206,12 +207,13 @@ For the old `main.cpp` / `Definitions.h`:
 ## Files
 
 - `platformio.ini`: board, platform version and build settings
-- `src/main.cpp`: demo of the connection layer, the buttons, the LCDs and the strip (onboard LED, serial `a`/`b`/`t`/`p`/`1`/`2`/`l`, `button: A`/`B`) until #42
+- `src/main.cpp`: the box (#42): joins the connection layer to the LCDs, the strip and the buttons (serial `a`/`b`/`l` for the bench)
+- `lib/Box/`: the LCD screen and time left for each box state, with no Arduino dependency
 - `src/arena.h`, `src/arena.cpp`: connection layer (Wi-Fi, WebSocket, handshake, retries)
 - `src/arena_ca.h`: root certificates for `wss://`
 - `src/pins.h`: every pin number, with the box PCB's defaults
 - `src/buttons.h`, `src/buttons.cpp`: surrender buttons (`buttonsBegin`, `pollButtons`)
-- `src/display.h`, `src/display.cpp`: both LCDs (`displayBegin`, `displayPoll`, `showTime`, `showMessage`)
+- `src/display.h`, `src/display.cpp`: both LCDs (`displayBegin`, `displayPoll`, `showTime`, `clearTime`, `showMessage`)
 - `lib/Display/`: LCD text (mm:ss, centring, accents) with no Arduino dependency
 - `src/led.h`, `src/led.cpp`: LED strip (`ledBegin`, `setLedState`)
 - `lib/Led/`: strip colours, effects and `ledStateFor`, with no Arduino dependency
@@ -222,6 +224,7 @@ For the old `main.cpp` / `Definitions.h`:
 - `test/test_buttons/`: unit tests for the debounce in `lib/Buttons` (`pio test -e native`)
 - `test/test_display/`: unit tests for the LCD text in `lib/Display` (`pio test -e native`)
 - `test/test_led/`: unit tests for the strip colours in `lib/Led` (`pio test -e native`)
+- `test/test_box/`: unit tests for the LCD screens in `lib/Box` (`pio test -e native`)
 - `main.cpp`: old sketch: setup, serial commands and state machine
 - `Definitions.h`: pin numbers and the state enum
 - `config.example.h`: template for the git-ignored `config.h` (server address, device id and token, Wi-Fi)

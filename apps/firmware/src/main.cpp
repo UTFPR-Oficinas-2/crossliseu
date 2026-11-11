@@ -1,86 +1,50 @@
-// Demonstração enquanto a integração (#42) não existe: conexão (src/arena.h),
-// botões (src/buttons.h), os dois LCDs (src/display.h) e a fita de LED (src/led.h).
-//   - O LED da placa acende com a caixa conectada.
-//   - Cada aperto dos botões físicos imprime "button: A" ou "button: B".
-//   - A fita segue a caixa: sem conexão, arena livre e cada `state` que o servidor
-//     manda (é só criar, começar, pausar e encerrar uma luta no site).
-//   - Comandos no monitor serial:
-//       a / b  envia surrender do lado A ou B
-//       t      contagem de teste de 3 minutos nos LCDs ("TEMPO RESTANTE"); depois de p, continua de onde parou
-//       p      pausa a contagem e mostra "PAUSADA"
-//       1 / 2  mostra showTime(185000) / showTime(94210): 03:05 / 01:35
-//       l      passa a fita para o próximo estado, à mão (para testar na bancada);
-//              depois do último, volta a seguir a caixa
+// Caixa da arena (#42): junta a conexão com o servidor (src/arena.h) aos LCDs
+// (src/display.h), à fita de LED (src/led.h) e aos botões de desistência
+// (src/buttons.h). O servidor manda na luta; a caixa só mostra o último `state`
+// e avisa quando um botão é apertado (docs/arena-protocol.md).
+//   - LCDs: uma tela por estado (README.md, "LCD screens"); durante a luta, o tempo
+//     desce a partir do remainingMs do último state e para em 00:00 esperando o servidor.
+//   - Fita: uma cor por estado (README.md, "Strip states").
+//   - Botões: cada aperto vira um surrender; sem conexão, o aperto é descartado.
+//   - LED da placa: aceso com a caixa conectada.
+// Comandos no monitor serial, para testar na bancada:
+//   a / b  envia surrender do lado A ou B (o mesmo que apertar o botão)
+//   l      passa a fita para o próximo estado, à mão; depois do último, volta a seguir a caixa
 #include <Arduino.h>
 #include <ctype.h>
 
 #include "arena.h"
+#include "box_screen.h"
 #include "buttons.h"
-#include "demo_clock.h"
 #include "display.h"
 #include "led.h"
 #include "pins.h"
 
-static constexpr long TEST_MATCH_MS = 3L * 60 * 1000;
-
-static DemoClock demo(TEST_MATCH_MS);  // contagem de teste dos LCDs (comandos "t" e "p")
-
 // Teste à mão da fita (comando "l"): -1 = seguir a caixa; 0..6 = LedState fixo.
 static int manualLed = -1;
 
-static void printState(const ArenaState& s) {
-  Serial.printf("demo: robots A=\"%s\" B=\"%s\"\n", s.robotA, s.robotB);
+static void logState(const ArenaState& s) {
+  Serial.printf("box: robots A=\"%s\" B=\"%s\"\n", s.robotA, s.robotB);
 }
 
-static void printHelp() {
-  Serial.println("demo: a/b = surrender A/B, t = 3:00 test countdown (resumes after p), p = pause + PAUSADA, 1 = showTime(185000), 2 = showTime(94210), l = next LED state (by hand)");
+static void surrender(char side, const char* from) {
+  const bool sent = arenaSendSurrender(side);
+  Serial.printf("box: %s %c -> surrender %s\n", from, side, sent ? "sent" : "dropped (not connected)");
 }
 
 static void nextManualLed() {
   manualLed++;
   if (manualLed >= LED_STATE_COUNT) {
     manualLed = -1;
-    Serial.println("demo: LED follows the box again");
+    Serial.println("box: LED follows the box again");
   } else {
-    Serial.printf("demo: LED %s\n", ledStateName(static_cast<LedState>(manualLed)));
+    Serial.printf("box: LED %s (by hand)\n", ledStateName(static_cast<LedState>(manualLed)));
   }
 }
 
 static void handleSerial(char c) {
-  switch (c) {
-    case 'A':
-    case 'B': {
-      const bool sent = arenaSendSurrender(c);
-      Serial.printf("demo: surrender %c %s\n", c, sent ? "sent" : "dropped (not connected)");
-      break;
-    }
-    case 'T': {
-      if (demo.running) demo.stop();  // "t" com a contagem rodando recomeça do 3:00
-      const bool resuming = demo.remainingMs < TEST_MATCH_MS;
-      demo.start(millis());
-      showMessage("TEMPO RESTANTE");
-      Serial.println(resuming ? "demo: test countdown resumed" : "demo: 3:00 test countdown started");
-      break;
-    }
-    case 'P':
-      demo.pause(millis());
-      showTime(demo.remaining(millis()));
-      showMessage("PAUSADA");
-      Serial.println("demo: showMessage(\"PAUSADA\")");
-      break;
-    case '1':
-    case '2':
-      demo.stop();
-      showMessage("TESTE");
-      showTime(c == '1' ? 185000 : 94210);
-      Serial.printf("demo: showTime(%ld)\n", c == '1' ? 185000L : 94210L);
-      break;
-    case 'L':
-      nextManualLed();
-      break;
-    default:
-      break;
-  }
+  if (c == 'A' || c == 'B') surrender(c, "serial");
+  else if (c == 'L') nextManualLed();
 }
 
 void setup() {
@@ -90,36 +54,30 @@ void setup() {
   delay(500);
   Serial.println("\nCrossliseu arena box");
   displayBegin();
-  showMessage("CROSSLISEU");
-  showTime(TEST_MATCH_MS);
   buttonsBegin();
-  onArenaState(printState);
+  onArenaState(logState);
   arenaBegin();
-  printHelp();
+  Serial.println("box: a/b = surrender A/B, l = next LED state (by hand)");
 }
 
 void loop() {
   arenaLoop();
   const bool connected = arenaConnected();
+  const ArenaState& state = arenaState();
   digitalWrite(PIN_ONBOARD_LED, connected ? HIGH : LOW);
 
-  const LedState led = manualLed >= 0 ? static_cast<LedState>(manualLed) : ledStateFor(connected, arenaState());
-  setLedState(led);
+  // LCDs: chamar a cada loop é barato, só redesenham o que mudou (texto) e uma vez
+  // por segundo (tempo). Um state novo aparece no loop seguinte, bem antes de 1 s.
+  const BoxScreen screen = boxScreenFor(connected, state, millis());
+  showMessage(screen.message);
+  if (screen.hasTime) showTime(screen.timeMs);
+  else clearTime();
+  displayPoll();
+
+  setLedState(manualLed >= 0 ? static_cast<LedState>(manualLed) : ledStateFor(connected, state));
 
   const Press press = pollButtons();
-  if (press != Press::None) Serial.printf("button: %c\n", press == Press::A ? 'A' : 'B');
-
-  if (demo.running) {
-    const long remaining = demo.remaining(millis());
-    showTime(remaining);  // chamar a cada loop é barato: só formata quando o segundo muda
-    if (remaining <= 0) {
-      demo.stop();
-      showMessage("FIM DE TEMPO");
-      Serial.println("demo: test countdown finished");
-    }
-  }
-
-  displayPoll();
+  if (press != Press::None) surrender(press == Press::A ? 'A' : 'B', "button");
 
   while (Serial.available()) handleSerial(toupper(Serial.read()));
 }

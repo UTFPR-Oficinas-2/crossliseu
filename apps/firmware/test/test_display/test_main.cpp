@@ -3,7 +3,6 @@
 #include <limits.h>
 #include <unity.h>
 
-#include "demo_clock.h"
 #include "display_text.h"
 #include "link_monitor.h"
 
@@ -130,44 +129,8 @@ static void test_link_reset_clears_failures() {
   TEST_ASSERT_FALSE(m.lost(false));
 }
 
-// --- contagem de teste (demo) --------------------------------------------------
-
-static void test_demo_clock_counts_down() {
-  DemoClock c(180000);
-  c.start(1000);
-  TEST_ASSERT_EQUAL_INT32(120000, c.remaining(61000));
-}
-
-static void test_demo_clock_pause_freezes() {
-  DemoClock c(180000);
-  c.start(1000);
-  c.pause(61000);
-  TEST_ASSERT_EQUAL_INT32(120000, c.remaining(999999));
-}
-
-static void test_demo_clock_start_after_pause_resumes() {
-  DemoClock c(180000);
-  c.start(1000);
-  c.pause(61000);
-  c.start(70000);
-  TEST_ASSERT_EQUAL_INT32(110000, c.remaining(80000));
-}
-
-static void test_demo_clock_stop_clears_pause() {
-  DemoClock c(180000);
-  c.start(1000);
-  c.pause(61000);
-  c.stop();
-  c.start(0);
-  TEST_ASSERT_EQUAL_INT32(180000, c.remaining(0));
-}
-
 int main() {
   UNITY_BEGIN();
-  RUN_TEST(test_demo_clock_counts_down);
-  RUN_TEST(test_demo_clock_pause_freezes);
-  RUN_TEST(test_demo_clock_start_after_pause_resumes);
-  RUN_TEST(test_demo_clock_stop_clears_pause);
   RUN_TEST(test_link_one_bad_poll_is_not_lost);
   RUN_TEST(test_link_two_bad_polls_in_a_row_is_lost);
   RUN_TEST(test_link_reset_evidence_is_lost_at_once);
