@@ -980,6 +980,31 @@ describe('FightService time-out timer', () => {
             );
         });
 
+        it('starts every match without waiting for the previous one', async () => {
+            const { service, repo, store } = setup({
+                state: 'ongoing',
+                events: [event('started', T0)],
+                now: at(30_000),
+            });
+            repo.findOngoingIds.mockResolvedValue(['other-id', MATCH_ID]);
+            let release: (m: Match) => void = () => {};
+            repo.findMatch.mockImplementationOnce(
+                () =>
+                    new Promise<Match>((resolve) => {
+                        release = resolve;
+                    }),
+            );
+
+            const restore = service.restoreTimeOuts();
+
+            // The second match is read while the first is still held
+            await vi.waitFor(() =>
+                expect(repo.findMatch).toHaveBeenCalledTimes(2),
+            );
+            release(store.match);
+            await restore;
+        });
+
         it('ignores paused matches', async () => {
             const { service, timer } = setup({
                 state: 'paused',

@@ -81,11 +81,11 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         this.timer.cancelAll();
     }
 
-    /** Arms the time-out of every ongoing match, one after another; a failing match is logged and does not stop the rest. Run once at boot. */
+    /** Arms the time-out of every ongoing match at once; a failing match is logged and does not stop the rest. Run once at boot. */
     async restoreTimeOuts(): Promise<void> {
-        for (const matchId of await this.repo.findOngoingIds()) {
-            await this.trySyncTimer(matchId);
-        }
+        const matchIds = await this.repo.findOngoingIds();
+        // trySyncTimer never rejects, so one failing match cannot stop the others
+        await Promise.all(matchIds.map((id) => this.trySyncTimer(id)));
     }
 
     /** Owner-only. 404 match_not_found, 409 match_invalid_transition. Returns the state after. */
