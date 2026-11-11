@@ -100,6 +100,8 @@ Each box needs its own `config.h` in this folder, next to `platformio.ini` (the 
 | `4003` (another box logged in with the same id) | Stops until it is rebooted |
 | Anything else, or nothing heard for 30 s | Retries after 1 s, doubling up to 30 s |
 
+While the Wi-Fi is down, the box calls `WiFi.begin()` again every 10 s (`arena: wifi still down after 10 s, trying again`). The core's own auto-reconnect gives up after a `connect failed`, for example when a phone hotspot is switched back on and is still starting, and the box then stayed offline until it was reset.
+
 The WebSocket library is a patched copy of arduinoWebSockets 2.7.2 in `lib/WebSockets`, so the box can read the server's close code; see [`lib/WebSockets/CROSSLISEU_PATCH.md`](lib/WebSockets/CROSSLISEU_PATCH.md). The server certificate is checked against the ISRG Root X1 and X2 certificates in `src/arena_ca.h`.
 
 To test the arena flow without the hardware, the simulator in [`tools/arena-sim`](../../tools/arena-sim/arena-sim.mjs) logs in with the same `config.h`: `node tools/arena-sim/arena-sim.mjs --config apps/firmware/config.h`.
