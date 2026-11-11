@@ -15,7 +15,8 @@ const bigintAsNumber = {
 
 /**
  * The fight recording of a match, stored in R2 (docs/recording-storage.md). One per match: a new
- * upload reuses the row and overwrites the same object key.
+ * upload reuses the row, waits in the pending columns and replaces the confirmed video only when
+ * the browser confirms it.
  *
  * uploading -> an upload URL was handed out; the file may not be in R2 yet
  * uploaded  -> the browser confirmed it and the object was found in R2
@@ -53,6 +54,16 @@ export class MatchVideo extends BaseEntity {
 
     @Column({ name: 'uploaded_at', type: 'timestamptz', nullable: true })
     uploadedAt: Date | null;
+
+    /**
+     * Set while a new upload is in progress; the confirmed video (`objectKey`, `status`) is
+     * untouched until `complete` promotes it.
+     */
+    @Column({ name: 'pending_object_key', type: 'varchar', nullable: true })
+    pendingObjectKey: string | null;
+
+    @Column({ name: 'pending_content_type', type: 'varchar', nullable: true })
+    pendingContentType: string | null;
 
     /** The operator who asked for the latest upload URL */
     @Column({ name: 'uploaded_by_user_id', type: 'uuid', nullable: false })

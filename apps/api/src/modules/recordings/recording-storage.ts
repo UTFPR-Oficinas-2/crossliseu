@@ -4,6 +4,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+    DeleteObjectCommand,
     GetObjectCommand,
     HeadObjectCommand,
     NotFound,
@@ -32,6 +33,9 @@ export abstract class RecordingStorage {
 
     /** Size in bytes of the object at `key`, or null when it is not there */
     abstract objectSize(key: string): Promise<number | null>;
+
+    /** Removes the object at `key`; a key that is not there is not an error */
+    abstract deleteObject(key: string): Promise<void>;
 }
 
 interface R2Settings {
@@ -119,6 +123,12 @@ export class R2RecordingStorage extends RecordingStorage {
             if (error instanceof NotFound || status === 404) return null;
             throw error;
         }
+    }
+
+    async deleteObject(key: string) {
+        const { client, bucket } = this.configured();
+        // S3/R2 answer 204 for a missing key too
+        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     }
 
     private configured() {
