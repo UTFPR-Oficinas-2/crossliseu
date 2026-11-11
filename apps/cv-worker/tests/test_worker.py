@@ -140,6 +140,20 @@ class ShutdownTest(unittest.TestCase):
 
         connect.assert_not_called()
 
+    def test_stop_while_connecting_does_not_start_consuming(self):
+        instance = worker.Worker("amqp://unused", storage=None)
+        consumer = mock.MagicMock()  # stands in for the connection and its channel
+
+        def connect_then_sigterm(*_args, **_kwargs):
+            instance.stop()  # SIGTERM lands while the connection is being opened
+            return consumer
+
+        with mock.patch.object(worker.pika, "BlockingConnection", side_effect=connect_then_sigterm):
+            instance.run_forever()
+
+        consumer.channel.return_value.start_consuming.assert_not_called()
+        consumer.close.assert_called_once_with()
+
     def test_stop_while_waiting_to_reconnect_ends_run_forever(self):
         instance = worker.Worker("amqp://unused", storage=None)
 

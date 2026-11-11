@@ -67,6 +67,10 @@ class Worker:
         while not self._stopping.is_set():
             try:
                 self.connection = pika.BlockingConnection(pika.URLParameters(self.url))
+                if self._stopping.is_set():
+                    # SIGTERM arrived while connecting: stop() found no open connection to stop
+                    self.connection.close()
+                    return
                 self.channel = self.connection.channel()
                 declare_queues(self.channel)
                 # One job at a time: the next message only comes after this one is acked
