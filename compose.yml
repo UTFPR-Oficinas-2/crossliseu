@@ -68,7 +68,52 @@ services:
       timeout: 5s
       retries: 10
 
+  # Analysis jobs between the API and the CV worker (queues analysis.requested / .finished).
+  # Management UI: http://localhost:15672 (RABBITMQ_USER / RABBITMQ_PASSWORD)
+  rabbitmq:
+    image: rabbitmq:4.1-management
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-crossliseu}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-crossliseu}
+
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  cv-worker:
+    build:
+      context: ./apps/cv-worker
+    init: true
+
+    env_file:
+      - ./.env
+
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crossliseu}:${RABBITMQ_PASSWORD:-crossliseu}@rabbitmq:5672/
+      # Mock mode (dev default): every job runs the pipeline on this test video instead of the
+      # recording, since test recordings have no robot markers. Set CV_MOCK_VIDEO= (empty) in
+      # .env to process the real recordings.
+      CV_MOCK_VIDEO: ${CV_MOCK_VIDEO-/app/data/videos/video_facil.mp4}
+
+    volumes:
+      - ./apps/cv-worker/data/videos:/app/data/videos:ro
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   api_node_modules:
   web_node_modules:
+  rabbitmq_data:
