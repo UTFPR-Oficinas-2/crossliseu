@@ -53,15 +53,32 @@ export function useFightRecorder() {
     try {
       const probe = await navigator.mediaDevices.getUserMedia({ video: true })
       probe.getTracks().forEach((track) => track.stop())
-
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      cameras.value = devices.filter((device) => device.kind === 'videoinput')
-
-      // Keep the current choice if that camera is still there, otherwise take the first one
-      const stillThere = cameras.value.some((camera) => camera.deviceId === cameraId.value)
-      if (!stillThere) cameraId.value = cameras.value[0]?.deviceId ?? ''
+      await listCameras()
     } catch (err) {
       error.value = describeCameraError(err)
+    }
+  }
+
+  /** Reads the connected cameras into `cameras`, keeping the chosen one if it is still there */
+  async function listCameras() {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    cameras.value = devices.filter((device) => device.kind === 'videoinput')
+
+    // Keep the current choice if that camera is still there, otherwise take the first one
+    const stillThere = cameras.value.some((camera) => camera.deviceId === cameraId.value)
+    if (!stillThere) cameraId.value = cameras.value[0]?.deviceId ?? ''
+  }
+
+  /**
+   * A camera was plugged in or out. Only the list is refreshed: no probe capture (it would open a
+   * second stream on a camera that may be recording) and no change to `error`. The permission was
+   * already granted by `loadCameras`, so the names are available.
+   */
+  async function refreshCameras() {
+    try {
+      await listCameras()
+    } catch {
+      // The list stays as it was; the next plug event or "Tentar de novo" tries again
     }
   }
 
@@ -205,11 +222,11 @@ export function useFightRecorder() {
     stopRecorder = null
     if (current && current.state !== 'inactive') current.stop()
     stopStream()
-    navigator.mediaDevices?.removeEventListener('devicechange', loadCameras)
+    navigator.mediaDevices?.removeEventListener('devicechange', refreshCameras)
   }
 
   // A camera plugged in or out updates the list by itself
-  navigator.mediaDevices?.addEventListener('devicechange', loadCameras)
+  navigator.mediaDevices?.addEventListener('devicechange', refreshCameras)
   onBeforeUnmount(release)
 
   return {
