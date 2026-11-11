@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
     ConflictException,
     Injectable,
@@ -10,7 +11,6 @@ import type {
     CompleteRecordingDto,
     RecordingContentType,
 } from './dto/recording.dto.js';
-import { MatchVideo } from './entities/match-video.entity.js';
 import { MatchVideosRepository } from './match-videos.repository.js';
 import { RecordingStorage } from './recording-storage.js';
 
@@ -25,12 +25,15 @@ const EXTENSIONS: Record<RecordingContentType, string> = {
     'video/webm': 'webm',
 };
 
-/** "recordings/<matchId>.mp4": the R2 key of a match's recording */
+/**
+ * "recordings/<matchId>/<uuid>.mp4": the R2 key of one upload attempt. New on every call, so an
+ * object left by an earlier attempt can never be taken for the one being uploaded.
+ */
 export function recordingKey(
     matchId: string,
     contentType: RecordingContentType,
 ) {
-    return `recordings/${matchId}.${EXTENSIONS[contentType]}`;
+    return `recordings/${matchId}/${randomUUID()}.${EXTENSIONS[contentType]}`;
 }
 
 /**
@@ -50,7 +53,8 @@ export class RecordingsService {
 
     /**
      * Step 1. Owner-only: a match in someone else's championship answers 404 match_not_found,
-     * like the other match routes. Recording again overwrites the previous video.
+     * like the other match routes. Recording again leaves the confirmed video as it is until
+     * `complete` replaces it.
      */
     async requestUploadUrl(
         matchId: string,
@@ -66,16 +70,12 @@ export class RecordingsService {
             UPLOAD_URL_TTL_SECONDS,
         );
 
-        const video =
-            (await this.videos.findByMatch(matchId)) ?? new MatchVideo();
-        video.matchId = matchId;
-        video.objectKey = key;
-        video.contentType = contentType;
-        video.status = 'uploading';
-        video.sizeBytes = null;
-        video.uploadedAt = null;
-        video.uploadedByUserId = userId;
-        await this.videos.save(video);
+        await this.videos.requestUpload({
+            matchId,
+            objectKey: key,
+            contentType,
+            userId,
+        });
 
         return {
             url,
@@ -87,7 +87,7 @@ export class RecordingsService {
     }
 
     /**
-     * Step 3. Accepts only the key handed out in step 1, and only once the object is in R2 with
+     * Step 3. Accepts only the latest key handed out in step 1, and only once the object is in R2 with
      * the size the browser sent. 409 recording_not_requested / recording_not_uploaded /
      * recording_size_mismatch.
      */
@@ -99,7 +99,7 @@ export class RecordingsService {
         await this.assertOwned(matchId, userId);
 
         const video = await this.videos.findByMatch(matchId);
-        if (!video || video.objectKey !== key) {
+        if (!video || video.pendingObjectKey !== key) {
             this.logger.warn('recording_not_requested', { matchId, key });
             throw new ConflictException('recording_not_requested');
         }
@@ -119,10 +119,29 @@ export class RecordingsService {
             throw new ConflictException('recording_size_mismatch');
         }
 
+        const previousKey =
+            video.status === 'uploaded' ? video.objectKey : null;
+        video.objectKey = key;
+        video.contentType = video.pendingContentType ?? video.contentType;
         video.status = 'uploaded';
         video.sizeBytes = storedSize;
         video.uploadedAt = new Date();
+        video.pendingObjectKey = null;
+        video.pendingContentType = null;
         await this.videos.save(video);
+
+        if (previousKey && previousKey !== key) {
+            // The row is already right; a leftover object is not worth failing the request
+            try {
+                await this.storage.deleteObject(previousKey);
+            } catch (error) {
+                this.logger.warn('recording_replaced_object_not_deleted', {
+                    matchId,
+                    key: previousKey,
+                    error: String(error),
+                });
+            }
+        }
     }
 
     /**

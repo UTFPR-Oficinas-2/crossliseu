@@ -23,6 +23,7 @@ class FakeStorage extends RecordingStorage {
     signed: { key: string; contentType: string; expiresIn: number }[] = [];
     readSigned: { key: string; expiresIn: number }[] = [];
     objects = new Map<string, number>();
+    deleted: string[] = [];
 
     async presignUpload(key: string, contentType: string, expiresIn: number) {
         this.signed.push({ key, contentType, expiresIn });
@@ -36,6 +37,11 @@ class FakeStorage extends RecordingStorage {
 
     async objectSize(key: string) {
         return this.objects.get(key) ?? null;
+    }
+
+    async deleteObject(key: string) {
+        this.deleted.push(key);
+        this.objects.delete(key);
     }
 }
 
@@ -64,6 +70,29 @@ function setup({
     };
     const videos = {
         findByMatch: vi.fn(async () => stored),
+        // Same rule as the INSERT ... ON CONFLICT of the real repository
+        requestUpload: vi.fn(
+            async (input: {
+                matchId: string;
+                objectKey: string;
+                contentType: string;
+                userId: string;
+            }) => {
+                if (!stored) {
+                    stored = new MatchVideo();
+                    stored.matchId = input.matchId;
+                    stored.objectKey = input.objectKey;
+                    stored.contentType = input.contentType;
+                    stored.status = 'uploading';
+                    stored.sizeBytes = null;
+                    stored.uploadedAt = null;
+                }
+                stored.pendingObjectKey = input.objectKey;
+                stored.pendingContentType = input.contentType;
+                stored.uploadedByUserId = input.userId;
+                return stored;
+            },
+        ),
         save: vi.fn(async (video: MatchVideo) => {
             stored = video;
             return video;
@@ -87,21 +116,40 @@ function uploadingVideo(): MatchVideo {
     video.status = 'uploading';
     video.sizeBytes = null;
     video.uploadedAt = null;
+    video.pendingObjectKey = KEY;
+    video.pendingContentType = 'video/mp4';
     video.uploadedByUserId = USER_ID;
+    return video;
+}
+
+/** A confirmed video with no upload in progress */
+function uploadedVideo(): MatchVideo {
+    const video = uploadingVideo();
+    video.status = 'uploaded';
+    video.sizeBytes = 73_400_320;
+    video.uploadedAt = new Date('2026-11-10T22:15:37Z');
+    video.pendingObjectKey = null;
+    video.pendingContentType = null;
     return video;
 }
 
 describe('recordingKey', () => {
     it('names the object after the match, with the extension of the type', () => {
-        expect(recordingKey(MATCH_ID, 'video/mp4')).toBe(KEY);
-        expect(recordingKey(MATCH_ID, 'video/webm')).toBe(
-            `recordings/${MATCH_ID}.webm`,
+        expect(recordingKey(MATCH_ID, 'video/mp4')).toMatch(
+            new RegExp(`^recordings/${MATCH_ID}/[0-9a-f-]{36}\\.mp4$`),
+        );
+        expect(recordingKey(MATCH_ID, 'video/webm')).toMatch(/\.webm$/);
+    });
+
+    it('is new on every call', () => {
+        expect(recordingKey(MATCH_ID, 'video/mp4')).not.toBe(
+            recordingKey(MATCH_ID, 'video/mp4'),
         );
     });
 });
 
 describe('RecordingsService.requestUploadUrl', () => {
-    it('signs one PUT of the match key and stores the video as uploading', async () => {
+    it('signs one PUT of a new match key and stores the video as uploading', async () => {
         const { service, storage, current } = setup();
         const before = Date.now();
 
@@ -111,15 +159,17 @@ describe('RecordingsService.requestUploadUrl', () => {
             USER_ID,
         );
 
+        expect(answer.key).toMatch(
+            new RegExp(`^recordings/${MATCH_ID}/.+\\.mp4$`),
+        );
         expect(storage.signed).toEqual([
             {
-                key: KEY,
+                key: answer.key,
                 contentType: 'video/mp4',
                 expiresIn: UPLOAD_URL_TTL_SECONDS,
             },
         ]);
-        expect(answer.key).toBe(KEY);
-        expect(answer.url).toContain(KEY);
+        expect(answer.url).toContain(answer.key);
         const expiresAt = new Date(answer.expiresAt).getTime();
         expect(expiresAt).toBeGreaterThanOrEqual(
             before + UPLOAD_URL_TTL_SECONDS * 1000,
@@ -127,28 +177,46 @@ describe('RecordingsService.requestUploadUrl', () => {
 
         expect(current()).toMatchObject({
             matchId: MATCH_ID,
-            objectKey: KEY,
-            contentType: 'video/mp4',
+            objectKey: answer.key,
+            pendingObjectKey: answer.key,
+            pendingContentType: 'video/mp4',
             status: 'uploading',
             sizeBytes: null,
             uploadedByUserId: USER_ID,
         });
     });
 
-    it('reuses the row when the match is recorded again', async () => {
-        const previous = uploadingVideo();
-        previous.status = 'uploaded';
-        previous.sizeBytes = 123;
-        const { service, current } = setup({ existing: previous });
+    it('a re-record gets a new object key', async () => {
+        const { service } = setup({ existing: uploadedVideo() });
 
-        await service.requestUploadUrl(MATCH_ID, 'video/webm', USER_ID);
+        const first = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/mp4',
+            USER_ID,
+        );
+        const second = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/mp4',
+            USER_ID,
+        );
 
-        expect(current()).toBe(previous);
-        expect(current()).toMatchObject({
-            objectKey: `recordings/${MATCH_ID}.webm`,
-            status: 'uploading',
-            sizeBytes: null,
-        });
+        expect(first.key).not.toBe(second.key);
+        expect(first.key).not.toBe(KEY);
+    });
+
+    it('keeps the confirmed video readable while a re-record is pending', async () => {
+        const { service } = setup({ existing: uploadedVideo() });
+
+        const answer = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/webm',
+            USER_ID,
+        );
+
+        const recording = await service.getRecording(MATCH_ID, USER_ID);
+        expect(recording.key).toBe(KEY);
+        expect(recording.contentType).toBe('video/mp4');
+        expect(answer.key).not.toBe(KEY);
     });
 
     it('answers 404 for a match in someone else championship, without signing', async () => {
@@ -158,7 +226,7 @@ describe('RecordingsService.requestUploadUrl', () => {
             service.requestUploadUrl(MATCH_ID, 'video/mp4', USER_ID),
         ).rejects.toEqual(new NotFoundException('match_not_found'));
         expect(storage.signed).toEqual([]);
-        expect(videos.save).not.toHaveBeenCalled();
+        expect(videos.requestUpload).not.toHaveBeenCalled();
     });
 
     it('answers 404 for an unknown match', async () => {
@@ -185,9 +253,90 @@ describe('RecordingsService.complete', () => {
 
         expect(current()).toMatchObject({
             status: 'uploaded',
+            objectKey: KEY,
             sizeBytes: 73_400_320,
+            pendingObjectKey: null,
+            pendingContentType: null,
         });
         expect(current()?.uploadedAt).toBeInstanceOf(Date);
+    });
+
+    it('first upload: deletes nothing', async () => {
+        const { service, storage } = setup({ existing: uploadingVideo() });
+        storage.objects.set(KEY, 10);
+
+        await service.complete(MATCH_ID, { key: KEY, size: 10 }, USER_ID);
+
+        expect(storage.deleted).toEqual([]);
+    });
+
+    it('promotes the pending upload and deletes the replaced object', async () => {
+        const { service, storage, current } = setup({
+            existing: uploadedVideo(),
+        });
+        storage.objects.set(KEY, 73_400_320);
+        const { key } = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/webm',
+            USER_ID,
+        );
+        storage.objects.set(key, 5000);
+
+        await service.complete(MATCH_ID, { key, size: 5000 }, USER_ID);
+
+        expect(current()).toMatchObject({
+            objectKey: key,
+            contentType: 'video/webm',
+            status: 'uploaded',
+            sizeBytes: 5000,
+            pendingObjectKey: null,
+        });
+        expect(storage.deleted).toEqual([KEY]);
+        expect((await service.getRecording(MATCH_ID, USER_ID)).key).toBe(key);
+    });
+
+    it('still confirms when deleting the replaced object fails', async () => {
+        const { service, storage, current } = setup({
+            existing: uploadedVideo(),
+        });
+        const { key } = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/mp4',
+            USER_ID,
+        );
+        storage.objects.set(key, 99);
+        storage.deleteObject = async () => {
+            throw new Error('r2 down');
+        };
+
+        await service.complete(MATCH_ID, { key, size: 99 }, USER_ID);
+
+        expect(current()?.objectKey).toBe(key);
+    });
+
+    it('rejects the previous object when the new one was never uploaded', async () => {
+        const { service, storage } = setup({ existing: uploadedVideo() });
+        storage.objects.set(KEY, 73_400_320);
+        const { key } = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/mp4',
+            USER_ID,
+        );
+
+        await expect(
+            service.complete(MATCH_ID, { key, size: 73_400_320 }, USER_ID),
+        ).rejects.toEqual(new ConflictException('recording_not_uploaded'));
+        expect((await service.getRecording(MATCH_ID, USER_ID)).key).toBe(KEY);
+    });
+
+    it('refuses the old key after a re-record was requested', async () => {
+        const { service, storage } = setup({ existing: uploadedVideo() });
+        storage.objects.set(KEY, 73_400_320);
+        await service.requestUploadUrl(MATCH_ID, 'video/mp4', USER_ID);
+
+        await expect(
+            service.complete(MATCH_ID, { key: KEY, size: 73_400_320 }, USER_ID),
+        ).rejects.toEqual(new ConflictException('recording_not_requested'));
     });
 
     it('refuses a key that was not handed out', async () => {
@@ -242,14 +391,6 @@ describe('RecordingsService.complete', () => {
 });
 
 describe('RecordingsService.getRecording', () => {
-    function uploadedVideo(): MatchVideo {
-        const video = uploadingVideo();
-        video.status = 'uploaded';
-        video.sizeBytes = 73_400_320;
-        video.uploadedAt = new Date('2026-11-10T22:15:37Z');
-        return video;
-    }
-
     it('returns the video with a fresh read URL', async () => {
         const { service, storage } = setup({ existing: uploadedVideo() });
         const before = Date.now();
