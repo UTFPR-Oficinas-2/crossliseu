@@ -37,10 +37,15 @@ export class RecordingsController {
     @HttpCode(HttpStatus.OK)
     requestUploadUrl(
         @Param('id', ParseUUIDPipe) id: string,
-        @Body() { contentType }: RequestUploadUrlDto,
+        @Body() { contentType, size }: RequestUploadUrlDto,
         @CurrentUserId() userId: string,
     ) {
-        return this.recordingsService.requestUploadUrl(id, contentType, userId);
+        return this.recordingsService.requestUploadUrl(
+            id,
+            contentType,
+            size,
+            userId,
+        );
     }
 
     /** Step 3: the browser finished the PUT; the video is stored as uploaded */

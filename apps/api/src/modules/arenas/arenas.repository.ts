@@ -32,9 +32,7 @@ export type LockedArenaResult = 'done' | 'arena_not_found' | 'arena_match_live';
 
 /** Outcome of undoing a pick: refused once the match has started, or finished and awaits close */
 export type ClearCurrentMatchResult =
-    | 'done'
-    | 'arena_not_found'
-    | 'arena_match_started';
+    'done' | 'arena_not_found' | 'arena_match_started';
 
 export type RenameArenaResult = 'done' | 'arena_not_found' | 'arena_name_taken';
 
@@ -75,6 +73,16 @@ export class ArenasRepository {
     findLiveByDeviceId(deviceId: string): Promise<Arena | null> {
         // findOne skips soft-deleted rows
         return this.repository.findOne({ where: { deviceId } });
+    }
+
+    /** The live arena's current match; null when it has none or the arena is unknown or deleted */
+    async findCurrentMatchId(arenaId: string): Promise<string | null> {
+        // findOne skips soft-deleted rows
+        const arena = await this.repository.findOne({
+            where: { id: arenaId },
+            select: { id: true, currentMatchId: true },
+        });
+        return arena?.currentMatchId ?? null;
     }
 
     /** Saves the arena (id and timestamps are filled in on success) */

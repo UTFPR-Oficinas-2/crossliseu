@@ -4,6 +4,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+    DeleteObjectCommand,
     GetObjectCommand,
     HeadObjectCommand,
     NotFound,
@@ -17,10 +18,14 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
  * one is R2RecordingStorage (the same pattern as Clock in the matches module).
  */
 export abstract class RecordingStorage {
-    /** URL that allows one PUT of `key` with exactly this Content-Type, for `expiresInSeconds` */
+    /**
+     * URL that allows one PUT of `key` with exactly this Content-Type and exactly `sizeBytes`
+     * bytes, for `expiresInSeconds`
+     */
     abstract presignUpload(
         key: string,
         contentType: string,
+        sizeBytes: number,
         expiresInSeconds: number,
     ): Promise<string>;
 
@@ -32,6 +37,9 @@ export abstract class RecordingStorage {
 
     /** Size in bytes of the object at `key`, or null when it is not there */
     abstract objectSize(key: string): Promise<number | null>;
+
+    /** Removes the object at `key`; a key that is not there is not an error */
+    abstract deleteObject(key: string): Promise<void>;
 }
 
 interface R2Settings {
@@ -66,11 +74,9 @@ export class R2RecordingStorage extends RecordingStorage {
         ? new S3Client({
               endpoint: this.settings.endpoint,
               region: 'auto', // R2 has no regions
-              // Recent SDK versions add a CRC32 checksum to every request by default, which
-              // lands in the presigned PUT URL as a parameter the browser never sends: only
-              // compute checksums when an operation requires them
+              // Without this the SDK puts a CRC32 of the (empty) body in the presigned URL, which
+              // would not match the video the browser sends
               requestChecksumCalculation: 'WHEN_REQUIRED',
-              responseChecksumValidation: 'WHEN_REQUIRED',
               credentials: {
                   accessKeyId: this.settings.accessKeyId,
                   secretAccessKey: this.settings.secretAccessKey,
@@ -81,6 +87,7 @@ export class R2RecordingStorage extends RecordingStorage {
     async presignUpload(
         key: string,
         contentType: string,
+        sizeBytes: number,
         expiresInSeconds: number,
     ) {
         const { client, bucket } = this.configured();
@@ -90,12 +97,13 @@ export class R2RecordingStorage extends RecordingStorage {
                 Bucket: bucket,
                 Key: key,
                 ContentType: contentType,
+                ContentLength: sizeBytes,
             }),
             {
                 expiresIn: expiresInSeconds,
-                // Without this the SDK leaves Content-Type out of the signature, and the URL
-                // accepts any type: signing it makes R2 refuse a PUT with another one (403)
-                signableHeaders: new Set(['content-type']),
+                // Without this the SDK leaves these out of the signature, and the URL accepts any
+                // type or size: signing them makes R2 refuse a PUT with another one (403)
+                signableHeaders: new Set(['content-type', 'content-length']),
             },
         );
     }
@@ -124,6 +132,14 @@ export class R2RecordingStorage extends RecordingStorage {
             if (error instanceof NotFound || status === 404) return null;
             throw error;
         }
+    }
+
+    async deleteObject(key: string) {
+        const { client, bucket } = this.configured();
+        // S3/R2 answer 204 for a missing key too
+        await client.send(
+            new DeleteObjectCommand({ Bucket: bucket, Key: key }),
+        );
     }
 
     private configured() {

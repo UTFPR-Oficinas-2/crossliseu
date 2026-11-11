@@ -92,6 +92,7 @@ describe('uploadToR2', () => {
     await expect(upload).rejects.toMatchObject({
       status: 0,
       message: 'Falha de rede durante o envio.',
+      aborted: false,
     })
   })
 
@@ -100,16 +101,20 @@ describe('uploadToR2', () => {
     const upload = uploadToR2('https://r2/x', video, { signal: controller.signal })
 
     controller.abort()
-    await expect(upload).rejects.toMatchObject({ status: 0, message: 'Envio cancelado.' })
+    await expect(upload).rejects.toMatchObject({
+      status: 0,
+      message: 'Envio cancelado.',
+      aborted: true,
+    })
   })
 
   it('does not start when the signal is already aborted', async () => {
     const controller = new AbortController()
     controller.abort()
 
-    await expect(uploadToR2('https://r2/x', video, { signal: controller.signal })).rejects.toThrow(
-      'Envio cancelado.',
-    )
+    await expect(
+      uploadToR2('https://r2/x', video, { signal: controller.signal }),
+    ).rejects.toMatchObject({ aborted: true })
     expect(FakeXhr.last).toBeNull()
   })
 })

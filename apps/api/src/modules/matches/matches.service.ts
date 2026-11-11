@@ -11,6 +11,7 @@ import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
 import { ChampionshipsService } from '../championships/championships.service.js';
 import { FightService } from './fight/fight.service.js';
+import { FightEvents } from './fight/fight-events.js';
 import { Robot } from '../robots/entities/robot.entity.js';
 import type { WeightClass } from '../robots/weight-class.js';
 
@@ -22,6 +23,7 @@ export class MatchesService {
         private readonly matchesRepository: MatchesRepository,
         private readonly championshipsService: ChampionshipsService,
         private readonly fightService: FightService,
+        private readonly fightEvents: FightEvents,
     ) {}
 
     async create(createMatchDto: CreateMatchDto, createdByUserId: string) {
@@ -121,6 +123,12 @@ export class MatchesService {
             await this.rejectLostWrite(id);
         }
 
+        // A picked match is on its arena's box, which must show the new robots
+        const arenaId = await this.matchesRepository.findCurrentArenaId(id);
+        if (arenaId) {
+            this.fightEvents.emit({ matchId: id, arenaId });
+        }
+
         return this.findOne(id);
     }
 
@@ -129,11 +137,15 @@ export class MatchesService {
         await this.assertOwned(match, userId);
         this.assertEditable(match);
 
-        const removed = await this.matchesRepository.softDeleteIf(id, {
+        const clearedArenaIds = await this.matchesRepository.softDeleteIf(id, {
             state: 'scheduled',
         });
-        if (!removed) {
-            await this.rejectLostWrite(id);
+        if (!clearedArenaIds) {
+            return this.rejectLostWrite(id);
+        }
+        // Those arenas' boxes were showing the deleted match
+        for (const arenaId of clearedArenaIds) {
+            this.fightEvents.emit({ matchId: id, arenaId });
         }
     }
 

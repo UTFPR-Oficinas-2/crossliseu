@@ -245,6 +245,7 @@ The side that surrendered is not part of the value or of `state`: the API record
 - While `paused`, `scheduled` or `finished`, the box shows `remainingMs` frozen.
 - The time is shown as `mm:ss`, **rounded up** to the next whole second: `94210` shows `01:35`, and `00:00` appears only once the time is actually up.
 - **The server decides when time is up.** When the box's own countdown reaches zero, it shows `00:00` and waits. It switches to ended only when the server sends `state` with `status: "finished"`. This avoids the box declaring the end while a surrender is still in flight.
+- The server finishes an `ongoing` match on its own the moment time runs out (and on startup for matches that ran out while it was down), then sends `state` with `status: "finished"` and `endReason: "time_out"`.
 
 ## Close codes
 

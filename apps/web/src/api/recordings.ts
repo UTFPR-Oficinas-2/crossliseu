@@ -22,16 +22,18 @@ export interface ApiRecordingComplete {
 
 /**
  * Step 1. POST /matches/:id/recording/upload-url (JWT). `contentType` is part of the signature,
- * so the PUT in step 2 must send the same Content-Type.
+ * and so is `size` (bytes), so the PUT in step 2 must send the same Content-Type and exactly that
+ * many bytes.
  */
 export function requestUploadUrl(
   matchId: string,
   contentType: string,
+  size: number,
   token: string,
 ): Promise<ApiRecordingUploadUrl> {
   return apiRequest(`/matches/${encodeURIComponent(matchId)}/recording/upload-url`, {
     method: 'POST',
-    body: { contentType },
+    body: { contentType, size },
     token,
   })
 }

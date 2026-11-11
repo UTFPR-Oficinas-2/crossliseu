@@ -331,6 +331,7 @@ export interface RecordingUploadTarget {
 export const requestRecordingUpload: (
   matchId: string,
   contentType: string,
+  size: number,
   token: string,
 ) => Promise<RecordingUploadTarget> = async () => {
   throw notImplemented()

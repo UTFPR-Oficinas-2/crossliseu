@@ -11,6 +11,8 @@ import { Robot } from '../robots/entities/robot.entity.js';
 import type { MatchesRepository } from './matches.repository.js';
 import type { ChampionshipsService } from '../championships/championships.service.js';
 import type { FightService } from './fight/fight.service.js';
+import { FightEvents } from './fight/fight-events.js';
+import type { FightChange } from './fight/fight-events.js';
 import type { WeightClass } from '../robots/weight-class.js';
 
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
@@ -20,6 +22,7 @@ const ROBOT_B_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ROBOT_C_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const ARENA_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 const SCHEDULED_AT = new Date('2026-11-10T14:00:00Z');
 
 function robot(
@@ -54,7 +57,11 @@ function match(state: MatchState = 'scheduled'): Match {
     return entity;
 }
 
-function setup(robots: Robot[], matches: Match[] = []) {
+function setup(
+    robots: Robot[],
+    matches: Match[] = [],
+    arenas: { id: string; currentMatchId: string | null }[] = [],
+) {
     const byId = (id: string) =>
         robots.find((entity) => entity.id === id) ?? null;
     const matchesRepository = {
@@ -103,13 +110,34 @@ function setup(robots: Robot[], matches: Match[] = []) {
         findOne: vi.fn((id: string) =>
             Promise.resolve(matches.find((entity) => entity.id === id) ?? null),
         ),
-        softDeleteIf: vi.fn((id: string, expected: Partial<Match>) =>
+        // The live arena pointing at the match, like the pointer read after the update
+        findCurrentArenaId: vi.fn((id: string) =>
             Promise.resolve(
-                matches.some(
-                    (entity) =>
-                        entity.id === id && entity.state === expected.state,
-                ),
+                arenas.find((arena) => arena.currentMatchId === id)?.id ?? null,
             ),
+        ),
+        // Clears the pointers and returns the arenas it cleared; null when nothing was deleted
+        softDeleteIf: vi.fn(
+            (
+                id: string,
+                expected: Partial<Match>,
+            ): Promise<string[] | null> => {
+                if (
+                    !matches.some(
+                        (entity) =>
+                            entity.id === id && entity.state === expected.state,
+                    )
+                ) {
+                    return Promise.resolve(null);
+                }
+                const cleared = arenas.filter(
+                    (arena) => arena.currentMatchId === id,
+                );
+                for (const arena of cleared) {
+                    arena.currentMatchId = null;
+                }
+                return Promise.resolve(cleared.map((arena) => arena.id));
+            },
         ),
     };
     const championshipsService = {
@@ -117,13 +145,23 @@ function setup(robots: Robot[], matches: Match[] = []) {
         isOwnedBy: vi.fn().mockResolvedValue(true),
     };
     const fightService = { settle: vi.fn().mockResolvedValue(false) };
+    const fightEvents = new FightEvents();
+    const changes: FightChange[] = [];
+    fightEvents.onChange((change) => changes.push(change));
     const service = new MatchesService(
         matchesRepository as unknown as MatchesRepository,
         championshipsService as unknown as ChampionshipsService,
         fightService as unknown as FightService,
+        fightEvents,
     );
 
-    return { service, matchesRepository, championshipsService, fightService };
+    return {
+        service,
+        matchesRepository,
+        championshipsService,
+        fightService,
+        changes,
+    };
 }
 
 const dto = {
@@ -532,6 +570,89 @@ describe('MatchesService.remove', () => {
     });
 });
 
+describe('MatchesService fight changes', () => {
+    const picked = () => [{ id: ARENA_ID, currentMatchId: MATCH_ID }];
+
+    it('an update of a picked match emits with its arena id', async () => {
+        const { service, changes } = setup(
+            [robot(ROBOT_A_ID), robot(ROBOT_B_ID), robot(ROBOT_C_ID)],
+            [match()],
+            picked(),
+        );
+
+        await service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID);
+
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('an update of a match no arena shows emits nothing', async () => {
+        const { service, changes } = setup(
+            [robot(ROBOT_A_ID), robot(ROBOT_B_ID), robot(ROBOT_C_ID)],
+            [match()],
+        );
+
+        await service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID);
+
+        expect(changes).toEqual([]);
+    });
+
+    it('a remove of a picked match emits with the cleared arena id', async () => {
+        const arenas = picked();
+        const { service, changes } = setup([], [match()], arenas);
+
+        await service.remove(MATCH_ID, USER_ID);
+
+        expect(arenas[0].currentMatchId).toBeNull();
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('a remove of a match no arena shows emits nothing', async () => {
+        const { service, changes } = setup([], [match()]);
+
+        await service.remove(MATCH_ID, USER_ID);
+
+        expect(changes).toEqual([]);
+    });
+
+    it('a refused update or remove emits nothing', async () => {
+        const { service, changes } = setup(
+            [robot(ROBOT_A_ID), robot(ROBOT_B_ID), robot(ROBOT_C_ID)],
+            [match('ongoing')],
+            picked(),
+        );
+
+        await expect(
+            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
+        ).rejects.toThrow(ConflictException);
+        await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
+            ConflictException,
+        );
+        expect(changes).toEqual([]);
+    });
+
+    it('an update or remove that loses a race emits nothing', async () => {
+        const { service, matchesRepository, changes } = setup(
+            [robot(ROBOT_A_ID), robot(ROBOT_B_ID), robot(ROBOT_C_ID)],
+            [],
+            picked(),
+        );
+        matchesRepository.updateScheduledWithRobots.mockResolvedValueOnce(
+            false,
+        );
+        matchesRepository.softDeleteIf.mockResolvedValueOnce(null);
+        matchesRepository.findOne.mockResolvedValue(match('scheduled'));
+        vi.spyOn(service.logger, 'error').mockImplementation(() => {});
+
+        await expect(
+            service.update(MATCH_ID, { robotBId: ROBOT_C_ID }, USER_ID),
+        ).rejects.toThrow(ConflictException);
+        await expect(service.remove(MATCH_ID, USER_ID)).rejects.toThrow(
+            ConflictException,
+        );
+        expect(changes).toEqual([]);
+    });
+});
+
 describe('MatchesService logging', () => {
     it('logs an unknown match at warn, not error', async () => {
         const { service } = setup([]);
@@ -559,7 +680,7 @@ describe('MatchesService writes that lose a race', () => {
         matchesRepository.updateScheduledWithRobots.mockResolvedValueOnce(
             false,
         );
-        matchesRepository.softDeleteIf.mockResolvedValueOnce(false);
+        matchesRepository.softDeleteIf.mockResolvedValueOnce(null);
         const read = match();
         matchesRepository.findOne
             .mockResolvedValueOnce(read)

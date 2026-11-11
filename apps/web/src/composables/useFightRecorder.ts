@@ -47,6 +47,15 @@ export function useFightRecorder() {
   /** Bumped by every `openCamera` and by `release`, so a late getUserMedia knows it is stale */
   let openRequest = 0
 
+  /** Reads the camera list; keeps the current choice if that camera is still there */
+  async function listCameras() {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    cameras.value = devices.filter((device) => device.kind === 'videoinput')
+
+    const stillThere = cameras.value.some((camera) => camera.deviceId === cameraId.value)
+    if (!stillThere) cameraId.value = cameras.value[0]?.deviceId ?? ''
+  }
+
   /** Lists the cameras. Asks for permission first: without it, browsers hide camera names. */
   async function loadCameras() {
     error.value = null
@@ -59,26 +68,17 @@ export function useFightRecorder() {
     }
   }
 
-  /** Reads the connected cameras into `cameras`, keeping the chosen one if it is still there */
-  async function listCameras() {
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    cameras.value = devices.filter((device) => device.kind === 'videoinput')
-
-    // Keep the current choice if that camera is still there, otherwise take the first one
-    const stillThere = cameras.value.some((camera) => camera.deviceId === cameraId.value)
-    if (!stillThere) cameraId.value = cameras.value[0]?.deviceId ?? ''
-  }
-
   /**
-   * A camera was plugged in or out. Only the list is refreshed: no probe capture (it would open a
-   * second stream on a camera that may be recording) and no change to `error`. The permission was
-   * already granted by `loadCameras`, so the names are available.
+   * A camera plugged in or out. With a camera open, permission is already granted, so only the
+   * list is read: probing the camera again mid-recording can fail (some cameras cannot be opened
+   * twice) or disturb the capture.
    */
-  async function refreshCameras() {
+  async function onDeviceChange() {
+    if (!stream.value) return loadCameras()
     try {
       await listCameras()
-    } catch {
-      // The list stays as it was; the next plug event or "Tentar de novo" tries again
+    } catch (err) {
+      error.value = describeCameraError(err)
     }
   }
 
@@ -126,11 +126,18 @@ export function useFightRecorder() {
     if (recorder !== current) return // released while stopping
     clearInterval(timer)
     // Plain type ("video/mp4"): it is what the upload signs and what R2 stores
-    const blob = new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
+    const blob =
+      chunks.length > 0
+        ? new Blob(chunks, { type: baseMimeType(mimeType.value || 'video/webm') })
+        : null
     chunks = []
     recording.value = blob
-    state.value = 'stopped'
-    if (!requested && !error.value) {
+    // Nothing was recorded (the recorder failed at once): there is no file to send, so go back
+    // to the live preview instead of offering an empty video
+    state.value = blob ? 'stopped' : 'previewing'
+    if (!blob && !error.value)
+      error.value = 'A gravação não capturou nenhuma imagem. Tente de novo.'
+    if (blob && !requested && !error.value) {
       error.value =
         'A gravação parou sozinha (a câmera foi desconectada?). O que foi gravado até aqui está abaixo.'
     }
@@ -222,11 +229,11 @@ export function useFightRecorder() {
     stopRecorder = null
     if (current && current.state !== 'inactive') current.stop()
     stopStream()
-    navigator.mediaDevices?.removeEventListener('devicechange', refreshCameras)
+    navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
   }
 
   // A camera plugged in or out updates the list by itself
-  navigator.mediaDevices?.addEventListener('devicechange', refreshCameras)
+  navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange)
   onBeforeUnmount(release)
 
   return {
