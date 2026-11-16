@@ -166,6 +166,45 @@ class ShutdownTest(unittest.TestCase):
         ):
             instance.run_forever()
 
+    def test_health_file_exists_only_while_consuming(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            marker = os.path.join(directory, "healthy")
+            instance = worker.Worker("amqp://unused", storage=None)
+            seen = []
+            connection = mock.MagicMock()
+            connection.channel.return_value.start_consuming.side_effect = lambda: seen.append(os.path.exists(marker))
+
+            with mock.patch.object(worker, "HEALTH_FILE", marker), mock.patch.object(
+                worker.pika, "BlockingConnection", return_value=connection
+            ):
+                instance.run_forever()
+
+            self.assertEqual(seen, [True])
+            self.assertFalse(os.path.exists(marker))
+
+    def test_health_file_is_removed_when_the_connection_drops(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            marker = os.path.join(directory, "healthy")
+            instance = worker.Worker("amqp://unused", storage=None)
+            connection = mock.MagicMock()
+
+            def drop():
+                instance.stop()
+                raise pika.exceptions.AMQPConnectionError("lost")
+
+            connection.channel.return_value.start_consuming.side_effect = drop
+
+            with mock.patch.object(worker, "HEALTH_FILE", marker), mock.patch.object(
+                worker.pika, "BlockingConnection", return_value=connection
+            ):
+                instance.run_forever()
+
+            self.assertFalse(os.path.exists(marker))
+
 
 if __name__ == "__main__":
     unittest.main()
