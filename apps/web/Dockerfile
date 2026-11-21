@@ -3,7 +3,7 @@
 # Node version: keep every FROM node:… tag in sync with /.nvmrc.
 
 # ---- deps: dependencies only, cached until package*.json changes ----
-FROM node:26.13.0-trixie AS deps
+FROM node:26.13.1-trixie AS deps
 
 WORKDIR /app
 RUN chown node:node /app
