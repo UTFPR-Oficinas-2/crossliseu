@@ -10,6 +10,8 @@ import type {
     ChampionshipCounts,
     ChampionshipsRepository,
 } from './championships.repository.js';
+import { FightEvents } from '../matches/fight/fight-events.js';
+import type { FightChange } from '../matches/fight/fight-events.js';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_ID = '22222222-2222-4222-8222-222222222222';
@@ -54,16 +56,22 @@ function setup(
         ),
         countRobotsAndMatches: vi.fn().mockResolvedValue(counts),
         update: vi.fn().mockResolvedValue(undefined),
-        removeCascade: vi.fn().mockResolvedValue('done'),
+        removeCascade: vi
+            .fn()
+            .mockResolvedValue({ result: 'done', changes: [] }),
     };
+    const fightEvents = new FightEvents();
+    const changes: FightChange[] = [];
+    fightEvents.onChange((change) => changes.push(change));
     const service = new ChampionshipsService(
         championshipsRepository as unknown as ChampionshipsRepository,
+        fightEvents,
     );
     const warn = vi.spyOn(service.logger, 'warn').mockImplementation(() => {});
     const error = vi
         .spyOn(service.logger, 'error')
         .mockImplementation(() => {});
-    return { service, championshipsRepository, warn, error };
+    return { service, championshipsRepository, changes, warn, error };
 }
 
 describe('ChampionshipsService status', () => {
@@ -218,13 +226,29 @@ describe('ChampionshipsService.remove', () => {
         expect(championshipsRepository.removeCascade).toHaveBeenCalledWith(ID);
     });
 
-    it('refuses while a match is ongoing or paused', async () => {
-        const { service, championshipsRepository, error } = setup([
+    it('emits each fight change the delete reports, in order', async () => {
+        const { service, championshipsRepository, changes } = setup([
             championship(),
         ]);
-        championshipsRepository.removeCascade.mockResolvedValueOnce(
-            'has_live_match',
-        );
+        const shown = { matchId: 'm-shown', arenaId: 'arena-1' };
+        const hidden = { matchId: 'm-hidden', arenaId: null };
+        championshipsRepository.removeCascade.mockResolvedValueOnce({
+            result: 'done',
+            changes: [shown, hidden],
+        });
+
+        await service.remove(ID, USER_ID);
+
+        expect(changes).toEqual([shown, hidden]);
+    });
+
+    it('refuses while a match is ongoing or paused', async () => {
+        const { service, championshipsRepository, changes, error } = setup([
+            championship(),
+        ]);
+        championshipsRepository.removeCascade.mockResolvedValueOnce({
+            result: 'has_live_match',
+        });
 
         await expect(service.remove(ID, USER_ID)).rejects.toThrow(
             new ConflictException('championship_has_live_match'),
@@ -232,17 +256,21 @@ describe('ChampionshipsService.remove', () => {
         expect(error).toHaveBeenCalledWith('championship_has_live_match', {
             id: ID,
         });
+        expect(changes).toEqual([]);
     });
 
     it('reports a championship deleted in the meantime as not found', async () => {
-        const { service, championshipsRepository } = setup([championship()]);
-        championshipsRepository.removeCascade.mockResolvedValueOnce(
-            'not_found',
-        );
+        const { service, championshipsRepository, changes } = setup([
+            championship(),
+        ]);
+        championshipsRepository.removeCascade.mockResolvedValueOnce({
+            result: 'not_found',
+        });
 
         await expect(service.remove(ID, USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),
         );
+        expect(changes).toEqual([]);
     });
 });
 
@@ -289,9 +317,9 @@ describe('ChampionshipsService ownership', () => {
 
     it("does not remove another account's championship, even with a live match", async () => {
         const { service, championshipsRepository } = setup([championship()]);
-        championshipsRepository.removeCascade.mockResolvedValueOnce(
-            'has_live_match',
-        );
+        championshipsRepository.removeCascade.mockResolvedValueOnce({
+            result: 'has_live_match',
+        });
 
         await expect(service.remove(ID, OTHER_USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),

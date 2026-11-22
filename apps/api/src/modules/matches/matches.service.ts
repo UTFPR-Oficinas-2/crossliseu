@@ -143,9 +143,12 @@ export class MatchesService {
         if (!clearedArenaIds) {
             return this.rejectLostWrite(id);
         }
-        // Those arenas' boxes were showing the deleted match
+        // Listeners must hear of every deletion: the boxes that showed it, and anyone watching it
         for (const arenaId of clearedArenaIds) {
             this.fightEvents.emit({ matchId: id, arenaId });
+        }
+        if (clearedArenaIds.length === 0) {
+            this.fightEvents.emit({ matchId: id, arenaId: null });
         }
     }
 

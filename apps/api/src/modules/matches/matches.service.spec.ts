@@ -606,12 +606,12 @@ describe('MatchesService fight changes', () => {
         expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
     });
 
-    it('a remove of a match no arena shows emits nothing', async () => {
+    it('a remove of a match no arena shows emits with a null arena id', async () => {
         const { service, changes } = setup([], [match()]);
 
         await service.remove(MATCH_ID, USER_ID);
 
-        expect(changes).toEqual([]);
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: null }]);
     });
 
     it('a refused update or remove emits nothing', async () => {

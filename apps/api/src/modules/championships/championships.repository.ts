@@ -4,6 +4,7 @@ import { Championship } from './entities/championship.entity.js';
 import { In, Repository } from 'typeorm';
 import { Arena } from '../arenas/entities/arena.entity.js';
 import type { MatchState } from '../matches/entities/match.entity.js';
+import type { FightChange } from '../matches/fight/fight-events.js';
 import { Match } from '../matches/entities/match.entity.js';
 import { Robot } from '../robots/entities/robot.entity.js';
 
@@ -101,21 +102,28 @@ export class ChampionshipsRepository {
      * championship either commits first and is deleted here, or waits and finds it gone.
      * Every arena is locked between the championship and the matches (arena before match, like
      * ArenasRepository), and arenas pointing at a deleted match lose that pointer.
+     *
+     * On `done`, `changes` has one entry per deleted match: with the arena whose pointer was
+     * cleared, or a null arena when none showed it. Matches deleted earlier are not in it.
      */
     removeCascade(
         id: string,
-    ): Promise<'done' | 'not_found' | 'has_live_match'> {
+    ): Promise<
+        | { result: 'done'; changes: FightChange[] }
+        | { result: 'not_found' }
+        | { result: 'has_live_match' }
+    > {
         return this.repository.manager.transaction(async (manager) => {
             const championship = await manager.findOne(Championship, {
                 where: { id },
                 lock: { mode: 'pessimistic_write' },
             });
             if (!championship) {
-                return 'not_found';
+                return { result: 'not_found' };
             }
 
-            await manager.find(Arena, {
-                select: { id: true },
+            const arenas = await manager.find(Arena, {
+                select: { id: true, currentMatchId: true },
                 order: { id: 'ASC' },
                 lock: { mode: 'pessimistic_write' },
             });
@@ -125,7 +133,7 @@ export class ChampionshipsRepository {
                 lock: { mode: 'pessimistic_write' },
             });
             if (matches.some((match) => LIVE_STATES.includes(match.state))) {
-                return 'has_live_match';
+                return { result: 'has_live_match' };
             }
 
             if (matches.length > 0) {
@@ -138,7 +146,14 @@ export class ChampionshipsRepository {
             await manager.softDelete(Match, { championshipId: id });
             await manager.softDelete(Robot, { championshipId: id });
             await manager.softDelete(Championship, { id });
-            return 'done';
+            // The arena rows are locked, so these are exactly the pointers the update cleared
+            const changes = matches.map((match) => ({
+                matchId: match.id,
+                arenaId:
+                    arenas.find((arena) => arena.currentMatchId === match.id)
+                        ?.id ?? null,
+            }));
+            return { result: 'done', changes };
         });
     }
 }

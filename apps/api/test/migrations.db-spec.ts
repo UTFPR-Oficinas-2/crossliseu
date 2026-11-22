@@ -46,6 +46,7 @@ describe('migrations on a fresh database', () => {
             'arenas',
             'championships',
             'match_events',
+            'match_videos',
             'matches',
             'migrations',
             'robots',
@@ -142,9 +143,17 @@ describe('migrations on a fresh database', () => {
         beforeEach(async () => {
             await ds.runMigrations();
             await ds.query(`TRUNCATE "users", "arenas" CASCADE`);
-            // MatchEvents is newer than ArenaOwners: undo both to leave ArenaOwners pending
-            await ds.undoLastMigration();
-            await ds.undoLastMigration();
+            // Undo every migration down to ArenaOwners, so it is the next to run however many
+            // newer ones exist
+            while (
+                (
+                    await ds.query(
+                        `SELECT 1 FROM "migrations" WHERE "name" = 'ArenaOwners1794100000000'`,
+                    )
+                ).length > 0
+            ) {
+                await ds.undoLastMigration();
+            }
         });
 
         afterEach(cleanUp);
