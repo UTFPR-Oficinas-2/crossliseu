@@ -2,6 +2,8 @@ import { NotFoundException } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { DataSource } from 'typeorm';
+import { FightEvents } from '../src/modules/matches/fight/fight-events.js';
+import type { FightChange } from '../src/modules/matches/fight/fight-events.js';
 import { MatchesService } from '../src/modules/matches/matches.service.js';
 import { RobotsService } from '../src/modules/robots/robots.service.js';
 import {
@@ -13,6 +15,7 @@ import {
     resetDatabase,
     seedChampionship,
     seedCreatorId,
+    seedArena,
     seedMatch,
     seedRobot,
 } from './helpers.js';
@@ -65,6 +68,46 @@ describe('deleting a championship (e2e)', () => {
         expect(robots.body).toEqual([]);
         expect(matches.body).toEqual([]);
         await http().get(`/championships/${championship.id}`).expect(404);
+    });
+
+    it('emits a fight change for each match it removes, with the arena that showed it', async () => {
+        const { championship, match: shown } = await championshipWithAMatch();
+        const [a, b] = await ds.query(
+            `SELECT "id" FROM "robots" WHERE "championship_id" = $1 ORDER BY "name"`,
+            [championship.id],
+        );
+        const hidden = await seedMatch(ds, championship.id, a.id, b.id);
+        const earlier = await seedMatch(ds, championship.id, a.id, b.id);
+        await ds.query(
+            `UPDATE "matches" SET "deleted_at" = '2026-01-01T00:00:00Z' WHERE "id" = $1`,
+            [earlier.id],
+        );
+        const arena = await seedArena(ds, 'Arena 1');
+        await ds.query(
+            `UPDATE "arenas" SET "current_match_id" = $1 WHERE "id" = $2`,
+            [shown.id, arena.id],
+        );
+        const changes: FightChange[] = [];
+        const unsubscribe = app
+            .get(FightEvents)
+            .onChange((change) => changes.push(change));
+
+        try {
+            await http()
+                .delete(`/championships/${championship.id}`)
+                .set(auth())
+                .expect(204);
+        } finally {
+            unsubscribe();
+        }
+
+        expect(changes).toHaveLength(2);
+        expect(changes).toEqual(
+            expect.arrayContaining([
+                { matchId: shown.id, arenaId: arena.id },
+                { matchId: hidden.id, arenaId: null },
+            ]),
+        );
     });
 
     it('keeps the deletion time of robots and matches removed earlier', async () => {

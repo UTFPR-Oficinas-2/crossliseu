@@ -16,6 +16,7 @@ import {
 } from './championship-status.js';
 import { CreateChampionshipDto } from './dto/create-championship.dto.js';
 import { UpdateChampionshipDto } from './dto/update-championship.dto.js';
+import { FightEvents } from '../matches/fight/fight-events.js';
 
 @Injectable()
 export class ChampionshipsService {
@@ -23,6 +24,7 @@ export class ChampionshipsService {
 
     constructor(
         private readonly championshipsRepository: ChampionshipsRepository,
+        private readonly fightEvents: FightEvents,
     ) {}
 
     async create(
@@ -119,14 +121,18 @@ export class ChampionshipsService {
     async remove(id: string, userId: string) {
         await this.findOwned(id, userId);
 
-        const result = await this.championshipsRepository.removeCascade(id);
-        if (result === 'not_found') {
+        const outcome = await this.championshipsRepository.removeCascade(id);
+        if (outcome.result === 'not_found') {
             this.logger.warn('championship_not_found', { id });
             throw new NotFoundException('championship_not_found');
         }
-        if (result === 'has_live_match') {
+        if (outcome.result === 'has_live_match') {
             this.logger.error('championship_has_live_match', { id });
             throw new ConflictException('championship_has_live_match');
+        }
+        // After the commit: boxes that showed these matches, and anyone watching them, must hear
+        for (const change of outcome.changes) {
+            this.fightEvents.emit(change);
         }
     }
 
