@@ -5,7 +5,7 @@
 # built in `build` (bcrypt) run in `prod`.
 
 # ---- deps: dependencies only, cached until package*.json changes ----
-FROM node:26.13.0-trixie AS deps
+FROM node:26.13.1-trixie AS deps
 
 WORKDIR /app
 RUN chown node:node /app
@@ -53,7 +53,7 @@ COPY --chown=node:node . .
 RUN npm run build && npm prune --omit=dev
 
 # ---- prod: small runtime image used on the VPS ----
-FROM node:26.13.0-trixie-slim AS prod
+FROM node:26.13.1-trixie-slim AS prod
 
 ENV NODE_ENV=production
 
