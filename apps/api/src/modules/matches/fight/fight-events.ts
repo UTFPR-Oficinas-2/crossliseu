@@ -7,8 +7,8 @@ export interface FightChange {
 }
 
 /**
- * In-process notifications of committed fight changes. Lives in MatchesModule so the arenas
- * module can subscribe without MatchesModule importing it.
+ * In-process notifications of committed fight changes. Lives in its own module (FightEventsModule)
+ * so the arenas and championships modules can use it without depending on MatchesModule.
  */
 @Injectable()
 export class FightEvents {

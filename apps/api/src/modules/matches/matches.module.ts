@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Match } from './entities/match.entity.js';
 import { MatchEvent } from './entities/match-event.entity.js';
 import { Clock, SystemClock } from './fight/clock.js';
-import { FightEvents } from './fight/fight-events.js';
+import { FightEventsModule } from './fight/fight-events.module.js';
 import { FightTimer } from './fight/fight-timer.js';
 import { FightRepository } from './fight/fight.repository.js';
 import { FightService } from './fight/fight.service.js';
@@ -16,6 +16,7 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
     imports: [
         TypeOrmModule.forFeature([Match, MatchEvent]),
         ChampionshipsModule,
+        FightEventsModule,
     ],
     controllers: [MatchesController],
     providers: [
@@ -23,10 +24,9 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
         MatchesRepository,
         FightRepository,
         FightService,
-        FightEvents,
         FightTimer,
         { provide: Clock, useClass: SystemClock },
     ],
-    exports: [MatchesService, FightService, FightEvents],
+    exports: [MatchesService, FightService, FightEventsModule],
 })
 export class MatchesModule {}
