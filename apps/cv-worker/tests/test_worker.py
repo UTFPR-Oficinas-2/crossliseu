@@ -96,6 +96,13 @@ def run_failing_job(headers=None, redelivered=False):
 
 
 class RetryAccountingTest(unittest.TestCase):
+    def test_running_message_names_the_video(self):
+        # The API ignores results for a video the operator has since replaced
+        channel = run_failing_job()
+
+        results = [body for body, _ in channel.to(worker.RESULT_QUEUE)]
+        self.assertEqual(results[0], {"matchId": "m1", "videoKey": "recordings/m1.mp4", "status": "running"})
+
     def test_first_transient_failure_republishes_with_attempt_2_and_acks(self):
         channel = run_failing_job()
 

@@ -1,7 +1,7 @@
 """CV worker: consumes analysis jobs from RabbitMQ, one at a time.
 
     analysis.requested  -> {"matchId", "videoKey"}         (published by the API)
-    analysis.finished   <- {"matchId", "status": ...}      (consumed by the API)
+    analysis.finished   <- {"matchId", "videoKey", "status": ...}   (consumed by the API)
 
 For each job it publishes "running", then "done" or "failed", and acks the request only at the
 end, so a worker that dies mid-job leaves the message in the queue for the next one.
@@ -107,8 +107,9 @@ class Worker:
     def process(self, channel, method, properties, body):
         tag = method.delivery_tag
         try:
-            match_id, _ = parse_request(body)
-            self.on_channel(channel, lambda: publish(channel, {"matchId": match_id, "status": "running"}))
+            match_id, video_key = parse_request(body)
+            running = {"matchId": match_id, "videoKey": video_key, "status": "running"}
+            self.on_channel(channel, lambda: publish(channel, running))
             log.info("job %s started", match_id)
             started = time.monotonic()
             result = run_job(body, self.storage, self.mock_video)
