@@ -11,6 +11,9 @@ import { FightService } from './fight/fight.service.js';
 import { MatchesController } from './matches.controller.js';
 import { MatchesService } from './matches.service.js';
 import { MatchesRepository } from './matches.repository.js';
+import { RefereesController } from './referees/referees.controller.js';
+import { RefereesRepository } from './referees/referees.repository.js';
+import { RefereesService } from './referees/referees.service.js';
 import { ChampionshipsModule } from '../championships/championships.module.js';
 
 @Module({
@@ -19,15 +22,17 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
         ChampionshipsModule,
         FightEventsModule,
     ],
-    controllers: [MatchesController],
+    controllers: [MatchesController, RefereesController],
     providers: [
         MatchesService,
         MatchesRepository,
         FightRepository,
         FightService,
         FightTimer,
+        RefereesRepository,
+        RefereesService,
         { provide: Clock, useClass: SystemClock },
     ],
-    exports: [MatchesService, FightService, FightEventsModule],
+    exports: [MatchesService, FightService, RefereesService, FightEventsModule],
 })
 export class MatchesModule {}

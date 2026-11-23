@@ -105,8 +105,16 @@ export class Match extends BaseEntity {
     @JoinColumn({ name: 'arena_id' })
     arena?: Relation<Arena> | null;
 
-    /** Shared by the match's referees to join; created on first request, never rotated (#18) */
-    @Column({ name: 'referee_token', type: 'varchar', nullable: true })
+    /**
+     * Shared by the match's referees to join; created on first request, never rotated (#18).
+     * Not selected by default: GET /matches is public and must never show it.
+     */
+    @Column({
+        name: 'referee_token',
+        type: 'varchar',
+        nullable: true,
+        select: false,
+    })
     refereeToken: string | null;
 
     @Column({ name: 'created_by_user_id', type: 'uuid', nullable: false })
