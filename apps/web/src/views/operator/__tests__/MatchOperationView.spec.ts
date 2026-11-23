@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
+import { openFightChannel, type FightChannelOptions } from '@/api/fight-channel'
 import { getFightState, sendFightCommand, type OperatorFightState } from '@/data'
 import { liveToken } from '@/stores/__tests__/token-helpers'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
@@ -23,6 +24,9 @@ function deferred<T>() {
 vi.mock('@/data', () => ({
   getFightState: vi.fn<typeof getFightState>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
+}))
+vi.mock('@/api/fight-channel', () => ({
+  openFightChannel: vi.fn<typeof openFightChannel>(),
 }))
 
 const video = shallowRef<Blob | null>(null)
@@ -103,6 +107,15 @@ describe('MatchOperationView', () => {
   enableAutoUnmount(afterEach)
   const get = vi.mocked(getFightState)
   const post = vi.mocked(sendFightCommand)
+  const open = vi.mocked(openFightChannel)
+  let channel: FightChannelOptions | undefined
+  /** The snapshot the channel delivers once connected, or `null` for none */
+  let firstFrame: OperatorFightState | null
+
+  async function push(frame: OperatorFightState) {
+    channel!.onState(frame)
+    await flushPromises()
+  }
   const fightLabels = ['Iniciar luta', 'Pausar', 'Retomar', 'Encerrar luta', 'Fechar luta']
 
   beforeEach(() => {
@@ -112,6 +125,19 @@ describe('MatchOperationView', () => {
     cameraError.value = null
     get.mockReset().mockResolvedValue(scheduled)
     post.mockReset()
+    channel = undefined
+    firstFrame = scheduled
+    open.mockReset().mockImplementation((options) => {
+      channel = options
+      const frame = firstFrame
+      if (frame) {
+        queueMicrotask(() => {
+          options.onState(frame)
+          options.onStatus('open')
+        })
+      }
+      return { close: vi.fn<() => void>() }
+    })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.stubGlobal(
       'URL',
@@ -129,19 +155,41 @@ describe('MatchOperationView', () => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
   })
 
+  it('follows the fight over the channel with the operator JWT', async () => {
+    const { button } = await mountFight()
+    expect(open).toHaveBeenCalledOnce()
+    expect(channel).toMatchObject({ matchId: 'm1', token: localStorage.getItem(TOKEN_STORAGE_KEY) })
+    expect(get).not.toHaveBeenCalled()
+
+    await push({ ...scheduled, status: 'ongoing' })
+    expect(button('Pausar')).toBeDefined()
+  })
+
   it('shows loading then the not-found screen', async () => {
-    const read = deferred<OperatorFightState>()
-    get.mockReturnValueOnce(read.promise)
+    firstFrame = null
     const { wrapper } = await mountFight()
     expect(wrapper.text()).toContain('Carregando a luta')
-    read.reject(new ApiError(404, 'match_not_found'))
+    channel!.onStatus('not-found')
     await flushPromises()
     expect(wrapper.text()).toContain('Luta não encontrada')
   })
 
+  it('hides the fight card but keeps the recorder when the match disappears mid-fight', async () => {
+    const { wrapper, button } = await mountFight()
+    expect(button('Iniciar luta')).toBeDefined()
+    channel!.onStatus('not-found')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Luta não encontrada')
+    expect(wrapper.find('.fight-operation').exists()).toBe(false)
+    expect(button('Iniciar luta')).toBeUndefined()
+    expect(wrapper.findComponent(FightRecorderPanel).exists()).toBe(true)
+  })
+
   it('retries an initial error and shows server names, side labels and the timer', async () => {
-    get.mockRejectedValueOnce(new ApiError(500, 'failed'))
+    firstFrame = null
     const { wrapper, click } = await mountFight()
+    channel!.onStatus('reconnecting')
+    await flushPromises()
     await click('Tentar atualizar')
 
     expect(wrapper.text()).toContain('Lado A')
@@ -160,7 +208,7 @@ describe('MatchOperationView', () => {
   ] as const)(
     'uses the server state to show the matching controls and recording phase (%j)',
     async (snapshot, labels, phase) => {
-      get.mockResolvedValueOnce(snapshot)
+      firstFrame = snapshot
       const { wrapper, router, button } = await mountFight()
 
       expect(fightLabels.filter((label) => button(label))).toEqual(labels)
@@ -174,7 +222,7 @@ describe('MatchOperationView', () => {
     [{ ...finished, endReason: 'time_out' }, 'Tempo esgotado'],
     [{ ...finished, endReason: 'surrender' }, 'Desistência'],
   ] as const)('shows the frozen result and rounds the time up (%s)', async (snapshot, reason) => {
-    get.mockResolvedValueOnce(snapshot)
+    firstFrame = snapshot
     const { wrapper } = await mountFight()
 
     expect(wrapper.text()).toContain(reason)
@@ -182,7 +230,7 @@ describe('MatchOperationView', () => {
   })
 
   it('shows which side surrendered', async () => {
-    get.mockResolvedValueOnce({ ...finished, endReason: 'surrender', winnerSide: 'A' })
+    firstFrame = { ...finished, endReason: 'surrender', winnerSide: 'A' }
     const { wrapper } = await mountFight()
 
     expect(wrapper.text()).toContain('Desistência do lado B')
@@ -208,7 +256,7 @@ describe('MatchOperationView', () => {
   })
 
   it('starts a scheduled fight without an arena and still offers to select one', async () => {
-    get.mockResolvedValueOnce({ ...scheduled, hasSelectedArena: false })
+    firstFrame = { ...scheduled, hasSelectedArena: false }
     const { button, link } = await mountFight()
     expect(button('Iniciar luta')).toBeDefined()
     expect(button('Iniciar luta')?.attributes('disabled')).toBeUndefined()
@@ -216,7 +264,7 @@ describe('MatchOperationView', () => {
   })
 
   it('sends Start when the operator clicks it without an arena', async () => {
-    get.mockResolvedValueOnce({ ...scheduled, hasSelectedArena: false })
+    firstFrame = { ...scheduled, hasSelectedArena: false }
     post.mockResolvedValueOnce({ ...scheduled, status: 'ongoing', hasSelectedArena: false })
     const { button, click } = await mountFight()
 
@@ -232,23 +280,23 @@ describe('MatchOperationView', () => {
   })
 
   it('does not offer arena selection once the fight has started', async () => {
-    get.mockResolvedValueOnce({ ...scheduled, status: 'ongoing', hasSelectedArena: false })
+    firstFrame = { ...scheduled, status: 'ongoing', hasSelectedArena: false }
     const { link } = await mountFight()
     expect(link('Selecionar arena')).toBeUndefined()
   })
 
-  it('disables controls during a command and after a failed refresh, retaining the recorder', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  it('disables controls during a command and after the channel is refused, retaining the recorder', async () => {
     const pending = deferred<OperatorFightState>()
     post.mockReturnValueOnce(pending.promise)
-    get.mockResolvedValueOnce(scheduled).mockRejectedValueOnce(new ApiError(500, 'failed'))
     const { wrapper, button, click } = await mountFight()
     const recorder = wrapper.getComponent(FightRecorderPanel).element
     await click('Iniciar luta')
     expect(button('Iniciar luta')?.attributes('disabled')).toBeDefined()
     pending.resolve({ ...scheduled, status: 'ongoing' })
     await flushPromises()
-    await vi.advanceTimersByTimeAsync(1_000)
+    expect(button('Pausar')?.attributes('disabled')).toBeUndefined()
+    channel!.onStatus('rejected')
+    await flushPromises()
     expect(button('Pausar')?.attributes('disabled')).toBeDefined()
     expect(wrapper.getComponent(FightRecorderPanel).element).toBe(recorder)
   })
@@ -262,10 +310,10 @@ describe('MatchOperationView', () => {
 
     vi.mocked(window.confirm).mockReturnValueOnce(false)
     await click('Voltar aos controles')
-    expect(get).toHaveBeenCalledTimes(2)
+    expect(get).toHaveBeenCalledTimes(1)
     await click('Voltar aos controles')
     expect(window.confirm).toHaveBeenLastCalledWith(expect.stringContaining('ainda pode'))
-    expect(get).toHaveBeenCalledTimes(3)
+    expect(get).toHaveBeenCalledTimes(2)
     expect(button('Iniciar luta')?.attributes('disabled')).toBeUndefined()
   })
 
@@ -273,7 +321,7 @@ describe('MatchOperationView', () => {
     [{ ...scheduled, status: 'paused' }, 'Encerrar luta'],
     [finished, 'Fechar luta'],
   ] as const)('does not send %s when confirmation is canceled (%s)', async (snapshot, label) => {
-    get.mockResolvedValueOnce(snapshot)
+    firstFrame = snapshot
     vi.mocked(window.confirm).mockReturnValueOnce(false)
     const { click } = await mountFight()
     await click(label)
@@ -282,32 +330,28 @@ describe('MatchOperationView', () => {
   })
 
   it('returns to operator home after the POST confirms a local Close', async () => {
-    get.mockResolvedValueOnce(finished)
+    firstFrame = finished
     post.mockResolvedValueOnce(closed)
     const { click, router } = await mountFight()
     await click('Fechar luta')
     expect(router.currentRoute.value.name).toBe('operator')
   })
 
-  it('returns to operator home after a later GET confirms an uncertain Close', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    get
-      .mockResolvedValueOnce(finished)
-      .mockResolvedValueOnce(finished)
-      .mockResolvedValueOnce(closed)
+  it('returns to operator home after a later pushed frame confirms an uncertain Close', async () => {
+    firstFrame = finished
+    get.mockResolvedValueOnce(finished)
     post.mockRejectedValueOnce(new ApiError(0, 'offline'))
     const { click, router } = await mountFight()
     await click('Fechar luta')
     expect(router.currentRoute.value.name).toBe('match-operation')
 
-    await vi.advanceTimersByTimeAsync(1_000)
-    await flushPromises()
+    await push(closed)
     expect(router.currentRoute.value.name).toBe('operator')
     expect(post).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the closed fight and the unsent video when navigation is canceled', async () => {
-    get.mockResolvedValueOnce(finished)
+    firstFrame = finished
     post.mockResolvedValueOnce(closed)
     vi.mocked(window.confirm).mockReturnValueOnce(true)
     const { wrapper, router, click, link, button } = await mountFight()
@@ -332,10 +376,9 @@ describe('MatchOperationView', () => {
   })
 
   it('stays on the closed screen after an external Close', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    get.mockResolvedValueOnce(finished).mockResolvedValueOnce(closed)
+    firstFrame = finished
     const { wrapper, router, button } = await mountFight()
-    await vi.advanceTimersByTimeAsync(1_000)
+    await push(closed)
     expect(router.currentRoute.value.name).toBe('match-operation')
     expect(wrapper.text()).toContain('Luta fechada')
     expect(button('Fechar luta')).toBeUndefined()

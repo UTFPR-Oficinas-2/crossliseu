@@ -5,7 +5,7 @@ organizers manage them; an operator runs each fight; three referees score from t
 
 ## Stack and commands
 
-- Client-rendered SPA. The backend is NestJS in `apps/api`; live updates are planned (WebSockets) but not implemented.
+- Client-rendered SPA. The backend is NestJS in `apps/api`; the operator screen follows the fight over the `/fights` WebSocket (`src/api/fight-channel.ts`; protocol in `docs/fight-channel-protocol.md`), while commands stay on HTTP.
 - No Tailwind, no UI kit, no React. Styling is plain CSS with custom properties.
 
 Before saying a task is done: run `type-check` and `lint`, and fix what they report.
