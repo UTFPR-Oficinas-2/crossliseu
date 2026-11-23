@@ -58,7 +58,8 @@ export class FightStatePusher implements OnModuleInit, OnModuleDestroy {
 
     /**
      * The first frame for one socket: false when the match doesn't exist. Other failures reject,
-     * for the caller to close the socket with.
+     * for the caller to close the socket with. The caller must add the socket to FightConnections
+     * before calling this, or a change that lands while the snapshot is read is not pushed to it.
      */
     sendSnapshot(
         matchId: string,

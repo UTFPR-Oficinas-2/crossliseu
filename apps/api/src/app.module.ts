@@ -10,6 +10,7 @@ import { RobotsModule } from './modules/robots/robots.module.js';
 import { ArenasModule } from './modules/arenas/arenas.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { RecordingsModule } from './modules/recordings/recordings.module.js';
+import { FightChannelModule } from './modules/fight-channel/fight-channel.module.js';
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { RecordingsModule } from './modules/recordings/recordings.module.js';
         ArenasModule,
         HealthModule,
         RecordingsModule,
+        FightChannelModule,
     ],
     controllers: [],
     providers: [],
