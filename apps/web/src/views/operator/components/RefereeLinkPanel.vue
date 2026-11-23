@@ -63,15 +63,18 @@ watch(
   { immediate: true },
 )
 
+// Only the newest request may set the list: replies can arrive out of order
+let seatsRequest = 0
+
 async function loadSeats() {
-  const id = matchId
+  const request = ++seatsRequest
   if (closed.value || !auth.token) {
     seats.value = []
     return
   }
   try {
-    const list = await getRefereeSeats(id, auth.token)
-    if (id === matchId) seats.value = list
+    const list = await getRefereeSeats(matchId, auth.token)
+    if (request === seatsRequest) seats.value = list
   } catch {
     // Keep the last list; the next pushed state tries again
   }

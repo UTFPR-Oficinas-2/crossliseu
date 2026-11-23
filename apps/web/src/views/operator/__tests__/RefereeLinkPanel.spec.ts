@@ -217,4 +217,22 @@ describe('RefereeLinkPanel', () => {
     expect(getSeats).toHaveBeenCalledTimes(2)
     confirm.mockRestore()
   })
+
+  it('keeps the newest seat list when replies arrive out of order', async () => {
+    const replies: ((seats: { seat: 1 | 2 | 3; name: string }[]) => void)[] = []
+    getSeats.mockImplementation(() => new Promise((resolve) => replies.push(resolve)))
+    const wrapper = await mountPanel()
+    await wrapper.setProps({ state: fightState() })
+    await flushPromises()
+
+    replies[1]!([
+      { seat: 1, name: 'Ana' },
+      { seat: 2, name: 'Bia' },
+    ])
+    await flushPromises()
+    replies[0]!([{ seat: 1, name: 'Ana' }])
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Bia')
+  })
 })
