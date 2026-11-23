@@ -5,7 +5,14 @@ import { ref, shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { openFightChannel, type FightChannelOptions } from '@/api/fight-channel'
-import { getFightState, getRefereeToken, sendFightCommand, type OperatorFightState } from '@/data'
+import {
+  freeRefereeSeat,
+  getFightState,
+  getRefereeSeats,
+  getRefereeToken,
+  sendFightCommand,
+  type OperatorFightState,
+} from '@/data'
 import { liveToken } from '@/stores/__tests__/token-helpers'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import FightRecorderPanel from '../components/FightRecorderPanel.vue'
@@ -26,6 +33,8 @@ vi.mock('@/data', () => ({
   getRefereeToken: vi.fn<typeof getRefereeToken>(() =>
     Promise.resolve({ token: 'abcdefghijklmnopqrstuv' }),
   ),
+  getRefereeSeats: vi.fn<typeof getRefereeSeats>(() => Promise.resolve([])),
+  freeRefereeSeat: vi.fn<typeof freeRefereeSeat>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
 }))
 vi.mock('@/api/fight-channel', () => ({

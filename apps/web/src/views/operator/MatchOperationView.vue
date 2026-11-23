@@ -204,7 +204,7 @@ function confirmResumeControls() {
           A caixa da arena mostra o cronômetro e recebe as desistências pelos botões de cada lado.
         </p>
       </aside>
-      <RefereeLinkPanel :match-id="matchId" :closed="state.closed" />
+      <RefereeLinkPanel :match-id="matchId" :state="state" />
     </div>
   </div>
 

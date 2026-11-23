@@ -113,3 +113,22 @@ export function sendFightCommand(
 export function getRefereeToken(id: string, token: string): Promise<{ token: string }> {
   return apiRequest(`/matches/${encodeURIComponent(id)}/referee-token`, { method: 'POST', token })
 }
+
+export type RefereeSeat = { seat: 1 | 2 | 3; name: string }
+
+/** GET /matches/:id/referees (JWT, owner-only). Who holds each seat, by seat. */
+export function getRefereeSeats(id: string, token: string): Promise<RefereeSeat[]> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/referees`, { token, cache: 'no-store' })
+}
+
+/** DELETE /matches/:id/referees/:seat (JWT, owner-only). 409 `match_started` after Start. */
+export function freeRefereeSeat(
+  id: string,
+  seat: RefereeSeat['seat'],
+  token: string,
+): Promise<void> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/referees/${seat}`, {
+    method: 'DELETE',
+    token,
+  })
+}
