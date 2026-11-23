@@ -205,6 +205,7 @@ describe('entity metadata', () => {
             'joined_at',
             'match_id',
             'name',
+            'name_key',
             'seat',
         ]);
     });
@@ -215,7 +216,6 @@ describe('entity metadata', () => {
         [Robot, 'UQ_robots_championship_id_lower_name'],
         [Arena, 'UQ_arenas_owner_user_id_lower_name'],
         [MatchEvent, 'UQ_match_events_once'],
-        [MatchReferee, 'UQ_match_referees_match_id_lower_name'],
     ] as const)(
         'keeps the migration-managed index %#, %s, out of synchronization',
         async (entity, name) => {

@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     ConflictException,
     Injectable,
     Logger,
@@ -10,6 +11,7 @@ import { ChampionshipsService } from '../../championships/championships.service.
 import { normalizeText } from '../../robots/dto/normalize.js';
 import type { JudgeSeat } from '../entities/match-event.entity.js';
 import type { SideCounts } from '../fight/score.js';
+import { nameKey } from './name-key.js';
 import { RefereesRepository } from './referees.repository.js';
 
 export interface RefereeSession {
@@ -69,9 +71,14 @@ export class RefereesService {
 
     /**
      * Public. Seats `name` with the shared token: 401 referee_invalid_token for an unknown,
-     * deleted or closed match, 409 referee_seats_full for a fourth name.
+     * deleted or closed match, 409 referee_seats_full for a fourth name, 400 referee_name_invalid
+     * for a name made only of accent marks.
      */
     async join(token: string, name: string): Promise<RefereeSession> {
+        // Only accent marks: nothing to tell referees apart by
+        if (nameKey(name) === '') {
+            throw new BadRequestException('referee_name_invalid');
+        }
         const outcome = await this.repo.join(token, normalizeText(name));
         if (outcome.kind === 'invalid_token') {
             throw new UnauthorizedException('referee_invalid_token');

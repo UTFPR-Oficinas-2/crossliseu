@@ -41,7 +41,7 @@ describe('match_referees (db)', () => {
 
     function seat(match: string, name: string, number: number) {
         return ds.query(
-            `INSERT INTO "match_referees" ("match_id", "name", "seat") VALUES ($1, $2, $3)`,
+            `INSERT INTO "match_referees" ("match_id", "name", "name_key", "seat") VALUES ($1, $2::varchar, lower($2::varchar), $3)`,
             [match, name, number],
         );
     }
@@ -61,12 +61,12 @@ describe('match_referees (db)', () => {
         });
     });
 
-    it('rejects the same name in another case for one match', async () => {
+    it('rejects the same name_key twice for one match', async () => {
         await seat(matchId, 'Ana', 1);
 
         await expect(seat(matchId, 'ANA', 2)).rejects.toMatchObject({
             code: UNIQUE_VIOLATION,
-            constraint: 'UQ_match_referees_match_id_lower_name',
+            constraint: 'UQ_match_referees_match_id_name_key',
         });
     });
 

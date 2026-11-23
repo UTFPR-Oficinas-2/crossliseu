@@ -9,10 +9,7 @@ export class MatchReferees1794400000000 implements MigrationInterface {
             `ALTER TABLE "matches" ADD "referee_token" character varying, ADD CONSTRAINT "UQ_matches_referee_token" UNIQUE ("referee_token")`,
         );
         await queryRunner.query(
-            `CREATE TABLE "match_referees" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "match_id" uuid NOT NULL, "name" character varying NOT NULL, "seat" integer NOT NULL, "joined_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_match_referees_match_id_seat" UNIQUE ("match_id", "seat"), CONSTRAINT "CHK_match_referees_seat" CHECK ("seat" IN (1, 2, 3)), CONSTRAINT "PK_match_referees" PRIMARY KEY ("id"))`,
-        );
-        await queryRunner.query(
-            `CREATE UNIQUE INDEX "UQ_match_referees_match_id_lower_name" ON "match_referees" ("match_id", lower("name"))`,
+            `CREATE TABLE "match_referees" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "match_id" uuid NOT NULL, "name" character varying NOT NULL, "name_key" character varying NOT NULL, "seat" integer NOT NULL, "joined_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_match_referees_match_id_seat" UNIQUE ("match_id", "seat"), CONSTRAINT "UQ_match_referees_match_id_name_key" UNIQUE ("match_id", "name_key"), CONSTRAINT "CHK_match_referees_seat" CHECK ("seat" IN (1, 2, 3)), CONSTRAINT "PK_match_referees" PRIMARY KEY ("id"))`,
         );
         await queryRunner.query(
             `ALTER TABLE "match_referees" ADD CONSTRAINT "FK_match_referees_match_id" FOREIGN KEY ("match_id") REFERENCES "matches"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,

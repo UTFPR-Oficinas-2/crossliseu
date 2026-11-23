@@ -187,6 +187,28 @@ describe('referees (e2e)', () => {
             expect(again.body).toMatchObject({ seat: 1, name: 'İsa' });
         });
 
+        it('"João" then "joao" gets the same seat', async () => {
+            await join('João').expect(200);
+
+            const again = await join('joao').expect(200);
+            expect(again.body).toMatchObject({ seat: 1, name: 'João' });
+        });
+
+        it('an accented rejoin finds the seat when the seats are full', async () => {
+            for (const name of ['Joao', 'Bia', 'Caio']) {
+                await join(name).expect(200);
+            }
+            await command('start');
+
+            const again = await join('JOÃO').expect(200);
+            expect(again.body).toMatchObject({ seat: 1, name: 'Joao' });
+        });
+
+        it('a name with nothing left after removing accents gets 400', async () => {
+            const response = await join('\u0301').expect(400);
+            expect(response.body.message).toBe('referee_name_invalid');
+        });
+
         it('a seated name still rejoins once the seats are full', async () => {
             for (const name of ['Ana', 'Bia', 'Caio']) {
                 await join(name).expect(200);
@@ -375,6 +397,17 @@ describe('referees (e2e)', () => {
             await command('start');
 
             await press({ name: 'Caio' }).expect(401);
+        });
+
+        it('a score from "joão" counts for the "Joao" seat', async () => {
+            await http()
+                .post('/referee/join')
+                .send({ token: shared, name: 'Joao' })
+                .expect(200);
+            await command('start');
+
+            const response = await press({ name: 'joão' }).expect(201);
+            expect(response.body).toEqual({ counts: { A: 1, B: 0 } });
         });
 
         it('the name matches in any case', async () => {

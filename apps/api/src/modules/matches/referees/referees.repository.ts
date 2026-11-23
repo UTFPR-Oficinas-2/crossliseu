@@ -7,6 +7,7 @@ import { MatchEvent } from '../entities/match-event.entity.js';
 import type { JudgeSeat } from '../entities/match-event.entity.js';
 import { MatchReferee } from '../entities/match-referee.entity.js';
 import { seatCounts, type SideCounts } from '../fight/score.js';
+import { nameKey } from './name-key.js';
 
 export const SEATS: readonly JudgeSeat[] = [1, 2, 3];
 
@@ -50,7 +51,7 @@ export class RefereesRepository {
 
     /**
      * Seats `name` on the match whose token this is. One transaction holding the match row lock,
-     * so concurrent joins can't take the same seat: the same name (case-insensitive) gets its
+     * so concurrent joins can't take the same seat: the same name (by `nameKey`) gets its
      * seat back, a new one the lowest free seat while fewer than three are seated.
      */
     join(token: string, name: string): Promise<JoinOutcome> {
@@ -67,12 +68,8 @@ export class RefereesRepository {
             const seated = await manager.find(MatchReferee, {
                 where: { matchId: match.id },
             });
-            // Postgres lower(), as the unique index uses: JS toLowerCase differs on some letters
-            let referee = await manager
-                .createQueryBuilder(MatchReferee, 'referee')
-                .where('referee.matchId = :matchId', { matchId: match.id })
-                .andWhere('lower(referee.name) = lower(:name)', { name })
-                .getOne();
+            const key = nameKey(name);
+            let referee = seated.find((r) => r.nameKey === key);
             if (!referee) {
                 const free = SEATS.find(
                     (seat) => !seated.some((r) => r.seat === seat),
@@ -83,6 +80,7 @@ export class RefereesRepository {
                 referee = manager.create(MatchReferee, {
                     matchId: match.id,
                     name,
+                    nameKey: key,
                     seat: free,
                 });
                 await manager.insert(MatchReferee, referee);
@@ -123,7 +121,7 @@ export class RefereesRepository {
             .innerJoin(Match, 'fight', 'fight.id = referee.matchId')
             .where('fight.refereeToken = :token', { token })
             .andWhere('fight.deletedAt IS NULL')
-            .andWhere('lower(referee.name) = lower(:name)', { name })
+            .andWhere('referee.nameKey = :key', { key: nameKey(name) })
             .andWhere(
                 `NOT EXISTS (SELECT 1 FROM "match_events" "closed" WHERE "closed"."match_id" = "fight"."id" AND "closed"."type" = 'closed')`,
             )

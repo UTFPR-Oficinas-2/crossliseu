@@ -119,7 +119,8 @@ erDiagram
   match_referees {
     uuid id PK
     uuid match_id FK "on delete cascade"
-    string name "unique per match, case-insensitive"
+    string name "as first typed"
+    string name_key "unique per match: name without accents, case or extra spaces"
     int seat "(1 | 2 | 3), unique per match"
     timestamptz joined_at
   }
@@ -127,9 +128,9 @@ erDiagram
 
 `matches.referee_token` is the one token the operator shares with the match's three referees.
 A referee joins with it and a name, without an account, and holds a seat in `match_referees`
-by that name: the first three distinct names (case-insensitive, unique index
-`UQ_match_referees_match_id_lower_name`) get seats 1–3, and the same name joining again gets
-its seat back. The token and the seats stop working once the match has a `closed` event. A
+by that name: the first three distinct names get seats 1–3, and the same name joining again gets
+its seat back. Names are compared by `name_key` (unique per match), the name without accents,
+case or extra spaces, so "João" and " joao " are the same referee. The API computes it. The token and the seats stop working once the match has a `closed` event. A
 referee's points are the `scored` events with their `judge_seat`.
 
 A match's start and finish times are the `occurred_at` of its `started` and `finished` events in `match_events`.
