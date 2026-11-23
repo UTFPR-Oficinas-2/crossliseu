@@ -195,7 +195,9 @@ describe('referees (e2e)', () => {
             );
 
             expect(
-                responses.map((r) => (r.body as { seat: number }).seat).sort(),
+                responses
+                    .map((r) => (r.body as { seat: number }).seat)
+                    .sort((x, y) => x - y),
             ).toEqual([1, 2, 3]);
         });
 
@@ -294,5 +296,104 @@ describe('referees (e2e)', () => {
 
             expect(await resolve('Ana')).toBeNull();
         });
+    });
+
+    describe('POST /matches/:id/scores', () => {
+        let shared: string;
+
+        beforeEach(async () => {
+            shared = (
+                (await refereeToken().expect(200)).body as { token: string }
+            ).token;
+            for (const name of ['Ana', 'Bia']) {
+                await http()
+                    .post('/referee/join')
+                    .send({ token: shared, name })
+                    .expect(200);
+            }
+        });
+
+        const press = (body: Record<string, unknown>, id = ids.match) =>
+            http()
+                .post(`/matches/${id}/scores`)
+                .send({
+                    token: shared,
+                    name: 'Ana',
+                    side: 'A',
+                    action: 1,
+                    ...body,
+                });
+        const score = async () =>
+            (
+                (await http().get(`/matches/${ids.match}/state`).expect(200))
+                    .body as { score: { A: number; B: number } }
+            ).score;
+
+        it('a seated referee scores while ongoing and gets 201 with own counts', async () => {
+            await command('start');
+
+            const response = await press({}).expect(201);
+
+            expect(response.body).toEqual({ counts: { A: 1, B: 0 } });
+            expect(await score()).toEqual({ A: 1, B: 0 });
+            const [row] = await ds.query<
+                { judge_seat: number; robot_id: string; action: number }[]
+            >(
+                `SELECT "judge_seat", "robot_id", "action" FROM "match_events" WHERE "type" = 'scored'`,
+            );
+            expect(row).toEqual({ judge_seat: 1, robot_id: ids.a, action: 1 });
+        });
+
+        it('is refused before Start with match_not_running', async () => {
+            const response = await press({}).expect(409);
+            expect(response.body.message).toBe('match_not_running');
+        });
+
+        it('−1 at 0 is score_below_zero', async () => {
+            await command('start');
+
+            const response = await press({ action: -1 }).expect(409);
+            expect(response.body.message).toBe('score_below_zero');
+        });
+
+        it('a token for another match is refused', async () => {
+            const other = await seedMatch(ds, ids.championship, ids.a, ids.b);
+            await command('start', other.id);
+
+            const response = await press({}, other.id).expect(401);
+            expect(response.body.message).toBe('referee_invalid_token');
+        });
+
+        it('an unseated name is refused', async () => {
+            await command('start');
+
+            await press({ name: 'Caio' }).expect(401);
+        });
+
+        it('the name matches in any case', async () => {
+            await command('start');
+
+            await press({ name: ' ana ' }).expect(201);
+        });
+
+        it('concurrent presses from two seats are both counted', async () => {
+            await command('start');
+
+            await Promise.all([
+                press({ name: 'Ana' }).expect(201),
+                press({ name: 'Bia' }).expect(201),
+            ]);
+
+            expect(await score()).toEqual({ A: 2, B: 0 });
+        });
+
+        it.each([[{ side: 'C' }], [{ action: 2 }], [{ action: 0 }]])(
+            '%j gets 400',
+            async (body) => {
+                await command('start');
+
+                await press(body).expect(400);
+            },
+        );
     });
 });

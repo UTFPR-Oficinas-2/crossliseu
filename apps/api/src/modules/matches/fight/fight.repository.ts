@@ -65,10 +65,12 @@ export interface LockedFight {
 }
 
 export interface FightWrites {
+    /** `score` is set on `scored` events only */
     appendEvent(
         type: MatchEventType,
         occurredAt: Date,
         actorUserId: string | null,
+        score?: { robotId: string; judgeSeat: JudgeSeat; action: ScoreAction },
     ): Promise<void>;
     updateMatch(
         patch: Pick<
@@ -126,12 +128,13 @@ export class FightRepository {
             });
 
             const writes: FightWrites = {
-                appendEvent: async (type, occurredAt, actorUserId) => {
+                appendEvent: async (type, occurredAt, actorUserId, score) => {
                     await manager.insert(MatchEvent, {
                         matchId,
                         type,
                         occurredAt,
                         actorUserId,
+                        ...score,
                     });
                 },
                 updateMatch: async (patch) => {
