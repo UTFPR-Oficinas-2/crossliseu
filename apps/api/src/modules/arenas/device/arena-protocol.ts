@@ -98,16 +98,26 @@ export function parseSurrender(data: unknown): Surrender | null {
     return { side: data.side, matchId: data.matchId };
 }
 
-/** A `state` frame; null (no match at the arena) gives the idle one */
+function withoutScore(state: FightState): Omit<FightState, 'score'> {
+    const { score: _score, ...rest } = state;
+    return rest;
+}
+
+/**
+ * A `state` frame; null (no match at the arena) gives the idle one. The score is left out:
+ * competitors never see it on the box.
+ */
 export function stateFrame(state: FightState | null): string {
     return JSON.stringify({
         event: 'state',
-        data: state ?? {
-            status: 'idle',
-            matchId: null,
-            remainingMs: null,
-            endReason: null,
-            robots: null,
-        },
+        data: state
+            ? withoutScore(state)
+            : {
+                  status: 'idle',
+                  matchId: null,
+                  remainingMs: null,
+                  endReason: null,
+                  robots: null,
+              },
     });
 }

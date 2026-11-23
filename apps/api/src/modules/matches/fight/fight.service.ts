@@ -8,12 +8,18 @@ import type { OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { ChampionshipsService } from '../../championships/championships.service.js';
 import type { MatchState } from '../entities/match.entity.js';
-import type { MatchEvent } from '../entities/match-event.entity.js';
+import type {
+    JudgeSeat,
+    MatchEvent,
+    ScoreAction,
+} from '../entities/match-event.entity.js';
 import { Clock } from './clock.js';
 import { FightEvents } from './fight-events.js';
 import { FightTimer } from './fight-timer.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
+import { scoreTotals, seatCounts } from './score.js';
+import type { Side, SideCounts } from './score.js';
 import { transitionFor } from './fight-transitions.js';
 import type { FightCommand } from './fight-transitions.js';
 import { FightRepository } from './fight.repository.js';
@@ -183,6 +189,71 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
             this.logger.warn(result.error, { matchId, command });
             throw new ConflictException(result.error);
         }
+    }
+
+    /**
+     * One referee press: `action` for `side` from `seat`, accepted only while the clock runs (a
+     * due time-out is settled first, then refused). A −1 never takes this seat's count for the
+     * side below 0. Returns this seat's counts after the press. 404 match_not_found, 409
+     * match_not_running or score_below_zero. The caller checks the referee's credential.
+     */
+    async score(
+        matchId: string,
+        seat: JudgeSeat,
+        side: Side,
+        action: ScoreAction,
+    ): Promise<SideCounts> {
+        const result = await this.repo.withLockedFight(
+            matchId,
+            async (fight, writes) => {
+                const settled = await this.settleLocked(
+                    fight,
+                    writes,
+                    this.clock.now(),
+                );
+                const { match } = fight;
+                const robots = { A: match.robotAId, B: match.robotBId };
+                const refused = (
+                    error: 'match_not_running' | 'score_below_zero',
+                ) => ({
+                    error,
+                    wrote: settled.wrote,
+                    arenaId: fight.arenaId,
+                    counts: null,
+                });
+                if (settled.state !== 'ongoing') {
+                    // Returned, not thrown: a time-out settled above must still commit
+                    return refused('match_not_running');
+                }
+                const before = seatCounts(settled.events, robots, seat);
+                if (action === -1 && before[side] === 0) {
+                    return refused('score_below_zero');
+                }
+                await writes.appendEvent(
+                    'scored',
+                    eventTime(this.clock.now(), settled.events),
+                    null,
+                    { robotId: robots[side], judgeSeat: seat, action },
+                );
+                return {
+                    error: null,
+                    wrote: true,
+                    arenaId: fight.arenaId,
+                    counts: { ...before, [side]: before[side] + action },
+                };
+            },
+        );
+        if (!result) {
+            throw this.notFound(matchId);
+        }
+        if (result.wrote) {
+            this.events.emit({ matchId, arenaId: result.arenaId });
+            await this.trySyncTimer(matchId);
+        }
+        if (result.error !== null) {
+            throw new ConflictException(result.error);
+        }
+        return result.counts;
     }
 
     /** Public. Settles first. 404 match_not_found. */
@@ -413,6 +484,10 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 A: { name: match.robotA?.name ?? '' },
                 B: { name: match.robotB?.name ?? '' },
             },
+            score: scoreTotals(events, {
+                A: match.robotAId,
+                B: match.robotBId,
+            }),
         };
     }
 
@@ -423,9 +498,10 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         if (!snapshot) {
             throw this.notFound(matchId);
         }
-        const { events, ...state } = snapshot;
+        const { events, robotIds, ...state } = snapshot;
         return {
             ...state,
+            score: scoreTotals(events, robotIds),
             remainingMs: remainingMs(state.status, events, this.clock.now()),
             closed: events.some((event) => event.type === 'closed'),
         };

@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { MatchEndReason, MatchState } from '@/types'
 import { formatElapsed } from '@/utils/recording'
 import FightRecorderPanel, { type FightPhase } from './components/FightRecorderPanel.vue'
+import RefereeLinkPanel from './components/RefereeLinkPanel.vue'
 import { useFightControl } from './use-fight-control'
 
 const { matchId } = defineProps<{ matchId: string }>()
@@ -186,22 +187,25 @@ function confirmResumeControls() {
       </p>
     </section>
 
-    <aside class="fight-arena" aria-labelledby="fight-arena-title">
-      <h2 id="fight-arena-title" class="text-heading-m">Arena</h2>
-      <StatusPill
-        :label="
-          state.hasSelectedArena
-            ? 'Selecionada'
-            : state.closed
-              ? 'Liberada'
-              : 'Sem arena selecionada'
-        "
-        :tone="state.hasSelectedArena ? 'success' : 'neutral'"
-      />
-      <p v-if="state.hasSelectedArena" class="fight-card__note text-body-s">
-        A caixa da arena mostra o cronômetro e recebe as desistências pelos botões de cada lado.
-      </p>
-    </aside>
+    <div class="fight-side">
+      <aside class="fight-arena" aria-labelledby="fight-arena-title">
+        <h2 id="fight-arena-title" class="text-heading-m">Arena</h2>
+        <StatusPill
+          :label="
+            state.hasSelectedArena
+              ? 'Selecionada'
+              : state.closed
+                ? 'Liberada'
+                : 'Sem arena selecionada'
+          "
+          :tone="state.hasSelectedArena ? 'success' : 'neutral'"
+        />
+        <p v-if="state.hasSelectedArena" class="fight-card__note text-body-s">
+          A caixa da arena mostra o cronômetro e recebe as desistências pelos botões de cada lado.
+        </p>
+      </aside>
+      <RefereeLinkPanel :match-id="matchId" :state="state" />
+    </div>
   </div>
 
   <div v-if="error || uncertainCommand" class="fight-feedback">
@@ -228,6 +232,13 @@ function confirmResumeControls() {
 </template>
 
 <style scoped>
+.fight-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
 .fight-operation {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 2fr);

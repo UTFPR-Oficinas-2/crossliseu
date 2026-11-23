@@ -4,13 +4,23 @@ import { IsNull, Repository } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
 import { Match } from '../entities/match.entity.js';
 import { MatchEvent } from '../entities/match-event.entity.js';
-import type { MatchEventType } from '../entities/match-event.entity.js';
+import type {
+    JudgeSeat,
+    MatchEventType,
+    ScoreAction,
+} from '../entities/match-event.entity.js';
 import { Arena } from '../../arenas/entities/arena.entity.js';
 import type { ClockEvent } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
+import type { ScoreEvent } from './score.js';
 
-export interface OperatorFightSnapshot extends Omit<FightState, 'remainingMs'> {
-    events: ClockEvent[];
+export interface OperatorFightSnapshot extends Omit<
+    FightState,
+    'remainingMs' | 'score'
+> {
+    events: (ClockEvent & ScoreEvent)[];
+    /** The robots on each side, to sum the `scored` events */
+    robotIds: { A: string; B: string };
     hasSelectedArena: boolean;
     /** Side of the winning robot, set when a surrender decided the fight */
     winnerSide: 'A' | 'B' | null;
@@ -24,10 +34,15 @@ interface OperatorFightRow {
     robotB: string | null;
     robotAId: string | null;
     robotBId: string | null;
+    fightRobotAId: string;
+    fightRobotBId: string;
     winnerRobotId: string | null;
     arenaId: string | null;
     eventType: MatchEventType | null;
     occurredAt: Date | null;
+    robotId: string | null;
+    judgeSeat: JudgeSeat | null;
+    action: ScoreAction | null;
 }
 
 function winnerSide(row: OperatorFightRow): 'A' | 'B' | null {
@@ -50,10 +65,12 @@ export interface LockedFight {
 }
 
 export interface FightWrites {
+    /** `score` is set on `scored` events only */
     appendEvent(
         type: MatchEventType,
         occurredAt: Date,
         actorUserId: string | null,
+        score?: { robotId: string; judgeSeat: JudgeSeat; action: ScoreAction },
     ): Promise<void>;
     updateMatch(
         patch: Pick<
@@ -111,12 +128,13 @@ export class FightRepository {
             });
 
             const writes: FightWrites = {
-                appendEvent: async (type, occurredAt, actorUserId) => {
+                appendEvent: async (type, occurredAt, actorUserId, score) => {
                     await manager.insert(MatchEvent, {
                         matchId,
                         type,
                         occurredAt,
                         actorUserId,
+                        ...score,
                     });
                 },
                 updateMatch: async (patch) => {
@@ -170,10 +188,15 @@ export class FightRepository {
             .addSelect('robotB.name', 'robotB')
             .addSelect('robotA.id', 'robotAId')
             .addSelect('robotB.id', 'robotBId')
+            .addSelect('fight.robotAId', 'fightRobotAId')
+            .addSelect('fight.robotBId', 'fightRobotBId')
             .addSelect('fight.winnerRobotId', 'winnerRobotId')
             .addSelect('arena.id', 'arenaId')
             .addSelect('event.type', 'eventType')
             .addSelect('event.occurredAt', 'occurredAt')
+            .addSelect('event.robotId', 'robotId')
+            .addSelect('event.judgeSeat', 'judgeSeat')
+            .addSelect('event.action', 'action')
             .leftJoin('fight.robotA', 'robotA')
             .leftJoin('fight.robotB', 'robotB')
             // TypeORM excludes soft-deleted arenas from the join.
@@ -193,10 +216,20 @@ export class FightRepository {
                 A: { name: row.robotA ?? '' },
                 B: { name: row.robotB ?? '' },
             },
-            events: rows.flatMap(({ eventType, occurredAt }) =>
-                eventType && occurredAt
-                    ? [{ type: eventType, occurredAt }]
-                    : [],
+            robotIds: { A: row.fightRobotAId, B: row.fightRobotBId },
+            events: rows.flatMap(
+                ({ eventType, occurredAt, robotId, judgeSeat, action }) =>
+                    eventType && occurredAt
+                        ? [
+                              {
+                                  type: eventType,
+                                  occurredAt,
+                                  robotId,
+                                  judgeSeat,
+                                  action,
+                              },
+                          ]
+                        : [],
             ),
             hasSelectedArena: row.arenaId !== null,
             winnerSide: winnerSide(row),

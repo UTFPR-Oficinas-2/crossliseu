@@ -1,5 +1,5 @@
 import type { Relation } from 'typeorm';
-import { Check, Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Check, Column, Entity, JoinColumn, ManyToOne, Unique } from 'typeorm';
 import { BaseEntity } from '../../../database/base.entity.js';
 import { Arena } from '../../arenas/entities/arena.entity.js';
 import { Championship } from '../../championships/entities/championship.entity.js';
@@ -23,6 +23,7 @@ export type MatchEndReason = 'time_out' | 'manual' | 'surrender';
     'CHK_matches_end_reason',
     `"end_reason" IS NULL OR "end_reason" IN ('time_out', 'manual', 'surrender')`,
 )
+@Unique('UQ_matches_referee_token', ['refereeToken'])
 @Entity('matches')
 export class Match extends BaseEntity {
     // TypeORM calls the constructor without arguments when hydrating rows
@@ -103,6 +104,18 @@ export class Match extends BaseEntity {
     @ManyToOne(() => Arena, { nullable: true })
     @JoinColumn({ name: 'arena_id' })
     arena?: Relation<Arena> | null;
+
+    /**
+     * Shared by the match's referees to join; created on first request, never rotated (#18).
+     * Not selected by default: GET /matches is public and must never show it.
+     */
+    @Column({
+        name: 'referee_token',
+        type: 'varchar',
+        nullable: true,
+        select: false,
+    })
+    refereeToken: string | null;
 
     @Column({ name: 'created_by_user_id', type: 'uuid', nullable: false })
     createdByUserId: string;

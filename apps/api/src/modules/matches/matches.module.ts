@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Match } from './entities/match.entity.js';
 import { MatchEvent } from './entities/match-event.entity.js';
+import { MatchReferee } from './entities/match-referee.entity.js';
 import { Clock, SystemClock } from './fight/clock.js';
 import { FightEventsModule } from './fight/fight-events.module.js';
 import { FightTimer } from './fight/fight-timer.js';
@@ -10,23 +11,31 @@ import { FightService } from './fight/fight.service.js';
 import { MatchesController } from './matches.controller.js';
 import { MatchesService } from './matches.service.js';
 import { MatchesRepository } from './matches.repository.js';
+import {
+    RefereeJoinController,
+    RefereesController,
+} from './referees/referees.controller.js';
+import { RefereesRepository } from './referees/referees.repository.js';
+import { RefereesService } from './referees/referees.service.js';
 import { ChampionshipsModule } from '../championships/championships.module.js';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Match, MatchEvent]),
+        TypeOrmModule.forFeature([Match, MatchEvent, MatchReferee]),
         ChampionshipsModule,
         FightEventsModule,
     ],
-    controllers: [MatchesController],
+    controllers: [MatchesController, RefereesController, RefereeJoinController],
     providers: [
         MatchesService,
         MatchesRepository,
         FightRepository,
         FightService,
         FightTimer,
+        RefereesRepository,
+        RefereesService,
         { provide: Clock, useClass: SystemClock },
     ],
-    exports: [MatchesService, FightService, FightEventsModule],
+    exports: [MatchesService, FightService, RefereesService, FightEventsModule],
 })
 export class MatchesModule {}

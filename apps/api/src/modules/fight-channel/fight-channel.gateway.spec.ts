@@ -97,11 +97,7 @@ describe('FightChannelGateway', () => {
         client.sendAuth();
         await flush();
 
-        expect(sendSnapshot).toHaveBeenCalledWith(
-            MATCH_ID,
-            'operator',
-            client,
-        );
+        expect(sendSnapshot).toHaveBeenCalledWith(MATCH_ID, 'operator', client);
         expect(JSON.parse(client.send.mock.calls[0][0] as string).event).toBe(
             'state',
         );

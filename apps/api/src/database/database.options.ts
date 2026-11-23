@@ -5,6 +5,7 @@ import { User } from '../modules/users/entities/user.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
 import { Robot } from '../modules/robots/entities/robot.entity.js';
 import { MatchEvent } from '../modules/matches/entities/match-event.entity.js';
+import { MatchReferee } from '../modules/matches/entities/match-referee.entity.js';
 import { MatchVideo } from '../modules/recordings/entities/match-video.entity.js';
 
 export function databaseOptions(): PostgresDataSourceOptions {
@@ -34,6 +35,7 @@ export function databaseOptions(): PostgresDataSourceOptions {
             Championship,
             Robot,
             MatchEvent,
+            MatchReferee,
             MatchVideo,
         ],
         // Migrations are listed only by the CLI data source (data-source.ts): the app never runs

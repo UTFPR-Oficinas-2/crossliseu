@@ -31,6 +31,7 @@ function fightState(remainingMs: number): FightState {
         remainingMs,
         endReason: null,
         robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+        score: { A: 0, B: 0 },
     };
 }
 

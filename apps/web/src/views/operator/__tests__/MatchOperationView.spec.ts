@@ -5,7 +5,14 @@ import { ref, shallowRef } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { openFightChannel, type FightChannelOptions } from '@/api/fight-channel'
-import { getFightState, sendFightCommand, type OperatorFightState } from '@/data'
+import {
+  freeRefereeSeat,
+  getFightState,
+  getRefereeSeats,
+  getRefereeToken,
+  sendFightCommand,
+  type OperatorFightState,
+} from '@/data'
 import { liveToken } from '@/stores/__tests__/token-helpers'
 import { TOKEN_STORAGE_KEY } from '@/stores/auth'
 import FightRecorderPanel from '../components/FightRecorderPanel.vue'
@@ -23,6 +30,11 @@ function deferred<T>() {
 
 vi.mock('@/data', () => ({
   getFightState: vi.fn<typeof getFightState>(),
+  getRefereeToken: vi.fn<typeof getRefereeToken>(() =>
+    Promise.resolve({ token: 'abcdefghijklmnopqrstuv' }),
+  ),
+  getRefereeSeats: vi.fn<typeof getRefereeSeats>(() => Promise.resolve([])),
+  freeRefereeSeat: vi.fn<typeof freeRefereeSeat>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
 }))
 vi.mock('@/api/fight-channel', () => ({
@@ -63,6 +75,7 @@ const scheduled: OperatorFightState = {
   remainingMs: 180_000,
   endReason: null,
   robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+  score: { A: 0, B: 0 },
   closed: false,
   winnerSide: null,
   hasSelectedArena: true,
@@ -153,6 +166,14 @@ describe('MatchOperationView', () => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
     localStorage.removeItem(TOKEN_STORAGE_KEY)
+  })
+
+  it('shows the referee link of the match', async () => {
+    const { wrapper } = await mountFight()
+
+    expect(vi.mocked(getRefereeToken)).toHaveBeenCalledWith('m1', expect.any(String))
+    expect(wrapper.text()).toContain('Link dos árbitros')
+    expect(wrapper.text()).toContain('/referee/abcdefghijklmnopqrstuv')
   })
 
   it('follows the fight over the channel with the operator JWT', async () => {

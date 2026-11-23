@@ -76,6 +76,8 @@ export interface OperatorFightState {
   remainingMs: number
   endReason: MatchEndReason | null
   robots: { A: { name: string }; B: { name: string } }
+  /** Each side's points summed over the three referees */
+  score: { A: number; B: number }
   closed: boolean
   hasSelectedArena: boolean
   /** Winning side when a surrender decided the fight */
@@ -101,5 +103,32 @@ export function sendFightCommand(
     method: 'POST',
     token,
     signal,
+  })
+}
+
+/**
+ * POST /matches/:id/referee-token (JWT, owner-only). The token the match's three referees share;
+ * the same on every call. 404 `match_not_found`, 409 `match_closed` once the fight is closed.
+ */
+export function getRefereeToken(id: string, token: string): Promise<{ token: string }> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/referee-token`, { method: 'POST', token })
+}
+
+export type RefereeSeat = { seat: 1 | 2 | 3; name: string }
+
+/** GET /matches/:id/referees (JWT, owner-only). Who holds each seat, by seat. */
+export function getRefereeSeats(id: string, token: string): Promise<RefereeSeat[]> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/referees`, { token, cache: 'no-store' })
+}
+
+/** DELETE /matches/:id/referees/:seat (JWT, owner-only). 409 `match_started` after Start. */
+export function freeRefereeSeat(
+  id: string,
+  seat: RefereeSeat['seat'],
+  token: string,
+): Promise<void> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/referees/${seat}`, {
+    method: 'DELETE',
+    token,
   })
 }

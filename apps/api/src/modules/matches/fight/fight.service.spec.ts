@@ -45,6 +45,20 @@ function event(type: MatchEventType, occurredAt: Date): MatchEvent {
     return entity;
 }
 
+function scoredEvent(
+    robotId: string,
+    judgeSeat: 1 | 2 | 3,
+    action: 1 | -1,
+    occurredAt: Date,
+): MatchEvent {
+    const entity = event('scored', occurredAt);
+    entity.actorUserId = null;
+    entity.robotId = robotId;
+    entity.judgeSeat = judgeSeat;
+    entity.action = action;
+    return entity;
+}
+
 interface Options {
     state?: MatchState;
     events?: MatchEvent[];
@@ -128,6 +142,10 @@ function setup({
                               A: { name: store.match.robotA?.name ?? '' },
                               B: { name: store.match.robotB?.name ?? '' },
                           },
+                          robotIds: {
+                              A: store.match.robotAId,
+                              B: store.match.robotBId,
+                          },
                           events: [...store.events],
                           hasSelectedArena: store.arenaPointer !== null,
                           winnerSide: !store.match.winnerRobotId
@@ -158,9 +176,14 @@ function setup({
                     arenaPointer: store.arenaPointer,
                 };
                 const writes: FightWrites = {
-                    appendEvent: (type, occurredAt, actorUserId) => {
+                    appendEvent: (type, occurredAt, actorUserId, score) => {
                         const written = event(type, occurredAt);
                         written.actorUserId = actorUserId;
+                        if (score) {
+                            written.robotId = score.robotId;
+                            written.judgeSeat = score.judgeSeat;
+                            written.action = score.action;
+                        }
                         store.events.push(written);
                         store.written.push(written);
                         return Promise.resolve();
@@ -243,6 +266,7 @@ describe('FightService', () => {
             remainingMs: 180_000,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 0, B: 0 },
             closed: false,
             hasSelectedArena: true,
             winnerSide: null,
@@ -597,6 +621,25 @@ describe('FightService', () => {
             remainingMs: 120_000,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 0, B: 0 },
+        });
+    });
+
+    it('state() and operatorState() carry the score totals', async () => {
+        const { service } = setup({
+            state: 'ongoing',
+            events: [
+                event('started', T0),
+                scoredEvent('a', 1, 1, at(1_000)),
+                scoredEvent('a', 2, 1, at(2_000)),
+            ],
+            now: at(60_000),
+        });
+
+        expect((await service.state(MATCH_ID)).score).toEqual({ A: 2, B: 0 });
+        expect((await service.operatorState(MATCH_ID)).score).toEqual({
+            A: 2,
+            B: 0,
         });
     });
 
@@ -617,6 +660,121 @@ describe('FightService', () => {
 
         expect(await service.settle(MATCH_ID)).toBe(false);
         expect(store.written).toHaveLength(0);
+    });
+});
+
+describe('FightService.score', () => {
+    const running = (events: MatchEvent[] = []) =>
+        setup({
+            state: 'ongoing',
+            events: [event('started', T0), ...events],
+            now: at(60_000),
+        });
+
+    it('stores a scored event with seat, robot and action', async () => {
+        const { service, store } = running();
+
+        const counts = await service.score(MATCH_ID, 2, 'B', 1);
+
+        expect(counts).toEqual({ A: 0, B: 1 });
+        expect(store.written).toHaveLength(1);
+        expect(store.written[0]).toMatchObject({
+            type: 'scored',
+            occurredAt: at(60_000),
+            actorUserId: null,
+            robotId: 'b',
+            judgeSeat: 2,
+            action: 1,
+        });
+    });
+
+    it("returns only this seat's counts", async () => {
+        const { service } = running([
+            scoredEvent('a', 1, 1, at(1_000)),
+            scoredEvent('a', 2, 1, at(2_000)),
+        ]);
+
+        expect(await service.score(MATCH_ID, 1, 'A', 1)).toEqual({
+            A: 2,
+            B: 0,
+        });
+    });
+
+    it.each(['scheduled', 'paused', 'finished'] as const)(
+        'refuses while %s with match_not_running',
+        async (state) => {
+            const { service, store, changes } = setup({
+                state,
+                events: state === 'scheduled' ? [] : [event('started', T0)],
+                now: at(60_000),
+            });
+
+            await expect(service.score(MATCH_ID, 1, 'A', 1)).rejects.toThrow(
+                new ConflictException('match_not_running'),
+            );
+            expect(store.written).toHaveLength(0);
+            expect(changes).toHaveLength(0);
+        },
+    );
+
+    it('refuses −1 at 0 with score_below_zero and writes nothing', async () => {
+        const { service, store } = running();
+
+        await expect(service.score(MATCH_ID, 1, 'A', -1)).rejects.toThrow(
+            new ConflictException('score_below_zero'),
+        );
+        expect(store.written).toHaveLength(0);
+    });
+
+    it("the floor is per seat: seat 2 can't undo seat 1's point", async () => {
+        const { service } = running([scoredEvent('a', 1, 1, at(1_000))]);
+
+        await expect(service.score(MATCH_ID, 2, 'A', -1)).rejects.toThrow(
+            new ConflictException('score_below_zero'),
+        );
+    });
+
+    it('the floor is per side', async () => {
+        const { service } = running([scoredEvent('a', 1, 1, at(1_000))]);
+
+        await expect(service.score(MATCH_ID, 1, 'B', -1)).rejects.toThrow(
+            new ConflictException('score_below_zero'),
+        );
+        expect(await service.score(MATCH_ID, 1, 'A', -1)).toEqual({
+            A: 0,
+            B: 0,
+        });
+    });
+
+    it('a press after the time ran out settles the time-out and is refused', async () => {
+        const { service, store, changes } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            now: at(200_000),
+        });
+
+        await expect(service.score(MATCH_ID, 1, 'A', 1)).rejects.toThrow(
+            new ConflictException('match_not_running'),
+        );
+        expect(store.match.endReason).toBe('time_out');
+        expect(store.written.map((e) => e.type)).toEqual(['finished']);
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: null }]);
+    });
+
+    it('emits a fight change after a stored press', async () => {
+        const { service, changes } = running();
+
+        await service.score(MATCH_ID, 1, 'A', 1);
+
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: null }]);
+    });
+
+    it('an unknown match is 404 match_not_found', async () => {
+        const { service } = setup({ missing: true });
+
+        await expect(service.score(MATCH_ID, 1, 'A', 1)).rejects.toThrow(
+            NotFoundException,
+        );
     });
 });
 

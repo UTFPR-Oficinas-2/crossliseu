@@ -128,7 +128,7 @@ A **full snapshot** of what the box should show. It is sent right after `welcome
 | `endReason` | `"time_out"` \| `"manual"` \| `"surrender"` \| null | Set only when `finished`; see [End reasons](#end-reasons) |
 | `robots` | `{ "A": { "name": string }, "B": { "name": string } }` \| null | `null` only when `idle`; the box may show the names |
 
-The score is never sent: competitors do not see it on the box.
+The score is never sent: competitors do not see it on the box. (`GET /matches/:id/state` and the browser channel carry a `score` field; the server strips it from this message.)
 
 Examples:
 

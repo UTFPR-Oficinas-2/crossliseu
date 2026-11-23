@@ -31,7 +31,7 @@ A socket follows exactly one match. To follow another, open another socket.
 
 | Event | When | `data` |
 | --- | --- | --- |
-| `state` | Right after a successful `auth` (a full snapshot), then on every committed change of the match | The same shape as `GET /matches/:id/state` and the `/arena` `state`: `status`, `matchId`, `remainingMs`, `endReason`, `robots` |
+| `state` | Right after a successful `auth` (a full snapshot), then on every committed change of the match | The same shape as `GET /matches/:id/state`: `status`, `matchId`, `remainingMs`, `endReason`, `robots`, `score` (`{ A, B }`, each side's points summed over the three referees; never one referee's partial). The `/arena` `state` is the same without `score` |
 | `ping` | Every 10 s on a subscribed socket | `null` |
 | `error` | A frame the server refuses; the socket stays open | `{ "code": string, "message": string }` |
 
@@ -74,8 +74,8 @@ type FightAccess = { role: 'operator'; userId: string } | { role: 'referee'; nam
 
 The built-in `JwtFightAccessVerifier` accepts the operator's login JWT (and requires the user to still exist). A verifier that returns `null` means "not mine"; one that throws is logged and the others are still tried. If one accepts, it wins. If none accepts and none threw, the socket closes with `4001`; if none accepts and one threw, the check fails as a server fault and the socket closes with `1011` (retried by the client), never `4001`.
 
-**Seam for #18 (referee credentials).** That feature registers its own `FightAccessVerifier` with the `FightAccessRegistry` (in its `onModuleInit`, as the JWT verifier does) and returns `{ role: 'referee', name }`. It needs no change to the gateway.
+**Referees.** A referee first joins over HTTP (`POST /referee/join` with the match's shared token and a name, which seats them), then sends `auth` with `{ matchId, token, name }`: the shared token and that name. `RefereeFightAccessVerifier` (registered like the JWT verifier) accepts it when the name holds a seat on that `matchId` and the match is live and not closed, and returns `{ role: 'referee', name }`; it never seats anybody. A referee socket gets the same `state` as the public view.
 
 **No match ownership check.** The channel does not check that the operator owns, or is otherwise allowed to see, the match: any operator JWT can watch any match, matching the public `GET /matches/:id/state?view=operator`. A verifier that needs to restrict access (such as a referee credential tied to one match) must check `credential.matchId` itself.
 
-**Checked once, at `auth`.** The credential is verified only when the socket authenticates; a subscribed socket is never re-checked. An operator socket keeps receiving state after its JWT expires (harmless today: the operator view is public over HTTP) until it reconnects. A verifier whose credentials can be revoked while sockets are open (such as #18's referee token, which stops working once the fight is confirmed) must close those sockets itself, or add a re-check/close hook to this seam.
+**Checked once, at `auth`.** The credential is verified only when the socket authenticates; a subscribed socket is never re-checked. An operator socket keeps receiving state after its JWT expires (harmless today: the operator view is public over HTTP) until it reconnects. Referee tokens stop working once the fight is confirmed, so `RefereeRevoker` closes that match's referee sockets with `4001 bad_credentials` on the change that writes `closed` (the phone shows the invalid access page and doesn't retry); operator sockets stay open. A new verifier whose credentials can be revoked while sockets are open must do the same.

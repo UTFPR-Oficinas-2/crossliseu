@@ -76,6 +76,7 @@ describe('frames', () => {
             remainingMs: 0,
             endReason: null,
             robots: { A: { name: 'a' }, B: { name: 'b' } },
+            score: { A: 0, B: 0 },
         };
         expect(stateFrame(state)).toBe(
             JSON.stringify({ event: 'state', data: state }),
