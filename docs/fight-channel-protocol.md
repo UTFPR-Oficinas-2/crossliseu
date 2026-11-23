@@ -41,7 +41,7 @@ A socket follows exactly one match. To follow another, open another socket.
 
 **Heartbeat.** Browsers can't see WebSocket-level pings, so a subscribed socket gets `{"event":"ping","data":null}` every `PING_INTERVAL_MS` (10 s). Clients ignore the frame; its job is to be traffic. If no frame of any kind arrives for 3 x `PING_INTERVAL_MS` (30 s), the connection is half-open: close it and reconnect.
 
-**Error codes** (`data.code`): `bad_frame` (binary, not JSON, or no non-empty string `event`), `unknown_event`, `invalid_data`, `not_authenticated` (any frame before `auth`), `already_authenticated`.
+**Error codes** (`data.code`): `bad_frame` (binary, not JSON, or no non-empty string `event`), `unknown_event`, `invalid_data` (reserved for events added later, such as #18's scores; not sent today), `not_authenticated` (any frame before `auth`), `already_authenticated`.
 
 ## Close codes
 
@@ -77,3 +77,5 @@ The built-in `JwtFightAccessVerifier` accepts the operator's login JWT (and requ
 **Seam for #18 (referee credentials).** That feature registers its own `FightAccessVerifier` with the `FightAccessRegistry` (in its `onModuleInit`, as the JWT verifier does) and returns `{ role: 'referee', name }`. It needs no change to the gateway.
 
 **No match ownership check.** The channel does not check that the operator owns, or is otherwise allowed to see, the match: any operator JWT can watch any match, matching the public `GET /matches/:id/state?view=operator`. A verifier that needs to restrict access (such as a referee credential tied to one match) must check `credential.matchId` itself.
+
+**Checked once, at `auth`.** The credential is verified only when the socket authenticates; a subscribed socket is never re-checked. An operator socket keeps receiving state after its JWT expires (harmless today: the operator view is public over HTTP) until it reconnects. A verifier whose credentials can be revoked while sockets are open (such as #18's referee token, which stops working once the fight is confirmed) must close those sockets itself, or add a re-check/close hook to this seam.
