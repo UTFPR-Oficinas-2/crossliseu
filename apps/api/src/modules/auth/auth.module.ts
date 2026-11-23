@@ -29,5 +29,6 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
             signOptions: { expiresIn: '2h' },
         }),
     ],
+    exports: [JwtModule],
 })
 export class AuthModule {}
