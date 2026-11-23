@@ -113,7 +113,7 @@ function confirmResumeControls() {
     <AppButton :to="operatorHome" variant="secondary">Voltar à operação</AppButton>
   </div>
 
-  <div v-if="state" class="fight-operation">
+  <div v-if="state && loadState !== 'not-found'" class="fight-operation">
     <section class="fight-card" aria-label="Controle da luta">
       <div class="fight-card__status" role="status">
         <StatusPill :label="state.closed ? 'Luta fechada' : display.label" :tone="display.tone" />

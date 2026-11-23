@@ -174,6 +174,17 @@ describe('MatchOperationView', () => {
     expect(wrapper.text()).toContain('Luta não encontrada')
   })
 
+  it('hides the fight card but keeps the recorder when the match disappears mid-fight', async () => {
+    const { wrapper, button } = await mountFight()
+    expect(button('Iniciar luta')).toBeDefined()
+    channel!.onStatus('not-found')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Luta não encontrada')
+    expect(wrapper.find('.fight-operation').exists()).toBe(false)
+    expect(button('Iniciar luta')).toBeUndefined()
+    expect(wrapper.findComponent(FightRecorderPanel).exists()).toBe(true)
+  })
+
   it('retries an initial error and shows server names, side labels and the timer', async () => {
     firstFrame = null
     const { wrapper, click } = await mountFight()

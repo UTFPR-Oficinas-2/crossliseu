@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
     FightAccessRegistry,
     type FightAccess,
@@ -22,7 +23,7 @@ describe('FightAccessRegistry', () => {
         expect(await new FightAccessRegistry().verify(cred)).toBeNull();
     });
 
-    it('skips a verifier that throws', async () => {
+    it('still lets a later verifier accept after one throws', async () => {
         const registry = new FightAccessRegistry();
         const broken: FightAccessVerifier = {
             verify: async () => {
@@ -33,10 +34,30 @@ describe('FightAccessRegistry', () => {
         registry.register({
             verify: async () => ({ role: 'referee', name: 'x' }),
         });
-        vi.spyOn(registry['logger'], 'error').mockImplementation(() => {});
+        const logged = vi
+            .spyOn(Logger.prototype, 'error')
+            .mockImplementation(() => {});
         expect(await registry.verify(cred)).toEqual({
             role: 'referee',
             name: 'x',
         });
+        expect(logged).toHaveBeenCalled();
+        logged.mockRestore();
+    });
+
+    it('rejects when a verifier threw and none accepted', async () => {
+        const registry = new FightAccessRegistry();
+        registry.register({
+            verify: async () => {
+                throw new Error('boom');
+            },
+        });
+        registry.register({ verify: async () => null });
+        const logged = vi
+            .spyOn(Logger.prototype, 'error')
+            .mockImplementation(() => {});
+        await expect(registry.verify(cred)).rejects.toThrow('boom');
+        expect(logged).toHaveBeenCalled();
+        logged.mockRestore();
     });
 });

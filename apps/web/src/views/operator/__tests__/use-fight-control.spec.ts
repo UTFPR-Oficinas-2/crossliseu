@@ -193,6 +193,17 @@ describe('useFightControl', () => {
     expect(fight.state.value?.status).toBe('ongoing')
   })
 
+  it('stops the countdown when the channel reports not-found after a frame', async () => {
+    const fight = startWith(snapshot({ status: 'ongoing', remainingMs: 30_000 }))
+    await tick(1_000)
+    expect(fight.remainingMs.value).toBe(29_000)
+    channel().status('not-found')
+    expect(fight.loadState.value).toBe('not-found')
+    const frozen = fight.remainingMs.value
+    await tick(2_000)
+    expect(fight.remainingMs.value).toBe(frozen)
+  })
+
   it('reports not-found from the channel', () => {
     const fight = start()
     channel().status('not-found')

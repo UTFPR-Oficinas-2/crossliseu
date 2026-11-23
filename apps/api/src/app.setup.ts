@@ -10,6 +10,6 @@ export function configureApp(app: INestApplication): void {
             transform: true,
         }),
     );
-    // Plain WebSockets (ws) for the arena boxes on /arena
+    // Plain WebSockets (ws) for the arena boxes on /arena and for browsers on /fights
     app.useWebSocketAdapter(new WsAdapter(app));
 }

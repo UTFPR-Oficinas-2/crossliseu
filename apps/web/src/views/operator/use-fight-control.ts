@@ -144,6 +144,8 @@ export function useFightControl(
       if (!state.value || status === 'rejected') loadState.value = 'error'
       readError.value = READ_ERROR
     } else if (status === 'not-found') {
+      // The match is gone: keep the last state (the recorder still needs it) but stop ticking
+      clearInterval(countdownTimer)
       loadState.value = 'not-found'
       readError.value = null
     }

@@ -43,7 +43,7 @@ export function apiWebSocketUrl(path: string): string {
   return url.toString()
 }
 
-type HttpMethod ='GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 interface RequestOptions {
   method?: HttpMethod

@@ -74,7 +74,7 @@ export class FightSession {
         }, PING_INTERVAL_MS);
     }
 
-    /** The match this socket asked to follow; null before a valid, verified auth */
+    /** The match this socket asked to follow; null until set just before `subscribe` is attempted, after a verified auth */
     get matchId(): string | null {
         return this.subscribedMatchId;
     }

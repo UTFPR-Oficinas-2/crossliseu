@@ -44,6 +44,12 @@ describe('JwtFightAccessVerifier', () => {
         expect(await verifier.verify(cred)).toBeNull();
     });
 
+    it('lets a failing user lookup propagate instead of returning null', async () => {
+        const { verifier, users } = build({ user: { id: 'u1' } });
+        users.findById.mockRejectedValueOnce(new Error('db down'));
+        await expect(verifier.verify(cred)).rejects.toThrow('db down');
+    });
+
     it('registers itself on module init', async () => {
         const { verifier, registry } = build({ user: { id: 'u1' } });
         verifier.onModuleInit();

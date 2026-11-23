@@ -47,19 +47,19 @@ A socket follows exactly one match. To follow another, open another socket.
 
 | Code | Reason | Meaning | Client action |
 | --- | --- | --- | --- |
-| `4001` | `bad_credentials` | The token is missing, malformed, expired, rejected, or its user no longer exists | Terminal. Do not retry; log the operator out. |
+| `4001` | `bad_credentials` | The credential was refused: the token is missing, malformed, expired, rejected, or its user no longer exists. Only a refusal gets `4001`; a server fault while checking is `1011` | Terminal. Do not retry; log the operator out. |
 | `4002` | `auth_timeout` | No `auth` within 5 s | Retry with backoff |
 | `4005` | `match_not_found` | The match doesn't exist, was deleted while subscribed, or `matchId` isn't a UUID | Terminal. Do not retry; show "match not found". It never means "log out". |
 | `1001` | `server_shutdown` | The server is restarting | Retry with backoff |
 | `1013` | `server_busy` | Too many credential checks at once | Retry with backoff |
 | `1011` | `internal_error` | The server failed while checking or subscribing | Retry with backoff |
-| `1009` | | Frame over 4 KiB | A bug in the client; do not retry in a loop |
+| `1009` | | Frame over 4 KiB | Retried with backoff like any other non-terminal code (only `4001` and `4005` are terminal). A well-behaved client never sends a frame over 4 KiB |
 
 Any other close (network drop, no frame for 30 s) is retried too.
 
 ### Reconnecting
 
-Retry with exponential backoff and jitter (for example 1 s doubling to 30 s, each wait randomized between half and full), so that a server restart doesn't bring every browser back in lockstep. Reset the backoff once a `state` frame arrives. Every reconnect re-sends `auth` and gets a fresh snapshot, so nothing needs replaying. There is no polling fallback on the operator screen: while disconnected, show it as stale.
+Retry with exponential backoff and jitter (the shipped client starts at 500 ms, doubles each attempt up to a 10 s cap, and applies ±20% jitter to each wait), so that a server restart doesn't bring every browser back in lockstep. The backoff resets once a `state` frame arrives. The client's watchdog closes and reconnects after 30 s with no frame of any kind. Every reconnect re-sends `auth` and gets a fresh snapshot, so nothing needs replaying. There is no polling fallback on the operator screen: while disconnected, show it as stale.
 
 ## Access and verifiers
 
@@ -72,7 +72,7 @@ interface FightAccessVerifier {
 type FightAccess = { role: 'operator'; userId: string } | { role: 'referee'; name: string };
 ```
 
-The built-in `JwtFightAccessVerifier` accepts the operator's login JWT (and requires the user to still exist). A verifier that returns `null` means "not mine"; one that throws is logged and skipped. If none accepts, the socket closes with `4001`.
+The built-in `JwtFightAccessVerifier` accepts the operator's login JWT (and requires the user to still exist). A verifier that returns `null` means "not mine"; one that throws is logged and the others are still tried. If one accepts, it wins. If none accepts and none threw, the socket closes with `4001`; if none accepts and one threw, the check fails as a server fault and the socket closes with `1011` (retried by the client), never `4001`.
 
 **Seam for #18 (referee credentials).** That feature registers its own `FightAccessVerifier` with the `FightAccessRegistry` (in its `onModuleInit`, as the JWT verifier does) and returns `{ role: 'referee', name }`. It needs no change to the gateway.
 
