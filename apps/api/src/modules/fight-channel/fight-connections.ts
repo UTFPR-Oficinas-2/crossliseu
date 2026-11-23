@@ -14,11 +14,7 @@ export class FightConnections {
     private readonly matchOf = new Map<FightSocket, string>();
 
     /** A socket follows one match: adding it again moves it */
-    add(
-        matchId: string,
-        role: FightAccess['role'],
-        socket: FightSocket,
-    ): void {
+    add(matchId: string, role: FightAccess['role'], socket: FightSocket): void {
         this.remove(socket);
         let sockets = this.byMatch.get(matchId);
         if (!sockets) {

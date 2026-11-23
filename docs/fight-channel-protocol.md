@@ -74,7 +74,7 @@ type FightAccess = { role: 'operator'; userId: string } | { role: 'referee'; nam
 
 The built-in `JwtFightAccessVerifier` accepts the operator's login JWT (and requires the user to still exist). A verifier that returns `null` means "not mine"; one that throws is logged and the others are still tried. If one accepts, it wins. If none accepts and none threw, the socket closes with `4001`; if none accepts and one threw, the check fails as a server fault and the socket closes with `1011` (retried by the client), never `4001`.
 
-**Seam for #18 (referee credentials).** That feature registers its own `FightAccessVerifier` with the `FightAccessRegistry` (in its `onModuleInit`, as the JWT verifier does) and returns `{ role: 'referee', name }`. It needs no change to the gateway.
+**Referees.** A referee first joins over HTTP (`POST /referee/join` with the match's shared token and a name, which seats them), then sends `auth` with `{ matchId, token, name }`: the shared token and that name. `RefereeFightAccessVerifier` (registered like the JWT verifier) accepts it when the name holds a seat on that `matchId` and the match is live and not closed, and returns `{ role: 'referee', name }`; it never seats anybody. A referee socket gets the same `state` as the public view.
 
 **No match ownership check.** The channel does not check that the operator owns, or is otherwise allowed to see, the match: any operator JWT can watch any match, matching the public `GET /matches/:id/state?view=operator`. A verifier that needs to restrict access (such as a referee credential tied to one match) must check `credential.matchId` itself.
 
