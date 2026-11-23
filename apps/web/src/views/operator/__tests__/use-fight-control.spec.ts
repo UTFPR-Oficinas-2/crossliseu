@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref, type EffectScope } from 'vue'
-import { ApiError } from '@/api/client'
+import { ApiError, reportUnauthorized } from '@/api/client'
+import {
+  openFightChannel,
+  type FightChannelOptions,
+  type FightChannelStatus,
+} from '@/api/fight-channel'
 import { getFightState, sendFightCommand, type OperatorFightState } from '@/data'
 import { useFightControl } from '../use-fight-control'
 
@@ -17,6 +22,13 @@ function deferred<T>() {
 vi.mock('@/data', () => ({
   getFightState: vi.fn<typeof getFightState>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
+}))
+vi.mock('@/api/fight-channel', () => ({
+  openFightChannel: vi.fn<typeof openFightChannel>(),
+}))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/client')>()),
+  reportUnauthorized: vi.fn<typeof reportUnauthorized>(),
 }))
 
 function snapshot(overrides: Partial<OperatorFightState> = {}): OperatorFightState {
@@ -35,110 +47,250 @@ function snapshot(overrides: Partial<OperatorFightState> = {}): OperatorFightSta
 
 const finished = snapshot({ status: 'finished', remainingMs: 30_000, endReason: 'manual' })
 const closed = { ...finished, closed: true, hasSelectedArena: false }
+const readError = 'Não foi possível atualizar a luta.'
 const get = vi.mocked(getFightState)
 const post = vi.mocked(sendFightCommand)
+const open = vi.mocked(openFightChannel)
+
+interface FakeChannel {
+  options: FightChannelOptions
+  close: ReturnType<typeof vi.fn<() => void>>
+  push(data: unknown): void
+  status(status: FightChannelStatus): void
+}
 
 describe('useFightControl', () => {
   let scope: EffectScope
+  let channels: FakeChannel[]
   const tick = (ms = 0) => vi.advanceTimersByTimeAsync(ms)
+  const channel = () => channels.at(-1)!
 
-  function start() {
+  function start(jwt = 'jwt') {
     const id = ref('m1')
-    const controls = scope.run(() => useFightControl(id, 'jwt'))!
-    return { id, ...controls }
+    const token = ref(jwt)
+    const controls = scope.run(() => useFightControl(id, token))!
+    return { id, token, ...controls }
+  }
+
+  /** Mounts and delivers the first frame, as the channel does once authenticated. */
+  function startWith(first: OperatorFightState) {
+    const fight = start()
+    channel().push(first)
+    return fight
   }
 
   beforeEach(() => {
     vi.useFakeTimers({
       toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'],
     })
+    channels = []
+    open.mockReset().mockImplementation((options) => {
+      const fake: FakeChannel = {
+        options,
+        close: vi.fn<() => void>(),
+        push: (data) => options.onState(data),
+        status: (status) => options.onStatus(status),
+      }
+      channels.push(fake)
+      return { close: fake.close }
+    })
     get.mockReset().mockResolvedValue(snapshot())
     post.mockReset()
+    vi.mocked(reportUnauthorized).mockReset()
     scope = effectScope()
   })
 
   afterEach(() => {
     scope.stop()
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
-  it('loads initially and waits one second after the current read finishes before polling', async () => {
-    const initial = deferred<OperatorFightState>()
-    get.mockReturnValueOnce(initial.promise)
+  it('opens the channel with the match id and JWT and never polls', async () => {
     const fight = start()
+    expect(open).toHaveBeenCalledOnce()
+    expect(channel().options).toMatchObject({ matchId: 'm1', token: 'jwt' })
     expect(fight.loadState.value).toBe('loading')
-    await tick(6_000)
-    expect(get).toHaveBeenCalledTimes(1)
+    await tick(10_000)
+    channel().push(snapshot())
+    await tick(10_000)
+    expect(get).not.toHaveBeenCalled()
+  })
 
-    initial.resolve(snapshot())
-    await tick()
+  it('applies a pushed frame and ignores an invalid one', () => {
+    const fight = start()
+    channel().push(snapshot({ status: 'ongoing', remainingMs: 30_000 }))
     expect(fight.loadState.value).toBe('ready')
-    expect(fight.remainingMs.value).toBe(180_000)
-    await tick(999)
-    expect(get).toHaveBeenCalledTimes(1)
-    await tick(1)
-    expect(get).toHaveBeenCalledTimes(2)
+    expect(fight.state.value?.status).toBe('ongoing')
+    expect(fight.remainingMs.value).toBe(30_000)
+
+    channel().push(snapshot({ status: 'ongoing', remainingMs: 20_000 }))
+    expect(fight.remainingMs.value).toBe(20_000)
+
+    channel().push({ status: 'paused' })
+    channel().push(snapshot({ matchId: 'other' }))
+    channel().push('garbage')
+    channel().push(null)
+    expect(fight.state.value).toMatchObject({ status: 'ongoing', remainingMs: 20_000 })
+    expect(fight.loadState.value).toBe('ready')
   })
 
   it('interpolates running time to zero and waits for the server to report timeout', async () => {
-    const timeout = deferred<OperatorFightState>()
-    get
-      .mockResolvedValueOnce(snapshot({ status: 'ongoing', remainingMs: 2_500 }))
-      .mockReturnValueOnce(timeout.promise)
-    const fight = start()
+    const fight = startWith(snapshot({ status: 'ongoing', remainingMs: 2_500 }))
     await tick(1_000)
     expect(fight.remainingMs.value).toBe(1_500)
     await tick(1_500)
     expect(fight.remainingMs.value).toBe(0)
     expect(fight.state.value?.status).toBe('ongoing')
-    timeout.resolve(snapshot({ status: 'finished', remainingMs: 0, endReason: 'time_out' }))
-    await tick()
+    channel().push(snapshot({ status: 'finished', remainingMs: 0, endReason: 'time_out' }))
     expect(fight.state.value).toMatchObject({ status: 'finished', endReason: 'time_out' })
   })
 
-  it('resyncs ongoing time from each poll and freezes on an external Pause', async () => {
-    get
-      .mockResolvedValueOnce(snapshot({ status: 'ongoing', remainingMs: 30_000 }))
-      .mockResolvedValueOnce(snapshot({ status: 'ongoing', remainingMs: 24_500 }))
-      .mockResolvedValue(snapshot({ status: 'paused', remainingMs: 21_000 }))
-    const fight = start()
+  it('resyncs ongoing time from each frame and freezes on a pushed Pause', async () => {
+    const fight = startWith(snapshot({ status: 'ongoing', remainingMs: 30_000 }))
     await tick(1_000)
+    expect(fight.remainingMs.value).toBe(29_000)
+    channel().push(snapshot({ status: 'ongoing', remainingMs: 24_500 }))
     expect(fight.remainingMs.value).toBe(24_500)
     await tick(500)
     expect(fight.remainingMs.value).toBe(24_000)
-    await tick(500)
+    channel().push(snapshot({ status: 'paused', remainingMs: 21_000 }))
+    await tick(2_000)
     expect(fight.state.value?.status).toBe('paused')
     expect(fight.remainingMs.value).toBe(21_000)
   })
 
   it.each(['scheduled', 'paused', 'finished'] as const)('keeps %s time fixed', async (status) => {
-    get.mockResolvedValue(snapshot({ status, remainingMs: 95_600 }))
-    const fight = start()
+    const fight = startWith(snapshot({ status, remainingMs: 95_600 }))
     await tick(4_000)
     expect(fight.remainingMs.value).toBe(95_600)
   })
 
-  it('coalesces visibility and manual reads with the current poll', async () => {
-    const poll = deferred<OperatorFightState>()
-    get.mockResolvedValueOnce(snapshot()).mockReturnValueOnce(poll.promise)
+  it('shows an error while reconnecting before the first frame', () => {
     const fight = start()
-    await tick(1_000)
-    const refresh = fight.refresh()
-    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
-    document.dispatchEvent(new Event('visibilitychange'))
-    expect(get).toHaveBeenCalledTimes(2)
-    poll.resolve(snapshot())
-    await refresh
+    channel().status('connecting')
+    channel().status('reconnecting')
+    expect(fight.loadState.value).toBe('error')
+    expect(fight.error.value).toBe(readError)
 
-    document.dispatchEvent(new Event('visibilitychange'))
-    expect(get).toHaveBeenCalledTimes(3)
-    vi.restoreAllMocks()
+    channel().push(snapshot())
+    expect(fight.loadState.value).toBe('ready')
+    expect(fight.error.value).toBeNull()
+  })
+
+  it('keeps the controls ready while reconnecting after a good frame', () => {
+    const fight = startWith(snapshot())
+    channel().status('reconnecting')
+    expect(fight.loadState.value).toBe('ready')
+    expect(fight.error.value).toBe(readError)
+    expect(fight.state.value?.status).toBe('scheduled')
+
+    channel().status('connecting')
+    channel().push(snapshot({ status: 'ongoing' }))
+    channel().status('open')
+    expect(fight.loadState.value).toBe('ready')
+    expect(fight.error.value).toBeNull()
+    expect(fight.state.value?.status).toBe('ongoing')
+  })
+
+  it('reports not-found from the channel', () => {
+    const fight = start()
+    channel().status('not-found')
+    expect(fight.loadState.value).toBe('not-found')
+    expect(fight.state.value).toBeNull()
+  })
+
+  it('reports a rejected channel as an error without reporting the session again', () => {
+    const fight = startWith(snapshot())
+    channel().status('rejected')
+    expect(fight.loadState.value).toBe('error')
+    expect(fight.error.value).toBe(readError)
+    expect(reportUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('reopens the channel when the match changes', () => {
+    const fight = startWith(finished)
+    const first = channel()
+    fight.id.value = 'm2'
+    expect(first.close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(channel().options).toMatchObject({ matchId: 'm2', token: 'jwt' })
+    expect(fight.state.value).toBeNull()
+    expect(fight.loadState.value).toBe('loading')
+
+    channel().push(snapshot({ matchId: 'm2' }))
+    expect(fight.state.value?.matchId).toBe('m2')
+  })
+
+  it('reopens the channel with a new token and keeps the current state', () => {
+    const fight = startWith(snapshot())
+    const first = channel()
+    fight.token.value = 'jwt2'
+    expect(first.close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(channel().options).toMatchObject({ matchId: 'm1', token: 'jwt2' })
+    expect(fight.state.value?.status).toBe('scheduled')
+    expect(fight.loadState.value).toBe('ready')
+  })
+
+  it('closes the channel on disposal and leaves no timers', () => {
+    startWith(snapshot({ status: 'ongoing', remainingMs: 30_000 }))
+    scope.stop()
+    expect(channel().close).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('opens no channel without a token', () => {
+    const fight = start('')
+    expect(open).not.toHaveBeenCalled()
+    expect(fight.loadState.value).toBe('error')
+    expect(reportUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('closes the channel when the token is cleared', () => {
+    const fight = startWith(snapshot())
+    fight.token.value = ''
+    expect(channel().close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledOnce()
+    expect(fight.loadState.value).toBe('error')
+  })
+
+  it('registers no visibilitychange listener', () => {
+    const listen = vi.spyOn(document, 'addEventListener')
+    start()
+    expect(listen).not.toHaveBeenCalledWith('visibilitychange', expect.anything())
+  })
+
+  it('coalesces manual reads into one one-shot request', async () => {
+    const read = deferred<OperatorFightState>()
+    get.mockReturnValueOnce(read.promise)
+    const fight = start()
+    const first = fight.refresh()
+    const second = fight.refresh()
+    expect(get).toHaveBeenCalledOnce()
+    read.resolve(snapshot())
+    await Promise.all([first, second])
+    expect(fight.loadState.value).toBe('ready')
+    await tick(10_000)
+    expect(get).toHaveBeenCalledOnce()
+  })
+
+  it('does not let a manual read overwrite a fresher pushed frame', async () => {
+    const read = deferred<OperatorFightState>()
+    get.mockReturnValueOnce(read.promise)
+    const fight = startWith(snapshot())
+    const refresh = fight.refresh()
+    channel().push(snapshot({ status: 'ongoing' }))
+    read.resolve(snapshot())
+    await refresh
+    expect(fight.state.value?.status).toBe('ongoing')
   })
 
   it('aborts a hung read and ignores its eventual result after retry', async () => {
     const hung = deferred<OperatorFightState>()
     get.mockReturnValueOnce(hung.promise)
     const fight = start()
+    void fight.refresh()
     const signal = get.mock.calls[0]?.[1]
     await tick(10_000)
     expect(signal?.aborted).toBe(true)
@@ -151,125 +303,143 @@ describe('useFightControl', () => {
     expect(fight.state.value?.status).toBe('scheduled')
   })
 
-  it('aborts on route changes and stops reads on disposal', async () => {
-    const initial = deferred<OperatorFightState>()
-    const nextRead = deferred<OperatorFightState>()
-    get.mockReturnValueOnce(initial.promise).mockReturnValueOnce(nextRead.promise)
+  it('aborts a read on route changes', async () => {
+    const read = deferred<OperatorFightState>()
+    get.mockReturnValueOnce(read.promise)
     const fight = start()
-    const oldSignal = get.mock.calls[0]?.[1]
+    void fight.refresh()
+    const signal = get.mock.calls[0]?.[1]
     fight.id.value = 'm2'
-    expect(oldSignal?.aborted).toBe(true)
-    initial.resolve(finished)
+    expect(signal?.aborted).toBe(true)
+    read.resolve(finished)
     await tick()
     expect(fight.state.value).toBeNull()
-
-    const nextSignal = get.mock.calls[1]?.[1]
-    scope.stop()
-    expect(nextSignal?.aborted).toBe(true)
-    nextRead.resolve(snapshot({ matchId: 'm2' }))
-    await tick(20_000)
-    expect(fight.state.value).toBeNull()
-    expect(get).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('allows one command and prevents a pre-command poll from overwriting it', async () => {
-    const poll = deferred<OperatorFightState>()
-    const command = deferred<OperatorFightState>()
-    get.mockResolvedValueOnce(snapshot()).mockReturnValueOnce(poll.promise)
-    post.mockReturnValueOnce(command.promise)
-    const fight = start()
-    await tick(1_000)
-    const request = fight.command('start')
-    expect(get.mock.calls[1]?.[1]?.aborted).toBe(true)
-    expect(fight.busy.value).toBe(true)
-    await fight.command('start')
-    await fight.refresh()
-
-    command.resolve(snapshot({ status: 'ongoing' }))
-    await request
-    poll.resolve(snapshot())
-    await tick()
-    expect(fight.state.value?.status).toBe('ongoing')
-    expect(fight.busy.value).toBe(false)
-    expect(post).toHaveBeenCalledExactlyOnceWith('m1', 'start', 'jwt', expect.any(AbortSignal))
-  })
-
-  it('reports initial 404 as not found', async () => {
+  it('reports a 404 read before any frame as not found', async () => {
     get.mockRejectedValueOnce(new ApiError(404, 'match_not_found'))
     const fight = start()
-    await tick()
+    await fight.refresh()
     expect(fight.loadState.value).toBe('not-found')
     expect(fight.state.value).toBeNull()
   })
 
-  it('keeps the last snapshot after a failed refresh and blocks commands until a successful read', async () => {
-    get.mockResolvedValueOnce(snapshot()).mockRejectedValueOnce(new ApiError(500, 'bad read'))
-    const fight = start()
-    await tick(1_000)
+  it('allows one command and applies its body when no frame arrived meanwhile', async () => {
+    const command = deferred<OperatorFightState>()
+    post.mockReturnValueOnce(command.promise)
+    const fight = startWith(snapshot())
+    const request = fight.command('start')
+    expect(fight.busy.value).toBe(true)
+    await fight.command('start')
+
+    command.resolve(snapshot({ status: 'ongoing' }))
+    await request
+    expect(fight.state.value?.status).toBe('ongoing')
+    expect(fight.busy.value).toBe(false)
+    expect(post).toHaveBeenCalledExactlyOnceWith('m1', 'start', 'jwt', expect.any(AbortSignal))
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('applies frames during a command and does not let the body overwrite them', async () => {
+    const command = deferred<OperatorFightState>()
+    post.mockReturnValueOnce(command.promise)
+    const fight = startWith(snapshot())
+    const request = fight.command('start')
+    channel().push(snapshot({ status: 'ongoing', remainingMs: 170_000 }))
+    expect(fight.state.value?.remainingMs).toBe(170_000)
+    channel().push(snapshot({ status: 'paused', remainingMs: 160_000 }))
+
+    command.resolve(snapshot({ status: 'ongoing', remainingMs: 179_900 }))
+    await request
+    expect(fight.state.value).toMatchObject({ status: 'paused', remainingMs: 160_000 })
+    expect(fight.busy.value).toBe(false)
+    expect(fight.error.value).toBeNull()
+  })
+
+  it('navigates on a confirmed Close even when a frame arrived first', async () => {
+    const command = deferred<OperatorFightState>()
+    post.mockReturnValueOnce(command.promise)
+    const fight = startWith(finished)
+    const request = fight.command('close')
+    channel().push(closed)
+    expect(fight.confirmedCloseMatchId.value).toBeNull()
+    command.resolve(closed)
+    await request
+    expect(fight.confirmedCloseMatchId.value).toBe('m1')
+  })
+
+  it('blocks commands after a failed manual read until a frame arrives', async () => {
+    get.mockRejectedValueOnce(new ApiError(500, 'bad read'))
+    const fight = startWith(snapshot())
+    await fight.refresh()
     expect(fight.loadState.value).toBe('error')
     expect(fight.state.value?.status).toBe('scheduled')
     expect(fight.error.value).toBeTruthy()
     await fight.command('start')
     expect(post).not.toHaveBeenCalled()
 
-    await fight.refresh()
+    channel().push(snapshot())
     expect(fight.loadState.value).toBe('ready')
     expect(fight.error.value).toBeNull()
   })
 
-  it('reconciles a 409 without retrying Start', async () => {
+  it('reconciles a 409 with one read without retrying Start', async () => {
     const reconciliation = deferred<OperatorFightState>()
     post.mockRejectedValueOnce(new ApiError(409, 'match_invalid_transition'))
-    get.mockResolvedValueOnce(snapshot()).mockReturnValueOnce(reconciliation.promise)
-    const fight = start()
-    await tick()
+    get.mockReturnValueOnce(reconciliation.promise)
+    const fight = startWith(snapshot())
     const result = fight.command('start')
     await tick()
-    expect(get).toHaveBeenCalledTimes(2)
+    expect(get).toHaveBeenCalledOnce()
     await fight.command('start')
-    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledOnce()
     reconciliation.resolve(snapshot())
     await result
     expect(fight.uncertainCommand.value).toBeNull()
     expect(fight.state.value?.status).toBe('scheduled')
-    expect(post).toHaveBeenCalledTimes(1)
+    expect(fight.loadState.value).toBe('ready')
+    expect(post).toHaveBeenCalledOnce()
   })
 
-  it('leaves timed-out Close uncertain until a later poll reports closed', async () => {
+  it('leaves timed-out Close uncertain until a pushed frame reports closed', async () => {
     const hung = deferred<OperatorFightState>()
-    get
-      .mockResolvedValueOnce(finished)
-      .mockResolvedValueOnce(finished)
-      .mockResolvedValueOnce(closed)
+    get.mockResolvedValueOnce(finished)
     post.mockReturnValueOnce(hung.promise)
-    const fight = start()
-    await tick()
+    const fight = startWith(finished)
     const command = fight.command('close')
 
     await tick(10_000)
     await command
     expect(post.mock.calls[0]?.[3]?.aborted).toBe(true)
-    expect(get).toHaveBeenCalledTimes(2)
+    expect(get).toHaveBeenCalledOnce()
     expect(fight.uncertainCommand.value).toBe('close')
     expect(fight.confirmedCloseMatchId.value).toBeNull()
     await fight.command('close')
-    await tick(1_000)
+    channel().push(closed)
     expect(fight.uncertainCommand.value).toBeNull()
     expect(fight.confirmedCloseMatchId.value).toBe('m1')
-    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledOnce()
+  })
+
+  it('resolves an uncertain Start from the next pushed frame', async () => {
+    post.mockRejectedValueOnce(new ApiError(0, 'offline'))
+    get.mockRejectedValueOnce(new ApiError(0, 'offline'))
+    const fight = startWith(snapshot())
+    await fight.command('start')
+    expect(fight.uncertainCommand.value).toBe('start')
+    channel().push(snapshot({ status: 'ongoing' }))
+    expect(fight.uncertainCommand.value).toBeNull()
+    expect(fight.error.value).toBeNull()
+    expect(fight.loadState.value).toBe('ready')
   })
 
   it('requires a successful fresh read to recover and drops an unconfirmed Close intent', async () => {
     get
-      .mockResolvedValueOnce(finished)
       .mockRejectedValueOnce(new ApiError(500, 'bad read'))
       .mockRejectedValueOnce(new ApiError(0, 'offline'))
       .mockResolvedValueOnce(finished)
-      .mockResolvedValueOnce(closed)
     post.mockRejectedValueOnce(new ApiError(502, 'bad response'))
-    const fight = start()
-    await tick()
+    const fight = startWith(finished)
     await fight.command('close')
     expect(fight.state.value).toEqual(finished)
     expect(fight.loadState.value).toBe('error')
@@ -278,20 +448,22 @@ describe('useFightControl', () => {
     await fight.resumeControls()
     expect(fight.uncertainCommand.value).toBeNull()
     expect(fight.loadState.value).toBe('ready')
-    await tick(1_000)
+    expect(get).toHaveBeenCalledTimes(3)
+    channel().push(closed)
     expect(fight.state.value?.closed).toBe(true)
     expect(fight.confirmedCloseMatchId.value).toBeNull()
+    await tick(10_000)
+    expect(get).toHaveBeenCalledTimes(3)
   })
 
   it.each([false, true])(
     'drops the Close navigation intent on explicit recovery, including after a failed read (%s)',
     async (failedRecovery) => {
-      get.mockResolvedValueOnce(finished).mockResolvedValueOnce(finished)
+      get.mockResolvedValueOnce(finished)
       if (failedRecovery) get.mockRejectedValueOnce(new ApiError(500, 'bad read'))
       get.mockResolvedValueOnce(closed)
       post.mockRejectedValueOnce(new ApiError(0, 'offline'))
-      const fight = start()
-      await tick()
+      const fight = startWith(finished)
       await fight.command('close')
 
       await fight.resumeControls()
@@ -306,8 +478,7 @@ describe('useFightControl', () => {
   it('treats a malformed success payload as an unknown outcome', async () => {
     get.mockResolvedValue(snapshot({ status: 'ongoing' }))
     post.mockResolvedValueOnce({ status: 'paused' } as OperatorFightState)
-    const fight = start()
-    await tick()
+    const fight = startWith(snapshot({ status: 'ongoing' }))
     await fight.command('pause')
 
     expect(fight.state.value?.status).toBe('ongoing')
@@ -316,13 +487,11 @@ describe('useFightControl', () => {
 
   it('discards an unresolved Close when the match changes', async () => {
     const previous = deferred<OperatorFightState>()
-    get.mockResolvedValueOnce(finished).mockResolvedValueOnce({ ...closed, matchId: 'm2' })
     post.mockReturnValueOnce(previous.promise)
-    const fight = start()
-    await tick()
+    const fight = startWith(finished)
     const command = fight.command('close')
     fight.id.value = 'm2'
-    await tick()
+    channel().push({ ...closed, matchId: 'm2' })
     previous.resolve(closed)
     await command
     expect(post.mock.calls[0]?.[3]?.aborted).toBe(true)
@@ -331,10 +500,8 @@ describe('useFightControl', () => {
     expect(fight.confirmedCloseMatchId.value).toBeNull()
   })
 
-  it('does not signal navigation when the fight is already closed on entry', async () => {
-    get.mockResolvedValueOnce(closed)
-    const fight = start()
-    await tick()
+  it('does not signal navigation when the fight is already closed on entry', () => {
+    const fight = startWith(closed)
     expect(fight.state.value?.closed).toBe(true)
     expect(fight.confirmedCloseMatchId.value).toBeNull()
   })

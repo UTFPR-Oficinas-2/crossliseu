@@ -1,11 +1,12 @@
 import { computed, onScopeDispose, readonly, ref, shallowRef, toValue, watch } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 import { ApiError } from '@/api/client'
+import { openFightChannel, type FightChannelStatus } from '@/api/fight-channel'
 import { getFightState, sendFightCommand, type FightCommand, type OperatorFightState } from '@/data'
 
-const POLL_INTERVAL_MS = 1_000
 const REQUEST_TIMEOUT_MS = 10_000
 const COUNTDOWN_INTERVAL_MS = 100
+const READ_ERROR = 'Não foi possível atualizar a luta.'
 
 const commandsByStatus: Record<OperatorFightState['status'], readonly FightCommand[]> = {
   scheduled: ['start'],
@@ -94,7 +95,10 @@ export function useFightControl(
   let shouldNavigateOnClose = false
   let activeRead: PendingRead | null = null
   let activeCommand: AbortController | null = null
-  let pollTimer: ReturnType<typeof setTimeout> | undefined
+  let channel: { close(): void } | null = null
+  let channelVersion = 0
+  // Counts pushed frames applied, so a slower HTTP response never overwrites a fresher frame
+  let framesApplied = 0
   let countdownTimer: ReturnType<typeof setInterval> | undefined
 
   function apply(snapshot: OperatorFightState) {
@@ -123,9 +127,47 @@ export function useFightControl(
     }
   }
 
-  function pollLater() {
-    clearTimeout(pollTimer)
-    pollTimer = setTimeout(() => void read(), POLL_INTERVAL_MS)
+  function onFrame(data: unknown, id: string) {
+    let snapshot: OperatorFightState
+    try {
+      snapshot = checkSnapshot(data as OperatorFightState, id)
+    } catch {
+      return
+    }
+    framesApplied++
+    apply(snapshot)
+  }
+
+  function onChannelStatus(status: FightChannelStatus) {
+    if (status === 'reconnecting' || status === 'rejected') {
+      // Once a frame arrived the last state stays usable while the channel reconnects
+      if (!state.value || status === 'rejected') loadState.value = 'error'
+      readError.value = READ_ERROR
+    } else if (status === 'not-found') {
+      loadState.value = 'not-found'
+      readError.value = null
+    }
+  }
+
+  function closeChannel() {
+    channelVersion++
+    channel?.close()
+    channel = null
+  }
+
+  function openChannel(id: string, jwt: string) {
+    const version = channelVersion
+    const current = () => !disposed && version === channelVersion
+    channel = openFightChannel({
+      matchId: id,
+      token: jwt,
+      onState: (data) => {
+        if (current()) onFrame(data, id)
+      },
+      onStatus: (status) => {
+        if (current()) onChannelStatus(status)
+      },
+    })
   }
 
   function cancelRead() {
@@ -138,32 +180,32 @@ export function useFightControl(
     if (disposed || activeCommand) return Promise.resolve(false)
     if (activeRead) return activeRead.result
 
-    clearTimeout(pollTimer)
     const id = toValue(matchId)
     const version = generation
+    const seen = framesApplied
     const controller = new AbortController()
     const current = () => version === generation && activeRead?.controller === controller
     const result = (async () => {
       try {
         const snapshot = await requestWithTimeout(controller, (signal) => getFightState(id, signal))
         if (!current()) return false
-        apply(checkSnapshot(snapshot, id))
+        const checked = checkSnapshot(snapshot, id)
+        // A frame pushed meanwhile is at least as fresh as this response
+        if (framesApplied === seen) apply(checked)
         return true
       } catch (cause) {
         if (!current()) return false
+        if (framesApplied !== seen) return true
         if (!state.value && cause instanceof ApiError && [400, 404].includes(cause.status)) {
           loadState.value = 'not-found'
           readError.value = null
         } else {
           loadState.value = 'error'
-          readError.value = 'Não foi possível atualizar a luta.'
+          readError.value = READ_ERROR
         }
         return false
       } finally {
-        if (current()) {
-          activeRead = null
-          pollLater()
-        }
+        if (current()) activeRead = null
       }
     })()
     activeRead = { controller, result }
@@ -205,9 +247,9 @@ export function useFightControl(
       return
     }
 
-    clearTimeout(pollTimer)
     cancelRead()
     const version = generation
+    const seen = framesApplied
     const controller = new AbortController()
     activeCommand = controller
     posting.value = true
@@ -221,7 +263,8 @@ export function useFightControl(
       if (version !== generation) return
       checkSnapshot(updated, snapshot.matchId)
       if (action === 'close' && !updated.closed) throw new Error('Close was not confirmed')
-      apply(updated)
+      // Frames applied while the command was in flight already hold equal or fresher state
+      if (framesApplied === seen) apply(updated)
       if (action === 'close') confirmedCloseMatchId.value = updated.matchId
     } catch (cause) {
       if (version !== generation) return
@@ -242,7 +285,6 @@ export function useFightControl(
         activeCommand = null
         posting.value = false
         if (reconcile) await read()
-        else pollLater()
       }
     }
   }
@@ -250,39 +292,42 @@ export function useFightControl(
   function clearRequests() {
     generation++
     shouldNavigateOnClose = false
-    clearTimeout(pollTimer)
     clearInterval(countdownTimer)
     cancelRead()
     activeCommand?.abort()
     activeCommand = null
   }
 
-  function refreshWhenVisible() {
-    if (document.visibilityState === 'visible') void read()
-  }
-
   watch(
-    () => toValue(matchId),
-    () => {
-      clearRequests()
-      state.value = null
-      loadState.value = 'loading'
-      remainingMs.value = 0
-      posting.value = false
-      recovering.value = false
-      readError.value = null
-      commandError.value = null
-      uncertainCommand.value = null
-      confirmedCloseMatchId.value = null
-      void read()
+    [() => toValue(matchId), () => toValue(token)],
+    ([id, jwt], previous) => {
+      // A new token only reopens the channel; a new match starts over
+      if (!previous || previous[0] !== id) {
+        clearRequests()
+        state.value = null
+        loadState.value = 'loading'
+        remainingMs.value = 0
+        posting.value = false
+        recovering.value = false
+        readError.value = null
+        commandError.value = null
+        uncertainCommand.value = null
+        confirmedCloseMatchId.value = null
+      }
+      closeChannel()
+      if (!jwt) {
+        loadState.value = 'error'
+        readError.value = READ_ERROR
+        return
+      }
+      openChannel(id, jwt)
     },
     { immediate: true, flush: 'sync' },
   )
-  document.addEventListener('visibilitychange', refreshWhenVisible)
   onScopeDispose(() => {
     disposed = true
     clearRequests()
-    document.removeEventListener('visibilitychange', refreshWhenVisible)
+    closeChannel()
   })
 
   return {
