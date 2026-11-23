@@ -93,18 +93,25 @@ describe('stateFrame', () => {
         });
     });
 
-    it('wraps a FightState unchanged', () => {
+    it('wraps a FightState without the score', () => {
         const state: FightState = {
             status: 'paused',
             matchId: 'm',
             remainingMs: 94210,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 3, B: 1 },
         };
 
         expect(JSON.parse(stateFrame(state))).toEqual({
             event: 'state',
-            data: state,
+            data: {
+                status: 'paused',
+                matchId: 'm',
+                remainingMs: 94210,
+                endReason: null,
+                robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            },
         });
     });
 });

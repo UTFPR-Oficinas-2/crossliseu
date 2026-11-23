@@ -31,7 +31,7 @@ A socket follows exactly one match. To follow another, open another socket.
 
 | Event | When | `data` |
 | --- | --- | --- |
-| `state` | Right after a successful `auth` (a full snapshot), then on every committed change of the match | The same shape as `GET /matches/:id/state` and the `/arena` `state`: `status`, `matchId`, `remainingMs`, `endReason`, `robots` |
+| `state` | Right after a successful `auth` (a full snapshot), then on every committed change of the match | The same shape as `GET /matches/:id/state`: `status`, `matchId`, `remainingMs`, `endReason`, `robots`, `score` (`{ A, B }`, each side's points summed over the three referees; never one referee's partial). The `/arena` `state` is the same without `score` |
 | `ping` | Every 10 s on a subscribed socket | `null` |
 | `error` | A frame the server refuses; the socket stays open | `{ "code": string, "message": string }` |
 

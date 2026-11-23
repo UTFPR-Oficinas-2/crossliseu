@@ -14,6 +14,7 @@ import { FightEvents } from './fight-events.js';
 import { FightTimer } from './fight-timer.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
+import { scoreTotals } from './score.js';
 import { transitionFor } from './fight-transitions.js';
 import type { FightCommand } from './fight-transitions.js';
 import { FightRepository } from './fight.repository.js';
@@ -413,6 +414,10 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 A: { name: match.robotA?.name ?? '' },
                 B: { name: match.robotB?.name ?? '' },
             },
+            score: scoreTotals(events, {
+                A: match.robotAId,
+                B: match.robotBId,
+            }),
         };
     }
 
@@ -423,9 +428,10 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         if (!snapshot) {
             throw this.notFound(matchId);
         }
-        const { events, ...state } = snapshot;
+        const { events, robotIds, ...state } = snapshot;
         return {
             ...state,
+            score: scoreTotals(events, robotIds),
             remainingMs: remainingMs(state.status, events, this.clock.now()),
             closed: events.some((event) => event.type === 'closed'),
         };

@@ -28,7 +28,14 @@ function fightState(remainingMs: number): FightState {
         remainingMs,
         endReason: null,
         robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+        score: { A: 0, B: 0 },
     };
+}
+
+/** What the box gets: the fight state without the score */
+function onBox(remainingMs: number) {
+    const { score: _score, ...rest } = fightState(remainingMs);
+    return rest;
 }
 
 const IDLE = {
@@ -104,7 +111,7 @@ describe('ArenaStatePusher', () => {
         expect(findCurrentMatchId).toHaveBeenCalledWith(ARENA_ID);
         expect(state).toHaveBeenCalledWith(MATCH_ID);
         expect(socket.sent).toEqual([
-            { event: 'state', data: fightState(1000) },
+            { event: 'state', data: onBox(1000) },
         ]);
     });
 
@@ -135,8 +142,8 @@ describe('ArenaStatePusher', () => {
         await Promise.all([a, b]);
 
         expect(socket.sent).toEqual([
-            { event: 'state', data: fightState(1000) },
-            { event: 'state', data: fightState(500) },
+            { event: 'state', data: onBox(1000) },
+            { event: 'state', data: onBox(500) },
         ]);
         // The settled chain is forgotten, so the map stays bounded
         const chains = (pusher as unknown as { chains: Map<string, unknown> })

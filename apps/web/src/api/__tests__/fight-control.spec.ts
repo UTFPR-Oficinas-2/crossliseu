@@ -7,6 +7,7 @@ const snapshot: OperatorFightState = {
   remainingMs: 180_000,
   endReason: null,
   robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+  score: { A: 0, B: 0 },
   closed: false,
   winnerSide: null,
   hasSelectedArena: true,

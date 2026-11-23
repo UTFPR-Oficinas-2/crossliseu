@@ -92,6 +92,7 @@ describe('fight (e2e)', () => {
             remainingMs: 180_000,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 0, B: 0 },
         });
 
         clock.advance(30_000);
@@ -133,6 +134,28 @@ describe('fight (e2e)', () => {
         ]);
     });
 
+    it('both state views sum the scored events of every seat per side', async () => {
+        await command('start').expect(200);
+        const scored = (robotId: string, seat: number, action: number) =>
+            ds.query(
+                `INSERT INTO "match_events" ("match_id", "type", "occurred_at", "robot_id", "judge_seat", "action")
+                 VALUES ($1, 'scored', now(), $2, $3, $4)`,
+                [ids.match, robotId, seat, action],
+            );
+        await scored(ids.a, 1, 1);
+        await scored(ids.a, 2, 1);
+        await scored(ids.b, 3, 1);
+        await scored(ids.a, 1, -1);
+        await scored(ids.a, 3, 1);
+
+        for (const view of ['', '?view=operator']) {
+            const response = await http()
+                .get(`/matches/${ids.match}/state${view}`)
+                .expect(200);
+            expect(response.body.score).toEqual({ A: 2, B: 1 });
+        }
+    });
+
     it('GET /matches/:id/state is public and has the /arena state shape', async () => {
         const response = await http()
             .get(`/matches/${ids.match}/state`)
@@ -143,6 +166,7 @@ describe('fight (e2e)', () => {
             remainingMs: 180_000,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 0, B: 0 },
         });
         await http()
             .get('/matches/00000000-0000-4000-8000-000000000000/state')

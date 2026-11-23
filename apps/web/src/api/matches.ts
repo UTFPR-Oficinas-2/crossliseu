@@ -76,6 +76,8 @@ export interface OperatorFightState {
   remainingMs: number
   endReason: MatchEndReason | null
   robots: { A: { name: string }; B: { name: string } }
+  /** Each side's points summed over the three referees */
+  score: { A: number; B: number }
   closed: boolean
   hasSelectedArena: boolean
   /** Winning side when a surrender decided the fight */

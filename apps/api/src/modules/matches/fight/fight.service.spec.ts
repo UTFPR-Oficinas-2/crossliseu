@@ -45,6 +45,20 @@ function event(type: MatchEventType, occurredAt: Date): MatchEvent {
     return entity;
 }
 
+function scoredEvent(
+    robotId: string,
+    judgeSeat: 1 | 2 | 3,
+    action: 1 | -1,
+    occurredAt: Date,
+): MatchEvent {
+    const entity = event('scored', occurredAt);
+    entity.actorUserId = null;
+    entity.robotId = robotId;
+    entity.judgeSeat = judgeSeat;
+    entity.action = action;
+    return entity;
+}
+
 interface Options {
     state?: MatchState;
     events?: MatchEvent[];
@@ -127,6 +141,10 @@ function setup({
                           robots: {
                               A: { name: store.match.robotA?.name ?? '' },
                               B: { name: store.match.robotB?.name ?? '' },
+                          },
+                          robotIds: {
+                              A: store.match.robotAId,
+                              B: store.match.robotBId,
                           },
                           events: [...store.events],
                           hasSelectedArena: store.arenaPointer !== null,
@@ -243,6 +261,7 @@ describe('FightService', () => {
             remainingMs: 180_000,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 0, B: 0 },
             closed: false,
             hasSelectedArena: true,
             winnerSide: null,
@@ -597,6 +616,25 @@ describe('FightService', () => {
             remainingMs: 120_000,
             endReason: null,
             robots: { A: { name: 'Tritura' }, B: { name: 'Ferrugem' } },
+            score: { A: 0, B: 0 },
+        });
+    });
+
+    it('state() and operatorState() carry the score totals', async () => {
+        const { service } = setup({
+            state: 'ongoing',
+            events: [
+                event('started', T0),
+                scoredEvent('a', 1, 1, at(1_000)),
+                scoredEvent('a', 2, 1, at(2_000)),
+            ],
+            now: at(60_000),
+        });
+
+        expect((await service.state(MATCH_ID)).score).toEqual({ A: 2, B: 0 });
+        expect((await service.operatorState(MATCH_ID)).score).toEqual({
+            A: 2,
+            B: 0,
         });
     });
 
