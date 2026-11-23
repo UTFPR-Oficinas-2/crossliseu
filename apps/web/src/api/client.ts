@@ -31,7 +31,19 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   onUnauthorized = handler
 }
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+/** Runs the registered unauthorized handler, for channels (WebSocket) that learn of a rejected session outside `apiRequest`. */
+export function reportUnauthorized(): void {
+  onUnauthorized?.()
+}
+
+/** `ws(s)://` URL for an API path, resolved against the page so `/api` and `/crossliseu/api` both work. */
+export function apiWebSocketUrl(path: string): string {
+  const url = new URL(`${API_URL}${path}`, window.location.href)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return url.toString()
+}
+
+type HttpMethod ='GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 interface RequestOptions {
   method?: HttpMethod
