@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { ChampionshipsService } from '../../championships/championships.service.js';
 import type { RefereesRepository } from './referees.repository.js';
+import { FightEvents } from '../fight/fight-events.js';
 import { RefereesService } from './referees.service.js';
 
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -12,6 +13,8 @@ function setup({
     closed = false,
     missing = false,
     token = null as string | null,
+    created = true,
+    freeResult = 'done' as 'done' | 'started' | 'missing',
 } = {}) {
     const store = { token };
     const repo = {
@@ -22,6 +25,17 @@ function setup({
         ),
         isClosed: vi.fn(() => Promise.resolve(closed)),
         findToken: vi.fn(() => Promise.resolve(store.token)),
+        join: vi.fn(() =>
+            Promise.resolve({
+                kind: 'seated' as const,
+                created,
+                matchId: MATCH_ID,
+                seat: 1 as const,
+                name: 'Ana',
+                counts: { A: 0, B: 0 },
+            }),
+        ),
+        freeSeat: vi.fn(() => Promise.resolve(freeResult)),
         claimToken: vi.fn((_id: string, next: string) => {
             store.token ??= next;
             return Promise.resolve();
@@ -30,11 +44,15 @@ function setup({
     const championships = {
         isOwnedBy: vi.fn(() => Promise.resolve(owner)),
     };
+    const events = new FightEvents();
+    const changes: unknown[] = [];
+    events.onChange((change) => changes.push(change));
     const service = new RefereesService(
         repo as unknown as RefereesRepository,
         championships as unknown as ChampionshipsService,
+        events,
     );
-    return { service, repo, store };
+    return { service, repo, store, changes };
 }
 
 describe('RefereesService.issueToken', () => {
@@ -87,5 +105,41 @@ describe('RefereesService.issueToken', () => {
             new ConflictException('match_closed'),
         );
         expect(repo.claimToken).not.toHaveBeenCalled();
+    });
+});
+
+describe('RefereesService change events', () => {
+    it('a new seat emits a fight change', async () => {
+        const { service, changes } = setup();
+
+        await service.join('t', 'Ana');
+
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: null }]);
+    });
+
+    it('a rejoin emits nothing', async () => {
+        const { service, changes } = setup({ created: false });
+
+        const session = await service.join('t', 'Ana');
+
+        expect(changes).toEqual([]);
+        expect(session).not.toHaveProperty('created');
+    });
+
+    it('a free emits a fight change', async () => {
+        const { service, changes } = setup();
+
+        await service.freeSeat(MATCH_ID, 1, USER_ID);
+
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: null }]);
+    });
+
+    it('a refused free emits nothing', async () => {
+        const { service, changes } = setup({ freeResult: 'started' });
+
+        await expect(service.freeSeat(MATCH_ID, 1, USER_ID)).rejects.toThrow(
+            new ConflictException('match_started'),
+        );
+        expect(changes).toEqual([]);
     });
 });

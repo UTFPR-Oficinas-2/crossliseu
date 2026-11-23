@@ -1,9 +1,13 @@
 import {
+    BadRequestException,
     Body,
     Controller,
+    Delete,
+    Get,
     HttpCode,
     HttpStatus,
     Param,
+    ParseIntPipe,
     ParseUUIDPipe,
     Post,
     UnauthorizedException,
@@ -14,6 +18,8 @@ import { Public } from '../../auth/public-decorator.js';
 import { JoinRefereeDto } from './dto/join-referee.dto.js';
 import { FightService } from '../fight/fight.service.js';
 import { SubmitScoreDto } from './dto/submit-score.dto.js';
+import type { JudgeSeat } from '../entities/match-event.entity.js';
+import { SEATS } from './referees.repository.js';
 import { RefereesService } from './referees.service.js';
 
 @ApiTags('referees')
@@ -33,6 +39,29 @@ export class RefereesController {
         @CurrentUserId() userId: string,
     ) {
         return this.referees.issueToken(id, userId);
+    }
+
+    /** Owner-only. Who holds each seat, by seat. */
+    @Get(':id/referees')
+    seats(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.referees.listSeats(id, userId);
+    }
+
+    /** Owner-only. Frees a seat before Start; 409 match_started after. */
+    @Delete(':id/referees/:seat')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    async freeSeat(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('seat', ParseIntPipe) seat: number,
+        @CurrentUserId() userId: string,
+    ) {
+        if (!SEATS.includes(seat as JudgeSeat)) {
+            throw new BadRequestException('seat must be 1, 2 or 3');
+        }
+        await this.referees.freeSeat(id, seat as JudgeSeat, userId);
     }
 
     /**

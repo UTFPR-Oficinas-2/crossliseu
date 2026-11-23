@@ -16,6 +16,8 @@ export type JoinOutcome =
     | { kind: 'seats_full' }
     | {
           kind: 'seated';
+          /** A new seat was taken (not a rejoin) */
+          created: boolean;
           matchId: string;
           seat: JudgeSeat;
           name: string;
@@ -70,6 +72,7 @@ export class RefereesRepository {
             });
             const key = nameKey(name);
             let referee = seated.find((r) => r.nameKey === key);
+            const created = !referee;
             if (!referee) {
                 const free = SEATS.find(
                     (seat) => !seated.some((r) => r.seat === seat),
@@ -94,6 +97,7 @@ export class RefereesRepository {
             });
             return {
                 kind: 'seated',
+                created,
                 matchId: match.id,
                 seat: referee.seat,
                 name: referee.name,
@@ -103,6 +107,43 @@ export class RefereesRepository {
                     referee.seat,
                 ),
             };
+        });
+    }
+
+    /** Who holds each seat, by seat */
+    async listSeats(
+        matchId: string,
+    ): Promise<{ seat: JudgeSeat; name: string }[]> {
+        const seated = await this.matches.manager.find(MatchReferee, {
+            select: { seat: true, name: true },
+            where: { matchId },
+            order: { seat: 'ASC' },
+        });
+        return seated.map(({ seat, name }) => ({ seat, name }));
+    }
+
+    /**
+     * Empties `seat` while the match is `scheduled`, under the match row lock so a concurrent
+     * Start is either before (then 'started') or after. An empty seat is 'done' too.
+     */
+    freeSeat(
+        matchId: string,
+        seat: JudgeSeat,
+    ): Promise<'done' | 'started' | 'missing'> {
+        return this.matches.manager.transaction(async (manager) => {
+            const match = await manager.findOne(Match, {
+                select: { id: true, state: true },
+                where: { id: matchId },
+                lock: { mode: 'pessimistic_write' },
+            });
+            if (!match) {
+                return 'missing';
+            }
+            if (match.state !== 'scheduled') {
+                return 'started';
+            }
+            await manager.delete(MatchReferee, { matchId, seat });
+            return 'done';
         });
     }
 

@@ -203,4 +203,20 @@ describe('referees on the live channel (e2e)', () => {
 
         expect(await within(client.closed, 2_000)).toEqual({ code: 4001 });
     });
+
+    it('join and free push a state to a subscribed operator socket', async () => {
+        const operator = await subscribed(jwt);
+
+        await http()
+            .post('/referee/join')
+            .send({ token: shared, name: 'Bia' })
+            .expect(200);
+        expect((await within(operator.next(), 1_000)).event).toBe('state');
+
+        await http()
+            .delete(`/matches/${matchId}/referees/2`)
+            .set(auth())
+            .expect(204);
+        expect((await within(operator.next(), 1_000)).event).toBe('state');
+    });
 });

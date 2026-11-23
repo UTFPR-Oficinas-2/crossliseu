@@ -436,4 +436,115 @@ describe('referees (e2e)', () => {
             },
         );
     });
+
+    describe('seats: GET and DELETE /matches/:id/referees', () => {
+        let shared: string;
+        const join = (name: string) =>
+            http()
+                .post('/referee/join')
+                .send({ token: shared, name })
+                .expect(200);
+        const seats = (jwt = token) =>
+            http().get(`/matches/${ids.match}/referees`).set(auth(jwt));
+        const free = (seat: number | string, jwt = token) =>
+            http()
+                .delete(`/matches/${ids.match}/referees/${seat}`)
+                .set(auth(jwt));
+
+        beforeEach(async () => {
+            shared = (
+                (await refereeToken().expect(200)).body as { token: string }
+            ).token;
+        });
+
+        it('lists seats in seat order', async () => {
+            for (const name of ['Ana', 'Bia', 'Caio']) {
+                await join(name);
+            }
+            await free(1).expect(204);
+            await join('Davi');
+
+            expect((await seats().expect(200)).body).toEqual([
+                { seat: 1, name: 'Davi' },
+                { seat: 2, name: 'Bia' },
+                { seat: 3, name: 'Caio' },
+            ]);
+        });
+
+        it('a non-owner gets 404 on list and free', async () => {
+            await join('Ana');
+            await createUser(ds, 'other', 'pw');
+            const other = await loginToken(app, 'other', 'pw');
+
+            await seats(other).expect(404);
+            await free(1, other).expect(404);
+            expect((await seats().expect(200)).body).toHaveLength(1);
+        });
+
+        it('needs a login', async () => {
+            await http().get(`/matches/${ids.match}/referees`).expect(401);
+            await http().delete(`/matches/${ids.match}/referees/1`).expect(401);
+        });
+
+        it('free before Start lets a new name take the seat', async () => {
+            for (const name of ['Ana', 'Bia', 'Caio']) {
+                await join(name);
+            }
+
+            await free(2).expect(204);
+
+            const davi = await join('Davi');
+            expect(davi.body).toMatchObject({
+                seat: 2,
+                name: 'Davi',
+                counts: { A: 0, B: 0 },
+            });
+        });
+
+        it('free after Start gets 409 match_started', async () => {
+            await join('Ana');
+            await command('start');
+
+            const response = await free(1).expect(409);
+            expect(response.body.message).toBe('match_started');
+            expect((await seats().expect(200)).body).toHaveLength(1);
+        });
+
+        it('freeing an empty seat is 204', async () => {
+            await free(3).expect(204);
+        });
+
+        it.each([4, 0, 'x'])('seat %j gets 400', async (seat) => {
+            await free(seat).expect(400);
+        });
+
+        it("the freed name's credential no longer scores", async () => {
+            await join('Ana');
+            await free(1).expect(204);
+            await command('start');
+
+            await http()
+                .post(`/matches/${ids.match}/scores`)
+                .send({ token: shared, name: 'Ana', side: 'A', action: 1 })
+                .expect(401);
+        });
+
+        it('free and start at once never frees a started fight', async () => {
+            await join('Ana');
+
+            const [freed, started] = await Promise.all([
+                free(1),
+                http().post(`/matches/${ids.match}/start`).set(auth()),
+            ]);
+
+            expect(started.status).toBe(200);
+            const left = (await seats().expect(200)).body as unknown[];
+            if (freed.status === 409) {
+                expect(left).toHaveLength(1);
+            } else {
+                expect(freed.status).toBe(204);
+                expect(left).toHaveLength(0);
+            }
+        });
+    });
 });
