@@ -120,8 +120,24 @@ export interface MatchResult {
 /** Heatmap generated from the recording, one per robot */
 export interface RobotHeatmap {
   robotId: string
+  side: Side
   status: ProcessingStatus
+  /** Frames where the robot was found */
   detectedPositions: number | null
+  /** Signed image URL; it expires, so ask for the analysis again when the image fails to load */
+  imageUrl: string | null
+}
+
+/** The CV worker's analysis of a match's uploaded video (apps/api GET /matches/:id/analysis) */
+export interface MatchAnalysis {
+  status: ProcessingStatus
+  /** Error code when failed */
+  error: string | null
+  /** Made from the worker's test video, not this recording (development only) */
+  mock: boolean
+  totalFrames: number | null
+  /** Empty until completed */
+  heatmaps: RobotHeatmap[]
 }
 
 /** What the organizer screens need from a match (Figma 10 and 10b) */

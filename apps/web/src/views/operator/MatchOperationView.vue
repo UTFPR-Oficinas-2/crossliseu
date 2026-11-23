@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import CompetitorTile from '@/components/ui/CompetitorTile.vue'
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { MatchEndReason, MatchState } from '@/types'
 import { formatElapsed } from '@/utils/recording'
 import FightRecorderPanel, { type FightPhase } from './components/FightRecorderPanel.vue'
+import MatchAnalysisPanel from './components/MatchAnalysisPanel.vue'
 import RefereeLinkPanel from './components/RefereeLinkPanel.vue'
 import { useFightControl } from './use-fight-control'
 
@@ -18,6 +19,8 @@ const emit = defineEmits<{
 }>()
 const auth = useAuthStore()
 const router = useRouter()
+/** Confirmed uploads on this screen; each one makes the analysis panel read again */
+const uploads = ref(0)
 const operatorHome = { name: 'operator' } as const
 const {
   state,
@@ -228,10 +231,26 @@ function confirmResumeControls() {
     :key="matchId"
     :match-id="matchId"
     :fight-phase="phaseByStatus[state.status]"
+    @uploaded="uploads++"
+  />
+
+  <MatchAnalysisPanel
+    v-if="state"
+    :key="`analysis-${matchId}`"
+    class="fight-analysis"
+    :match-id="matchId"
+    :robots="{ A: state.robots.A.name, B: state.robots.B.name }"
+    :uploads="uploads"
   />
 </template>
 
 <style scoped>
+/* Same column as the recorder above it */
+.fight-analysis {
+  max-width: 720px;
+  margin-top: var(--space-6);
+}
+
 .fight-side {
   display: flex;
   flex-direction: column;
