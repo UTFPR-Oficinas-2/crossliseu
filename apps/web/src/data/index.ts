@@ -338,6 +338,7 @@ export const confirmRecordingUpload = markUploaded
 // The operator snapshot already matches the view's data model.
 export {
   getFightState,
+  getRefereeToken,
   sendFightCommand,
   type FightCommand,
   type OperatorFightState,

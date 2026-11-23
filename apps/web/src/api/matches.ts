@@ -105,3 +105,11 @@ export function sendFightCommand(
     signal,
   })
 }
+
+/**
+ * POST /matches/:id/referee-token (JWT, owner-only). The token the match's three referees share;
+ * the same on every call. 404 `match_not_found`, 409 `match_closed` once the fight is closed.
+ */
+export function getRefereeToken(id: string, token: string): Promise<{ token: string }> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/referee-token`, { method: 'POST', token })
+}

@@ -144,8 +144,9 @@ slots. Each component's Figma description repeats its Vue file and props.
   `scheduled | ongoing | closed`.
 - Match state and recording/upload/analysis states (pendente, processando, concluído, falhou)
   are separate. Never merge them into one status.
-- Every screen shows only the total points per competitor (sum of the 3 referees). Never show a
-  single referee's partial.
+- Every shared screen (public, operator) shows only the total points per competitor (sum of the
+  3 referees). A referee's own phone also shows that referee's own counts, never another
+  referee's.
 - The server owns the fight (status, timer, end reason). Nothing is blocked by an offline arena
   or by referees who aren't connected: show the status, never disable Start because of it.
 - Surrender only comes from the arena box buttons and only counts while the fight is running.
