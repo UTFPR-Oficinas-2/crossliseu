@@ -46,6 +46,7 @@ describe('migrations on a fresh database', () => {
             'arenas',
             'championships',
             'match_events',
+            'match_referees',
             'match_videos',
             'matches',
             'migrations',

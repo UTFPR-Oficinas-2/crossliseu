@@ -41,6 +41,7 @@ erDiagram
   users ||--o{ robots : creates
   users ||--o{ arenas : owns
   matches ||--o{ match_events : "timeline"
+  matches ||--o{ match_referees : "seats"
   users |o--o{ match_events : "acts in"
   robots |o--o{ match_events : "scored for"
   robots ||--o{ matches : "wins"
@@ -88,6 +89,7 @@ erDiagram
     string weight_class "(fairyweight | antweight | beetleweight | hobbyweight | featherweight | lightweight)"
     string state "scheduled | ongoing | paused | finished"
     string end_reason "(time_out | manual | surrender), nullable"
+    string referee_token "nullable, unique"
     timestamptz scheduled_at
     timestamptz created_at
     timestamptz modified_at
@@ -114,6 +116,20 @@ erDiagram
     int judge_seat "(1 | 2 | 3), nullable, only on scored"
     int action "+1 | -1, nullable, only on scored"
   }
+  match_referees {
+    uuid id PK
+    uuid match_id FK "on delete cascade"
+    string name "unique per match, case-insensitive"
+    int seat "(1 | 2 | 3), unique per match"
+    timestamptz joined_at
+  }
 ```
+
+`matches.referee_token` is the one token the operator shares with the match's three referees.
+A referee joins with it and a name, without an account, and holds a seat in `match_referees`
+by that name: the first three distinct names (case-insensitive, unique index
+`UQ_match_referees_match_id_lower_name`) get seats 1–3, and the same name joining again gets
+its seat back. The token and the seats stop working once the match has a `closed` event. A
+referee's points are the `scored` events with their `judge_seat`.
 
 A match's start and finish times are the `occurred_at` of its `started` and `finished` events in `match_events`.

@@ -5,13 +5,22 @@ import { Arena } from '../modules/arenas/entities/arena.entity.js';
 import { Championship } from '../modules/championships/entities/championship.entity.js';
 import { Match } from '../modules/matches/entities/match.entity.js';
 import { MatchEvent } from '../modules/matches/entities/match-event.entity.js';
+import { MatchReferee } from '../modules/matches/entities/match-referee.entity.js';
 import { Robot } from '../modules/robots/entities/robot.entity.js';
 import { User } from '../modules/users/entities/user.entity.js';
 
 async function buildDataSource(): Promise<DataSource> {
     const dataSource = new DataSource({
         type: 'postgres',
-        entities: [Arena, Championship, Match, MatchEvent, Robot, User],
+        entities: [
+            Arena,
+            Championship,
+            Match,
+            MatchEvent,
+            MatchReferee,
+            Robot,
+            User,
+        ],
     });
     // buildMetadatas is protected; it only reads decorators and never connects
     await (
@@ -87,6 +96,7 @@ describe('entity metadata', () => {
             'end_reason',
             'id',
             'modified_at',
+            'referee_token',
             'robot_a_id',
             'robot_b_id',
             'scheduled_at',
@@ -96,11 +106,12 @@ describe('entity metadata', () => {
         ]);
     });
 
-    it('only the outcome, timing and audit columns of a match are nullable', async () => {
+    it('only the outcome, timing, audit and referee token columns of a match are nullable', async () => {
         expect(await nullableColumns(Match)).toEqual([
             'arena_id',
             'deleted_at',
             'end_reason',
+            'referee_token',
             'winner_robot_id',
         ]);
     });
@@ -184,12 +195,27 @@ describe('entity metadata', () => {
         ]);
     });
 
+    it('match referee references its match', async () => {
+        expect(await foreignKeys(MatchReferee)).toEqual(['match_id → matches']);
+    });
+
+    it('match referee has no soft delete or modified_at', async () => {
+        expect(await columnNames(MatchReferee)).toEqual([
+            'id',
+            'joined_at',
+            'match_id',
+            'name',
+            'seat',
+        ]);
+    });
+
     it.each([
         [User, 'UQ_users_lower_username'],
         [User, 'UQ_users_lower_email'],
         [Robot, 'UQ_robots_championship_id_lower_name'],
         [Arena, 'UQ_arenas_owner_user_id_lower_name'],
         [MatchEvent, 'UQ_match_events_once'],
+        [MatchReferee, 'UQ_match_referees_match_id_lower_name'],
     ] as const)(
         'keeps the migration-managed index %#, %s, out of synchronization',
         async (entity, name) => {
@@ -224,6 +250,7 @@ describe('entity metadata', () => {
         [MatchEvent, 'CHK_match_events_score_fields'],
         [MatchEvent, 'CHK_match_events_judge_seat'],
         [MatchEvent, 'CHK_match_events_action'],
+        [MatchReferee, 'CHK_match_referees_seat'],
     ] as const)('%o declares %s', async (entity, name) => {
         const dataSource = await buildDataSource();
 

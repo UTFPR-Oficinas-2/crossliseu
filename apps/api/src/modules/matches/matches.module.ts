@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Match } from './entities/match.entity.js';
 import { MatchEvent } from './entities/match-event.entity.js';
+import { MatchReferee } from './entities/match-referee.entity.js';
 import { Clock, SystemClock } from './fight/clock.js';
 import { FightEventsModule } from './fight/fight-events.module.js';
 import { FightTimer } from './fight/fight-timer.js';
@@ -14,7 +15,7 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Match, MatchEvent]),
+        TypeOrmModule.forFeature([Match, MatchEvent, MatchReferee]),
         ChampionshipsModule,
         FightEventsModule,
     ],
