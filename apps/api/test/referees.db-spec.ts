@@ -180,6 +180,13 @@ describe('referees (e2e)', () => {
             expect(again.body).toMatchObject({ seat: 1, name: 'Ana' });
         });
 
+        it('rejoining matches names the way the database lowercases them', async () => {
+            await join('İsa').expect(200);
+
+            const again = await join('isa').expect(200);
+            expect(again.body).toMatchObject({ seat: 1, name: 'İsa' });
+        });
+
         it('a seated name still rejoins once the seats are full', async () => {
             for (const name of ['Ana', 'Bia', 'Caio']) {
                 await join(name).expect(200);

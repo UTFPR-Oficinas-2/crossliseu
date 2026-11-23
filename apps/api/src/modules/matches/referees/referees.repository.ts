@@ -67,8 +67,12 @@ export class RefereesRepository {
             const seated = await manager.find(MatchReferee, {
                 where: { matchId: match.id },
             });
-            const lower = name.toLowerCase();
-            let referee = seated.find((r) => r.name.toLowerCase() === lower);
+            // Postgres lower(), as the unique index uses: JS toLowerCase differs on some letters
+            let referee = await manager
+                .createQueryBuilder(MatchReferee, 'referee')
+                .where('referee.matchId = :matchId', { matchId: match.id })
+                .andWhere('lower(referee.name) = lower(:name)', { name })
+                .getOne();
             if (!referee) {
                 const free = SEATS.find(
                     (seat) => !seated.some((r) => r.seat === seat),
