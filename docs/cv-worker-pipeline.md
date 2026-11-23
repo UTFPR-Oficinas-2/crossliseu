@@ -280,7 +280,7 @@ Planned: `src/arena.py` for [arena mapping](#5-arena-mapping), and a `tests/` fo
 
 ## Persistence
 
-Planned, after the pipeline works on local videos. The worker will hand `trajectories.csv` (or the same rows) and the heatmap images to the API for a given `matchId`; the API stores them and fills the match's `analysisStatus` and `heatmaps`. The upload format and the endpoint are not decided yet and will be added to this document when they are.
+**Done** (#21). The worker uploads `trajectories.csv` and the heatmap PNGs to R2 under `analyses/<matchId>/` and publishes a result on `analysis.finished` with the `matchId` and `videoKey` of the job; the API stores it on the match's video (`analysis_status`, `analysis_result`). See [Analysis jobs](recording-storage.md#analysis-jobs). Showing the status and the heatmaps in the web app is planned.
 
 ## Open questions
 
