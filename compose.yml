@@ -15,6 +15,8 @@ services:
       # Overrides .env, so the same .env also works when running the API on the host
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      # Analysis jobs for the CV worker; the API reconnects on its own (no depends_on needed)
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crossliseu}:${RABBITMQ_PASSWORD:-crossliseu}@rabbitmq:5672/
     ports:
       - "127.0.0.1:3000:3000"
 
