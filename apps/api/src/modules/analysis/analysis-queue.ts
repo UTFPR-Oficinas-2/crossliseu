@@ -9,7 +9,7 @@ import {
     type AmqpConnectionManager,
     type ChannelWrapper,
 } from 'amqp-connection-manager';
-import type { ConfirmChannel } from 'amqplib';
+import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
 
 /**
  * Queues shared with the CV worker (apps/cv-worker/src/worker.py). The names must match there.
@@ -34,6 +34,39 @@ export const PUBLISH_TIMEOUT_MS = 5_000;
 
 /** The job could not be handed to RabbitMQ (not configured, down, or no confirm in time) */
 export class AnalysisQueueUnavailable extends Error {}
+
+export const RESULT_STATUSES = ['running', 'done', 'failed'] as const;
+export type ResultStatus = (typeof RESULT_STATUSES)[number];
+
+/**
+ * Message on analysis.finished (apps/cv-worker/src/jobs.py). `details` is everything else the
+ * worker sent: for done, mock / totalFrames / trajectoriesKey / robots; for failed, error / detail.
+ */
+export interface AnalysisResult {
+    matchId: string;
+    videoKey: string;
+    status: ResultStatus;
+    details: Record<string, unknown>;
+}
+
+/**
+ * Checks a decoded analysis.finished message. null when it cannot be applied: not an object, no
+ * matchId, an unknown status, or no videoKey (a worker older than #21 never sent it, and without it
+ * the API cannot tell which video the result is for).
+ */
+export function parseAnalysisResult(raw: unknown): AnalysisResult | null {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        return null;
+    }
+    const { matchId, videoKey, status, ...details } = raw as Record<
+        string,
+        unknown
+    >;
+    if (typeof matchId !== 'string' || !matchId) return null;
+    if (typeof videoKey !== 'string' || !videoKey) return null;
+    if (!RESULT_STATUSES.includes(status as ResultStatus)) return null;
+    return { matchId, videoKey, status: status as ResultStatus, details };
+}
 
 /** RABBITMQ_URL from the environment, or null when it is not set */
 export function rabbitUrlFromEnv(
@@ -114,6 +147,66 @@ export class AnalysisQueue implements OnModuleInit, OnModuleDestroy {
             throw new AnalysisQueueUnavailable(String(error), {
                 cause: error,
             });
+        }
+    }
+
+    /**
+     * Reads analysis.finished one message at a time and hands each valid one to `handler`. The
+     * message is acked once the handler resolves. A message that cannot be parsed is dropped (it
+     * would fail the same way forever). When the handler throws (say, the database is down), the
+     * message goes back to the queue once; if it fails again it is dropped, so one bad message can
+     * never block the queue.
+     */
+    consumeResults(handler: (result: AnalysisResult) => Promise<void>) {
+        if (!this.channel) return;
+        const channel = this.channel;
+
+        void channel
+            .consume(
+                RESULT_QUEUE,
+                (message) => void this.onResult(channel, message, handler),
+                { prefetch: 1 },
+            )
+            .catch((error: unknown) =>
+                this.logger.error(
+                    `cannot consume ${RESULT_QUEUE}: ${String(error)}`,
+                ),
+            );
+    }
+
+    private async onResult(
+        channel: ChannelWrapper,
+        message: ConsumeMessage,
+        handler: (result: AnalysisResult) => Promise<void>,
+    ) {
+        let result: AnalysisResult | null = null;
+        try {
+            result = parseAnalysisResult(
+                JSON.parse(message.content.toString('utf8')),
+            );
+        } catch {
+            // Not JSON: handled as invalid below
+        }
+        if (!result) {
+            this.logger.warn('analysis_result_invalid', {
+                body: message.content.toString('utf8').slice(0, 300),
+            });
+            channel.ack(message);
+            return;
+        }
+
+        try {
+            await handler(result);
+            channel.ack(message);
+        } catch (error) {
+            const retry = !message.fields.redelivered;
+            this.logger.error('analysis_result_not_applied', {
+                matchId: result.matchId,
+                status: result.status,
+                retry,
+                error: String(error),
+            });
+            channel.nack(message, false, retry);
         }
     }
 

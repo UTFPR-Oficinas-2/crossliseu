@@ -6,7 +6,9 @@ import { AnalysisQueue } from './analysis-queue.js';
  * and reads the result back. See docs/recording-storage.md and docs/cv-worker-pipeline.md.
  */
 @Module({
-    providers: [{ provide: AnalysisQueue, useFactory: () => new AnalysisQueue() }],
+    providers: [
+        { provide: AnalysisQueue, useFactory: () => new AnalysisQueue() },
+    ],
     exports: [AnalysisQueue],
 })
 export class AnalysisModule {}

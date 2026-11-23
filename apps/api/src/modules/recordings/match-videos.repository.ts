@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { MatchVideo } from './entities/match-video.entity.js';
+import { Repository, type QueryDeepPartialEntity } from 'typeorm';
+import {
+    MatchVideo,
+    type AnalysisStatus,
+} from './entities/match-video.entity.js';
 
 @Injectable()
 export class MatchVideosRepository {
@@ -49,6 +52,34 @@ export class MatchVideosRepository {
             )
             .execute();
         return (await this.findByMatch(input.matchId))!;
+    }
+
+    /**
+     * Applies a CV worker result in one statement, and only while it still describes the match's
+     * confirmed video (`videoKey`) and the analysis is in one of `from`. Checking both in the
+     * WHERE keeps a stale or out-of-order result from overwriting a newer state, even if a
+     * re-record is confirmed at the same moment. Returns false when nothing was changed.
+     */
+    async updateAnalysis(
+        matchId: string,
+        videoKey: string,
+        from: readonly AnalysisStatus[],
+        changes: Pick<
+            MatchVideo,
+            'analysisStatus' | 'analysisError' | 'analysisResult'
+        >,
+    ): Promise<boolean> {
+        const result = await this.repository
+            .createQueryBuilder()
+            .update(MatchVideo)
+            // TypeORM's partial type does not accept a Record for a jsonb column; it is stored as is
+            .set(changes as QueryDeepPartialEntity<MatchVideo>)
+            .where('match_id = :matchId', { matchId })
+            .andWhere('object_key = :videoKey', { videoKey })
+            .andWhere("status = 'uploaded'")
+            .andWhere('analysis_status IN (:...from)', { from })
+            .execute();
+        return (result.affected ?? 0) > 0;
     }
 
     save(video: MatchVideo): Promise<MatchVideo> {
