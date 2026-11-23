@@ -3,10 +3,23 @@ import {
     Injectable,
     Logger,
     NotFoundException,
+    UnauthorizedException,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { ChampionshipsService } from '../../championships/championships.service.js';
+import { normalizeText } from '../../robots/dto/normalize.js';
+import type { JudgeSeat } from '../entities/match-event.entity.js';
+import type { SideCounts } from '../fight/score.js';
 import { RefereesRepository } from './referees.repository.js';
+
+export interface RefereeSession {
+    matchId: string;
+    seat: JudgeSeat;
+    /** As stored at the first join */
+    name: string;
+    /** This referee's own points per side */
+    counts: SideCounts;
+}
 
 /** 16 random bytes, base64url: 22 characters that fit in the /referee/:accessToken link */
 function newToken(): string {
@@ -52,5 +65,29 @@ export class RefereesService {
             throw new NotFoundException('match_not_found');
         }
         return { token };
+    }
+
+    /**
+     * Public. Seats `name` with the shared token: 401 referee_invalid_token for an unknown,
+     * deleted or closed match, 409 referee_seats_full for a fourth name.
+     */
+    async join(token: string, name: string): Promise<RefereeSession> {
+        const outcome = await this.repo.join(token, normalizeText(name));
+        if (outcome.kind === 'invalid_token') {
+            throw new UnauthorizedException('referee_invalid_token');
+        }
+        if (outcome.kind === 'seats_full') {
+            throw new ConflictException('referee_seats_full');
+        }
+        const { kind: _kind, ...session } = outcome;
+        return session;
+    }
+
+    /** The seat this credential holds on a live, not yet closed match; null otherwise */
+    resolve(
+        token: string,
+        name: string,
+    ): Promise<{ matchId: string; seat: JudgeSeat } | null> {
+        return this.repo.findSeat(token, normalizeText(name));
     }
 }

@@ -11,7 +11,10 @@ import { FightService } from './fight/fight.service.js';
 import { MatchesController } from './matches.controller.js';
 import { MatchesService } from './matches.service.js';
 import { MatchesRepository } from './matches.repository.js';
-import { RefereesController } from './referees/referees.controller.js';
+import {
+    RefereeJoinController,
+    RefereesController,
+} from './referees/referees.controller.js';
 import { RefereesRepository } from './referees/referees.repository.js';
 import { RefereesService } from './referees/referees.service.js';
 import { ChampionshipsModule } from '../championships/championships.module.js';
@@ -22,7 +25,7 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
         ChampionshipsModule,
         FightEventsModule,
     ],
-    controllers: [MatchesController, RefereesController],
+    controllers: [MatchesController, RefereesController, RefereeJoinController],
     providers: [
         MatchesService,
         MatchesRepository,
