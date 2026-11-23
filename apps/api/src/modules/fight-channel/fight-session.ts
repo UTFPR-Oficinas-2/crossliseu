@@ -13,7 +13,7 @@ import {
 } from './fight-channel-protocol.js';
 
 /** ws readyState of an open socket */
-const SOCKET_OPEN = 1;
+export const SOCKET_OPEN = 1;
 
 export type FightSocket = {
     readyState: number;
