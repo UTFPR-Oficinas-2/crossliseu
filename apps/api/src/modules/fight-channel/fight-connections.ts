@@ -49,7 +49,29 @@ export class FightConnections {
 
     /** Closes and forgets every socket of the match; one that throws on close doesn't stop the rest */
     closeMatch(matchId: string, code: number, reason: string): void {
-        for (const { socket } of this.subscribers(matchId)) {
+        this.closeAll(this.subscribers(matchId), code, reason);
+    }
+
+    /** Like closeMatch, for the sockets of one role only */
+    closeRole(
+        matchId: string,
+        role: FightAccess['role'],
+        code: number,
+        reason: string,
+    ): void {
+        this.closeAll(
+            this.subscribers(matchId).filter((s) => s.role === role),
+            code,
+            reason,
+        );
+    }
+
+    private closeAll(
+        subscribers: Subscriber[],
+        code: number,
+        reason: string,
+    ): void {
+        for (const { socket } of subscribers) {
             this.remove(socket);
             try {
                 socket.close(code, reason);

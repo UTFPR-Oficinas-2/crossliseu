@@ -8,6 +8,7 @@ import { FightConnections } from './fight-connections.js';
 import { FightStatePusher } from './fight-state-pusher.js';
 import { JwtFightAccessVerifier } from './jwt-fight-access.verifier.js';
 import { RefereeFightAccessVerifier } from './referee-fight-access.verifier.js';
+import { RefereeRevoker } from './referee-revoker.js';
 
 @Module({
     // One way only: MatchesModule must not import this module
@@ -18,6 +19,7 @@ import { RefereeFightAccessVerifier } from './referee-fight-access.verifier.js';
         RefereeFightAccessVerifier,
         FightConnections,
         FightStatePusher,
+        RefereeRevoker,
         FightChannelGateway,
     ],
 })

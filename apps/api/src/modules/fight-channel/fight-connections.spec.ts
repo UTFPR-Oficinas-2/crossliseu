@@ -87,4 +87,37 @@ describe('FightConnections', () => {
         expect(b.close).toHaveBeenCalled();
         expect(connections.hasSubscribers('m1')).toBe(false);
     });
+
+    it("closeRole closes only that role's sockets of the match", () => {
+        const referee = fakeSocket();
+        const operator = fakeSocket();
+        const elsewhere = fakeSocket();
+        connections.add('m1', 'referee', referee);
+        connections.add('m1', 'operator', operator);
+        connections.add('m2', 'referee', elsewhere);
+
+        connections.closeRole('m1', 'referee', 4001, 'bad_credentials');
+
+        expect(referee.close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(operator.close).not.toHaveBeenCalled();
+        expect(elsewhere.close).not.toHaveBeenCalled();
+        expect(connections.subscribers('m1')).toEqual([
+            { role: 'operator', socket: operator },
+        ]);
+    });
+
+    it('closeRole keeps going when one socket throws on close', () => {
+        const broken = fakeSocket();
+        broken.close.mockImplementation(() => {
+            throw new Error('gone');
+        });
+        const next = fakeSocket();
+        connections.add('m1', 'referee', broken);
+        connections.add('m1', 'referee', next);
+
+        connections.closeRole('m1', 'referee', 4001, 'bad_credentials');
+
+        expect(next.close).toHaveBeenCalled();
+        expect(connections.hasSubscribers('m1')).toBe(false);
+    });
 });
