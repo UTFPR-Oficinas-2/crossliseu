@@ -20,6 +20,21 @@ import type { ConfirmChannel } from 'amqplib';
 export const REQUEST_QUEUE = 'analysis.requested';
 export const RESULT_QUEUE = 'analysis.finished';
 
+/** Message on analysis.requested; the worker reads exactly these two fields (jobs.parse_request) */
+export interface AnalysisRequest {
+    matchId: string;
+    videoKey: string;
+}
+
+/**
+ * While RabbitMQ is down the manager keeps messages in memory until it reconnects. The caller is
+ * an HTTP request, so it gives up after this long instead of hanging.
+ */
+export const PUBLISH_TIMEOUT_MS = 5_000;
+
+/** The job could not be handed to RabbitMQ (not configured, down, or no confirm in time) */
+export class AnalysisQueueUnavailable extends Error {}
+
 /** RABBITMQ_URL from the environment, or null when it is not set */
 export function rabbitUrlFromEnv(
     env: NodeJS.ProcessEnv = process.env,
@@ -78,6 +93,28 @@ export class AnalysisQueue implements OnModuleInit, OnModuleDestroy {
             json: true,
             setup: setupQueues,
         });
+    }
+
+    /**
+     * Puts one job on analysis.requested. Resolves once RabbitMQ has stored it (a confirm channel
+     * and a persistent message, so it survives a broker restart). Throws AnalysisQueueUnavailable
+     * when that does not happen.
+     */
+    async requestAnalysis(request: AnalysisRequest): Promise<void> {
+        if (!this.channel) {
+            throw new AnalysisQueueUnavailable('RABBITMQ_URL not set');
+        }
+        try {
+            await this.channel.sendToQueue(REQUEST_QUEUE, request, {
+                persistent: true,
+                contentType: 'application/json',
+                timeout: PUBLISH_TIMEOUT_MS,
+            });
+        } catch (error) {
+            throw new AnalysisQueueUnavailable(String(error), {
+                cause: error,
+            });
+        }
     }
 
     async onModuleDestroy() {

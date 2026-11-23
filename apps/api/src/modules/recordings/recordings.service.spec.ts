@@ -1,5 +1,10 @@
 import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+    AnalysisQueueUnavailable,
+    type AnalysisQueue,
+    type AnalysisRequest,
+} from '../analysis/analysis-queue.js';
 import type { ChampionshipsService } from '../championships/championships.service.js';
 import type { Match } from '../matches/entities/match.entity.js';
 import type { MatchesService } from '../matches/matches.service.js';
@@ -60,14 +65,24 @@ interface Options {
     missingMatch?: boolean;
     owner?: boolean;
     existing?: MatchVideo | null;
+    /** RabbitMQ refuses or times out every publish */
+    queueDown?: boolean;
 }
 
 function setup({
     missingMatch = false,
     owner = true,
     existing = null,
+    queueDown = false,
 }: Options = {}) {
     const storage = new FakeStorage();
+    const published: AnalysisRequest[] = [];
+    const analysisQueue = {
+        requestAnalysis: vi.fn(async (request: AnalysisRequest) => {
+            if (queueDown) throw new AnalysisQueueUnavailable('timeout');
+            published.push(request);
+        }),
+    };
     let stored: MatchVideo | null = existing;
 
     const matchesService = {
@@ -115,8 +130,9 @@ function setup({
         championshipsService as unknown as ChampionshipsService,
         videos as unknown as MatchVideosRepository,
         storage,
+        analysisQueue as unknown as AnalysisQueue,
     );
-    return { service, storage, videos, current: () => stored };
+    return { service, storage, videos, published, current: () => stored };
 }
 
 function uploadingVideo(): MatchVideo {
@@ -406,6 +422,73 @@ describe('RecordingsService.complete', () => {
         await expect(
             service.complete(MATCH_ID, { key: KEY, size: 1 }, USER_ID),
         ).rejects.toEqual(new NotFoundException('match_not_found'));
+    });
+});
+
+describe('RecordingsService.complete: analysis job (#21)', () => {
+    it('sends the confirmed video to the worker and marks the analysis pending', async () => {
+        const { service, storage, published, current } = setup({
+            existing: uploadingVideo(),
+        });
+        storage.objects.set(KEY, 10);
+
+        await service.complete(MATCH_ID, { key: KEY, size: 10 }, USER_ID);
+
+        expect(published).toEqual([{ matchId: MATCH_ID, videoKey: KEY }]);
+        expect(current()).toMatchObject({
+            analysisStatus: 'pending',
+            analysisError: null,
+            analysisResult: null,
+        });
+    });
+
+    it('a re-record drops the old result and sends the new key', async () => {
+        const done = uploadedVideo();
+        done.analysisStatus = 'done';
+        done.analysisResult = { totalFrames: 100 };
+        const { service, storage, published, current } = setup({
+            existing: done,
+        });
+        const { key } = await service.requestUploadUrl(
+            MATCH_ID,
+            'video/mp4',
+            SIZE,
+            USER_ID,
+        );
+        storage.objects.set(key, 99);
+
+        await service.complete(MATCH_ID, { key, size: 99 }, USER_ID);
+
+        expect(published).toEqual([{ matchId: MATCH_ID, videoKey: key }]);
+        expect(current()).toMatchObject({
+            analysisStatus: 'pending',
+            analysisResult: null,
+        });
+    });
+
+    it('still confirms the upload when RabbitMQ is down, with the analysis failed', async () => {
+        const { service, storage, current } = setup({
+            existing: uploadingVideo(),
+            queueDown: true,
+        });
+        storage.objects.set(KEY, 10);
+
+        await service.complete(MATCH_ID, { key: KEY, size: 10 }, USER_ID);
+
+        expect(current()).toMatchObject({
+            status: 'uploaded',
+            analysisStatus: 'failed',
+            analysisError: 'queue_unavailable',
+        });
+    });
+
+    it('sends nothing when the upload is refused', async () => {
+        const { service, published } = setup({ existing: uploadingVideo() });
+
+        await expect(
+            service.complete(MATCH_ID, { key: KEY, size: 10 }, USER_ID),
+        ).rejects.toEqual(new ConflictException('recording_not_uploaded'));
+        expect(published).toEqual([]);
     });
 });
 

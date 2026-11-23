@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConfirmChannel } from 'amqplib';
 import {
     AnalysisQueue,
+    AnalysisQueueUnavailable,
     REQUEST_QUEUE,
     RESULT_QUEUE,
     rabbitUrlFromEnv,
@@ -44,5 +45,14 @@ describe('AnalysisQueue without RABBITMQ_URL', () => {
 
         expect(queue.connected).toBe(false);
         await expect(queue.onModuleDestroy()).resolves.toBeUndefined();
+    });
+
+    it('refuses to publish a job', async () => {
+        const queue = new AnalysisQueue(null);
+        queue.onModuleInit();
+
+        await expect(
+            queue.requestAnalysis({ matchId: 'm', videoKey: 'k' }),
+        ).rejects.toBeInstanceOf(AnalysisQueueUnavailable);
     });
 });

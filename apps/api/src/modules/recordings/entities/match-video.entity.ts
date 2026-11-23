@@ -7,6 +7,22 @@ import { User } from '../../users/entities/user.entity.js';
 export const MATCH_VIDEO_STATUSES = ['uploading', 'uploaded'] as const;
 export type MatchVideoStatus = (typeof MATCH_VIDEO_STATUSES)[number];
 
+/**
+ * The CV worker's analysis of the confirmed video (#21). null until the first upload is confirmed.
+ *
+ * pending -> the job was sent to RabbitMQ; the worker has not picked it up yet
+ * running -> the worker is processing it
+ * done    -> results are in analysis_result
+ * failed  -> see analysis_error
+ */
+export const ANALYSIS_STATUSES = [
+    'pending',
+    'running',
+    'done',
+    'failed',
+] as const;
+export type AnalysisStatus = (typeof ANALYSIS_STATUSES)[number];
+
 /** bigint comes back from Postgres as a string; a video is far below Number.MAX_SAFE_INTEGER */
 const bigintAsNumber = {
     to: (value: number | null) => value,
@@ -23,6 +39,10 @@ const bigintAsNumber = {
  */
 @Index('UQ_match_videos_match_id', ['matchId'], { unique: true })
 @Check('CHK_match_videos_status', `"status" IN ('uploading', 'uploaded')`)
+@Check(
+    'CHK_match_videos_analysis_status',
+    `"analysis_status" IN ('pending', 'running', 'done', 'failed')`,
+)
 @Entity('match_videos')
 export class MatchVideo extends BaseEntity {
     @Column({ name: 'match_id', type: 'uuid', nullable: false })
@@ -72,4 +92,16 @@ export class MatchVideo extends BaseEntity {
     @ManyToOne(() => User, { nullable: false })
     @JoinColumn({ name: 'uploaded_by_user_id' })
     uploadedBy?: Relation<User>;
+
+    /** Analysis of the confirmed video; reset to pending each time a new upload is confirmed */
+    @Column({ name: 'analysis_status', type: 'varchar', nullable: true })
+    analysisStatus: AnalysisStatus | null;
+
+    /** Error code when failed, e.g. "queue_unavailable" or the worker's "video_unreadable" */
+    @Column({ name: 'analysis_error', type: 'varchar', nullable: true })
+    analysisError: string | null;
+
+    /** The worker's result message when done (frames, positions and heatmap keys per robot) */
+    @Column({ name: 'analysis_result', type: 'jsonb', nullable: true })
+    analysisResult: Record<string, unknown> | null;
 }
