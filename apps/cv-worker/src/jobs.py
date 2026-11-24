@@ -2,9 +2,12 @@
 
 Request  (queue analysis.requested): {"matchId": "...", "videoKey": "recordings/<id>.mp4"}
 Result   (queue analysis.finished):
-    {"matchId", "status": "done", "mock": bool, "totalFrames", "trajectoriesKey",
+    {"matchId", "videoKey", "status": "done", "mock": bool, "totalFrames", "trajectoriesKey",
      "robots": {"A": {"detectedPositions", "totalFrames", "heatmapKey"}, "B": {...}}}
-    {"matchId", "status": "failed", "error": "<code>", "detail": "<text>"}
+    {"matchId", "videoKey", "status": "failed", "error": "<code>", "detail": "<text>"}
+
+videoKey is echoed back so the API can tell a result for the current video from one for a video
+the operator has since replaced by recording again.
 
 Robot 1 (blue marker) is side A of the match, robot 2 (red) is side B.
 """
@@ -66,6 +69,7 @@ def run_job(body, storage, mock_video=None):
 
     return {
         "matchId": match_id,
+        "videoKey": video_key,
         "status": "done",
         "mock": bool(mock_video),
         "totalFrames": result.total_frames,
@@ -82,9 +86,16 @@ def run_job(body, storage, mock_video=None):
 
 
 def failed_message(body, code, detail):
-    """Result message for a job that failed; matchId may be unknown for a bad message."""
+    """Result message for a job that failed; matchId and videoKey may be unknown for a bad message."""
     try:
-        match_id = json.loads(body).get("matchId")
+        message = json.loads(body)
+        match_id, video_key = message.get("matchId"), message.get("videoKey")
     except (ValueError, AttributeError):
-        match_id = None
-    return {"matchId": match_id, "status": "failed", "error": code, "detail": detail[:500]}
+        match_id = video_key = None
+    return {
+        "matchId": match_id,
+        "videoKey": video_key,
+        "status": "failed",
+        "error": code,
+        "detail": detail[:500],
+    }

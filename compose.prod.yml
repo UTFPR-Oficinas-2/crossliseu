@@ -20,6 +20,9 @@ services:
       NODE_ENV: production
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      # Analysis jobs for the CV worker. No depends_on: the API reconnects on its own, and a
+      # broken RabbitMQ must not keep the whole API from starting.
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-crossliseu}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@rabbitmq:5672/
     ports:
       - "127.0.0.1:8011:3000"
     depends_on:

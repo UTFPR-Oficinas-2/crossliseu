@@ -13,7 +13,8 @@ Each section says whether it is **done**, **in progress** or **planned**. Update
 | R2 bucket and CORS | Cloudflare (#45) | Done |
 | R2 access key | Cloudflare dashboard (#45) | Done |
 | `upload-url` and `complete` routes, `match_videos` table | `apps/api` (#45) | Done, not tested end to end |
-| Start processing after the upload | `apps/api` (#21) | Planned |
+| Start processing after the upload, store the result | `apps/api`, `apps/cv-worker` (#21) | Done, tested end to end with Docker Compose (mock video) |
+| Show the analysis and heatmaps | `apps/api`, `apps/web` (#21) | Planned |
 
 ## Flow
 
@@ -30,7 +31,7 @@ The video never goes through the API. The API only hands out a short-lived permi
     │ ◄──────────────────────────────────────────────────────────── 200    │
     │ 3. POST /matches/:id/recording/complete                              │
     │ ───────────────────────────────► │ stores the video as uploaded     │
-    │                                  │ (later: creates the analysis job)│
+    │                                  │ and sends the analysis job       │
 ```
 
 | Step | From → to | Size |
@@ -128,6 +129,9 @@ The video is stored in the `match_videos` table, one row per match:
 | `pending_object_key`, `pending_content_type` | The latest URL handed out. `complete` accepts only this key and then moves it to `object_key` / `content_type` |
 | `size_bytes` | Read from R2 on `complete`; `null` while uploading |
 | `uploaded_at`, `uploaded_by_user_id` | When it was confirmed, and who asked for the URL |
+| `analysis_status` | `pending`, `running`, `done` or `failed`; `null` until the first upload is confirmed. See [Analysis jobs](#analysis-jobs) |
+| `analysis_error` | Error code when `failed`: `queue_unavailable` (set by the API) or the worker's (`recording_not_found`, `video_unreadable`, `processing_failed`, …) |
+| `analysis_result` | `jsonb`: the worker's `done` message without `matchId` / `videoKey` / `status` (`mock`, `totalFrames`, `trajectoriesKey`, `robots`) |
 
 ### `POST /matches/:id/recording/upload-url`
 
@@ -160,7 +164,7 @@ Request:
 { "key": "recordings/6f1c….mp4", "size": 73400320 }
 ```
 
-Response `204`. The API reads the object from R2 before accepting it, then stores the video as `uploaded` with R2's size and deletes the object it replaces (with #21, this is also where the analysis job will be created). `size` has the same cap as in `upload-url`.
+Response `204`. The API reads the object from R2 before accepting it, then stores the video as `uploaded` with R2's size, deletes the object it replaces and sends the [analysis job](#analysis-jobs). `size` has the same cap as in `upload-url`.
 
 | Error | When |
 | --- | --- |
@@ -186,6 +190,29 @@ The uploaded video, with a presigned read URL made on each call (for the CV work
 
 - The URL allows `GET` of that one object for 15 minutes; ask again for a new one.
 - `404 recording_not_found` while there is no confirmed upload (none yet, or one still in progress); `404 match_not_found` for an unknown match or one that is not the caller's.
+
+## Analysis jobs
+
+**Done** (#21), in `apps/api/src/modules/analysis/` and `apps/api/src/modules/recordings/analysis-results.service.ts`. The API and the [CV worker](cv-worker-pipeline.md) talk through two durable RabbitMQ queues:
+
+```text
+ API ── analysis.requested {matchId, videoKey} ──► worker
+ API ◄── analysis.finished {matchId, videoKey, status, …} ── worker   (running, then done | failed)
+```
+
+1. `complete` sets `analysis_status = pending` (clearing any earlier result: it described the old video) and publishes the job as a persistent message on a confirm channel. If RabbitMQ does not confirm within 5 s, the upload is still confirmed (`204`) and the analysis is stored as `failed` / `queue_unavailable`.
+2. The worker downloads `videoKey`, runs the pipeline, uploads the results to `analyses/<matchId>/` and publishes `running`, then `done` or `failed`.
+3. The API reads `analysis.finished` and applies each message with one `UPDATE` that also checks the video key and the previous state:
+
+| Message | Applied when the analysis is | Sets |
+| --- | --- | --- |
+| `running` | `pending` | `running` |
+| `done` | `pending` or `running` | `done`, `analysis_result` |
+| `failed` | `pending` or `running` | `failed`, `analysis_error` |
+
+So a result for a video that was since replaced by a re-record, a duplicate (a job redone after a worker crash) or a late message changes nothing (`analysis_result_ignored` in the log). A message that is not valid JSON, has an unknown status or no `videoKey` is dropped (`analysis_result_invalid`). A message acks only once stored; if storing fails it is requeued once, then dropped.
+
+`RABBITMQ_URL` is optional for the API, like the `R2_*` variables: without it the API starts and every analysis ends `failed` / `queue_unavailable`. Compose builds it from `RABBITMQ_USER` and `RABBITMQ_PASSWORD` for both the API and the worker.
 
 ## Web app
 

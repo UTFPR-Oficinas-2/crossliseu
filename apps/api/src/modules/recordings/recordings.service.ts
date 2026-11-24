@@ -5,12 +5,14 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common';
+import { AnalysisQueue } from '../analysis/analysis-queue.js';
 import { ChampionshipsService } from '../championships/championships.service.js';
 import { MatchesService } from '../matches/matches.service.js';
 import type {
     CompleteRecordingDto,
     RecordingContentType,
 } from './dto/recording.dto.js';
+import type { MatchVideo } from './entities/match-video.entity.js';
 import { MatchVideosRepository } from './match-videos.repository.js';
 import { RecordingStorage } from './recording-storage.js';
 
@@ -49,6 +51,7 @@ export class RecordingsService {
         private readonly championshipsService: ChampionshipsService,
         private readonly videos: MatchVideosRepository,
         private readonly storage: RecordingStorage,
+        private readonly analysisQueue: AnalysisQueue,
     ) {}
 
     /**
@@ -130,7 +133,13 @@ export class RecordingsService {
         video.uploadedAt = new Date();
         video.pendingObjectKey = null;
         video.pendingContentType = null;
+        // A new video makes any earlier analysis stale
+        video.analysisStatus = 'pending';
+        video.analysisError = null;
+        video.analysisResult = null;
         await this.videos.save(video);
+
+        await this.startAnalysis(video);
 
         if (previousKey && previousKey !== key) {
             // The row is already right; a leftover object is not worth failing the request
@@ -175,6 +184,28 @@ export class RecordingsService {
                 Date.now() + READ_URL_TTL_SECONDS * 1000,
             ).toISOString(),
         };
+    }
+
+    /**
+     * Hands the confirmed video to the CV worker. The upload itself is already confirmed, so a
+     * queue problem does not fail the request: the analysis is stored as failed with
+     * queue_unavailable instead, and the operator still gets 204.
+     */
+    private async startAnalysis(video: MatchVideo) {
+        try {
+            await this.analysisQueue.requestAnalysis({
+                matchId: video.matchId,
+                videoKey: video.objectKey,
+            });
+        } catch (error) {
+            this.logger.warn('analysis_not_requested', {
+                matchId: video.matchId,
+                error: String(error),
+            });
+            video.analysisStatus = 'failed';
+            video.analysisError = 'queue_unavailable';
+            await this.videos.save(video);
+        }
     }
 
     private async assertOwned(matchId: string, userId: string) {
