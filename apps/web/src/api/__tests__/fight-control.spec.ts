@@ -47,6 +47,19 @@ describe('operator fight requests', () => {
         headers: { Authorization: 'Bearer operator-token' },
         signal,
       })
+      expect(init?.body).toBeUndefined()
     },
   )
+
+  it('sends a draw call as the JSON body of Close (#50)', async () => {
+    await sendFightCommand(snapshot.matchId, 'close', 'operator-token', signal, { draw: true })
+
+    const [url, init] = fetch.mock.calls[0]!
+    expect(String(url).endsWith('/matches/fight%20%2F%231/close?view=operator')).toBe(true)
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    expect(JSON.parse(String(init?.body))).toEqual({ draw: true })
+  })
 })

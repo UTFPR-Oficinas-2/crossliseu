@@ -108,16 +108,19 @@ export function getFightState(id: string, signal?: AbortSignal): Promise<Operato
   })
 }
 
+/** `body` only on Close: `{ draw: true }` confirms a draw instead of the proposal (#50) */
 export function sendFightCommand(
   id: string,
   command: FightCommand,
   token: string,
   signal?: AbortSignal,
+  body?: { draw?: boolean },
 ): Promise<OperatorFightState> {
   return apiRequest(`/matches/${encodeURIComponent(id)}/${command}?view=operator`, {
     method: 'POST',
     token,
     signal,
+    body,
   })
 }
 

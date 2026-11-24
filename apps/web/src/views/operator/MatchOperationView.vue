@@ -10,6 +10,7 @@ import type { MatchEndReason, MatchState } from '@/types'
 import { formatElapsed } from '@/utils/recording'
 import FightRecorderPanel, { type FightPhase } from './components/FightRecorderPanel.vue'
 import RefereeLinkPanel from './components/RefereeLinkPanel.vue'
+import ResultConfirmation from './components/ResultConfirmation.vue'
 import { useFightControl } from './use-fight-control'
 
 const { matchId } = defineProps<{ matchId: string }>()
@@ -53,9 +54,13 @@ const reasonLabel: Record<MatchEndReason, string> = {
   surrender: 'Desistência',
 }
 
+// The side that gave up: opposite the proposed winner before Close, the confirmed one after (#50)
 const loserSide = computed(() => {
-  const { winnerSide, endReason } = state.value ?? {}
-  return endReason === 'surrender' && winnerSide ? (winnerSide === 'A' ? 'B' : 'A') : null
+  const { endReason, proposal, winnerSide } = state.value ?? {}
+  if (endReason !== 'surrender') return null
+  const winner =
+    proposal?.outcome === 'A' || proposal?.outcome === 'B' ? proposal.outcome : winnerSide
+  return winner ? (winner === 'A' ? 'B' : 'A') : null
 })
 const reasonText = computed(() => {
   const reason = state.value?.endReason
@@ -91,10 +96,6 @@ watch(
 
 function confirmFinish() {
   if (window.confirm('Encerrar a luta agora?')) void command('finish')
-}
-
-function confirmClose() {
-  if (window.confirm('Fechar a luta e liberar a arena?')) void command('close')
 }
 
 function confirmResumeControls() {
@@ -170,8 +171,15 @@ function confirmResumeControls() {
             Encerrar luta
           </AppButton>
         </template>
-        <AppButton v-else :disabled="disabled" @click="confirmClose">Fechar luta</AppButton>
       </div>
+
+      <ResultConfirmation
+        v-if="state.status === 'finished'"
+        :state="state"
+        :disabled="disabled"
+        @confirm="command('close')"
+        @draw="command('close', { draw: true })"
+      />
 
       <p v-if="state.status === 'ongoing'" class="fight-card__note text-body-s">
         A luta termina quando o tempo acaba. A desistência só vale pelos botões da arena.
