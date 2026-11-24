@@ -22,8 +22,12 @@ export interface OperatorFightSnapshot extends Omit<
     /** The robots on each side, to sum the `scored` events */
     robotIds: { A: string; B: string };
     hasSelectedArena: boolean;
-    /** Side of the winning robot, set when a surrender decided the fight */
+    /** Side of the confirmed winner, set when the operator closed the fight (#50) */
     winnerSide: 'A' | 'B' | null;
+    /** True for a draw the operator confirmed */
+    draw: boolean;
+    /** Side of the robot that gave up, set when a surrender ended the fight */
+    surrenderedSide: 'A' | 'B' | null;
 }
 
 interface OperatorFightRow {
@@ -37,6 +41,8 @@ interface OperatorFightRow {
     fightRobotAId: string;
     fightRobotBId: string;
     winnerRobotId: string | null;
+    surrenderedRobotId: string | null;
+    draw: boolean;
     arenaId: string | null;
     eventType: MatchEventType | null;
     occurredAt: Date | null;
@@ -45,14 +51,18 @@ interface OperatorFightRow {
     action: ScoreAction | null;
 }
 
-function winnerSide(row: OperatorFightRow): 'A' | 'B' | null {
-    if (row.winnerRobotId === null) {
+/** The side `robotId` plays on in this fight, or null */
+function sideOf(
+    row: OperatorFightRow,
+    robotId: string | null,
+): 'A' | 'B' | null {
+    if (robotId === null) {
         return null;
     }
-    if (row.winnerRobotId === row.robotAId) {
+    if (robotId === row.fightRobotAId) {
         return 'A';
     }
-    return row.winnerRobotId === row.robotBId ? 'B' : null;
+    return robotId === row.fightRobotBId ? 'B' : null;
 }
 
 export interface LockedFight {
@@ -196,6 +206,8 @@ export class FightRepository {
             .addSelect('fight.robotAId', 'fightRobotAId')
             .addSelect('fight.robotBId', 'fightRobotBId')
             .addSelect('fight.winnerRobotId', 'winnerRobotId')
+            .addSelect('fight.surrenderedRobotId', 'surrenderedRobotId')
+            .addSelect('fight.draw', 'draw')
             .addSelect('arena.id', 'arenaId')
             .addSelect('event.type', 'eventType')
             .addSelect('event.occurredAt', 'occurredAt')
@@ -237,7 +249,9 @@ export class FightRepository {
                         : [],
             ),
             hasSelectedArena: row.arenaId !== null,
-            winnerSide: winnerSide(row),
+            winnerSide: sideOf(row, row.winnerRobotId),
+            draw: row.draw,
+            surrenderedSide: sideOf(row, row.surrenderedRobotId),
         };
     }
 

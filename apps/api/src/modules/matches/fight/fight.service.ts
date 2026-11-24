@@ -24,6 +24,7 @@ import { remainingMs, timeOutAt } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
 import { scoreTotals, seatCounts } from './score.js';
 import { proposeResult, surrenderedSide } from './fight-result.js';
+import type { ResultProposal } from './fight-result.js';
 import type { Side, SideCounts } from './score.js';
 import { transitionFor } from './fight-transitions.js';
 import type { FightCommand } from './fight-transitions.js';
@@ -46,7 +47,12 @@ export interface CommandOptions {
 export interface OperatorFightState extends FightState {
     closed: boolean;
     hasSelectedArena: boolean;
+    /** The confirmed winner: null before the fight is closed and on a draw (#50) */
     winnerSide: 'A' | 'B' | null;
+    /** True once the operator confirmed a draw */
+    draw: boolean;
+    /** What closing would confirm; only while the fight is finished and not closed */
+    proposal: ResultProposal | null;
 }
 
 export type SurrenderResult = 'done' | 'not_current_match' | 'not_ongoing';
@@ -550,12 +556,22 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         if (!snapshot) {
             throw this.notFound(matchId);
         }
-        const { events, robotIds, ...state } = snapshot;
+        const { events, robotIds, surrenderedSide, ...state } = snapshot;
+        const score = scoreTotals(events, robotIds);
+        const closed = events.some((event) => event.type === 'closed');
         return {
             ...state,
-            score: scoreTotals(events, robotIds),
+            score,
             remainingMs: remainingMs(state.status, events, this.clock.now()),
-            closed: events.some((event) => event.type === 'closed'),
+            closed,
+            proposal:
+                state.status === 'finished' && !closed
+                    ? proposeResult({
+                          endReason: state.endReason,
+                          surrenderedSide,
+                          totals: score,
+                      })
+                    : null,
         };
     }
 

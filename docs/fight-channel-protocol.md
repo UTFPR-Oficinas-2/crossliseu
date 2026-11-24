@@ -35,7 +35,13 @@ A socket follows exactly one match. To follow another, open another socket.
 | `ping` | Every 10 s on a subscribed socket | `null` |
 | `error` | A frame the server refuses; the socket stays open | `{ "code": string, "message": string }` |
 
-**Operator extras.** A socket authenticated as an operator receives the same `state` plus `closed`, `hasSelectedArena` and `winnerSide`. Referees get only the public shape.
+**Operator extras.** A socket authenticated as an operator receives the same `state` plus `closed`, `hasSelectedArena`, `winnerSide`, `draw` and `proposal`. Referees get only the public shape.
+
+- `proposal`: what closing the fight would confirm (#50), `{ "outcome": "A" | "B" | "draw", "basis": "surrender" | "points" | "tied" }`. Present only while the fight is `finished` and not closed, otherwise `null`. A surrender proposes the other side; otherwise the side with more points over the three referees, and equal points (including none) propose a draw.
+- `winnerSide`: the confirmed winner, set only once the fight is closed with a winner; `null` before that and on a draw.
+- `draw`: `true` once the fight is closed as a draw.
+
+The operator confirms with `POST /matches/:id/close` (no body: the proposal; `{ "draw": true }`: a draw). The server computes the result itself; the client never sends a winner.
 
 **Snapshots.** Every subscribe starts with a full `state`; there is no resume or diff. A socket's last frame is never older than the last committed change, including a change that lands while the first snapshot is being read.
 
