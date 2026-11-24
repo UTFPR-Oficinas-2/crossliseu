@@ -108,7 +108,10 @@ export class Match extends BaseEntity {
     surrenderedRobotId: string | null;
 
     @ManyToOne(() => Robot, { nullable: true })
-    @JoinColumn({ name: 'surrendered_robot_id' })
+    @JoinColumn({
+        name: 'surrendered_robot_id',
+        foreignKeyConstraintName: 'FK_matches_surrendered_robot_id',
+    })
     surrenderedRobot?: Relation<Robot> | null;
 
     // Arena the match was played on; written at Start, not by any DTO

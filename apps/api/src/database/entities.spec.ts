@@ -87,6 +87,16 @@ describe('entity metadata', () => {
         ]);
     });
 
+    it('names the surrendered robot FK like its migration, so migration:generate leaves it alone', async () => {
+        const dataSource = await buildDataSource();
+        const fk = dataSource
+            .getMetadata(Match)
+            .foreignKeys.find((key) =>
+                key.columnNames.includes('surrendered_robot_id'),
+            );
+        expect(fk?.name).toBe('FK_matches_surrendered_robot_id');
+    });
+
     it('match has the diagram columns', async () => {
         expect(await columnNames(Match)).toEqual([
             'arena_id',
