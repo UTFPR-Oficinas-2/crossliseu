@@ -32,6 +32,15 @@ export class RecordingsController {
         return this.recordingsService.getRecording(id, userId);
     }
 
+    /** The CV worker's analysis of the video, with presigned heatmap URLs once done (#21) */
+    @Get(':id/analysis')
+    getAnalysis(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+    ) {
+        return this.recordingsService.getAnalysis(id, userId);
+    }
+
     /** Step 1: a presigned R2 URL for one PUT of this match's video */
     @Post(':id/recording/upload-url')
     @HttpCode(HttpStatus.OK)

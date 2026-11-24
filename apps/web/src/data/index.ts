@@ -21,7 +21,12 @@ import {
   type ApiArena,
 } from '@/api/arenas'
 import { login } from '@/api/auth'
-import { markUploaded, requestUploadUrl } from '@/api/recordings'
+import {
+  getAnalysis,
+  markUploaded,
+  requestUploadUrl,
+  type ApiMatchAnalysis,
+} from '@/api/recordings'
 import {
   createMatch as postMatch,
   deleteMatch as removeMatch,
@@ -53,7 +58,9 @@ import type {
   DeviceCredentials,
   ManagedArena,
   Match,
+  MatchAnalysis,
   MatchSummary,
+  ProcessingStatus,
   Robot,
   WeightClass,
 } from '@/types'
@@ -355,6 +362,44 @@ export async function requestRecordingUpload(
 }
 
 export const confirmRecordingUpload = markUploaded
+
+const analysisStatus: Record<ApiMatchAnalysis['status'], ProcessingStatus> = {
+  pending: 'pending',
+  running: 'processing',
+  done: 'completed',
+  failed: 'failed',
+}
+
+/**
+ * GET /matches/:id/analysis (#21), or null while the match has no uploaded video yet (404
+ * analysis_not_found). Other errors propagate.
+ */
+export async function getMatchAnalysis(
+  matchId: string,
+  token: string,
+): Promise<MatchAnalysis | null> {
+  let api: ApiMatchAnalysis
+  try {
+    api = await getAnalysis(matchId, token)
+  } catch (error) {
+    if (error instanceof ApiError && error.details.includes('analysis_not_found')) return null
+    throw error
+  }
+  const status = analysisStatus[api.status]
+  return {
+    status,
+    error: api.error,
+    mock: api.mock,
+    totalFrames: api.totalFrames,
+    heatmaps: api.robots.map((robot) => ({
+      robotId: robot.robotId,
+      side: robot.side,
+      status,
+      detectedPositions: robot.detectedPositions,
+      imageUrl: robot.heatmapUrl,
+    })),
+  }
+}
 
 // The operator snapshot already matches the view's data model.
 export {

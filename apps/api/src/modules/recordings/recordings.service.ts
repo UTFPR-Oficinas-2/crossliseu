@@ -12,6 +12,7 @@ import type {
     CompleteRecordingDto,
     RecordingContentType,
 } from './dto/recording.dto.js';
+import { readAnalysisResult, type Side } from './analysis-result.js';
 import type { MatchVideo } from './entities/match-video.entity.js';
 import { MatchVideosRepository } from './match-videos.repository.js';
 import { RecordingStorage } from './recording-storage.js';
@@ -208,6 +209,57 @@ export class RecordingsService {
         }
     }
 
+    /**
+     * The CV worker's analysis of the confirmed video (#21), with a presigned read URL for each
+     * heatmap once it is done. Owner-only, like the recording. 404 analysis_not_found until a video
+     * has been confirmed. Cheap enough to poll while the analysis runs (signing is local, no R2
+     * call).
+     */
+    async getAnalysis(matchId: string, userId: string) {
+        const match = await this.assertOwned(matchId, userId);
+
+        const video = await this.videos.findByMatch(matchId);
+        if (!video?.analysisStatus) {
+            throw new NotFoundException('analysis_not_found');
+        }
+
+        const result =
+            video.analysisStatus === 'done'
+                ? readAnalysisResult(video.analysisResult)
+                : null;
+        const robotIds: Record<Side, string> = {
+            A: match.robotAId,
+            B: match.robotBId,
+        };
+        const robots = await Promise.all(
+            (result?.robots ?? []).map(async (robot) => ({
+                side: robot.side,
+                robotId: robotIds[robot.side],
+                detectedPositions: robot.detectedPositions,
+                heatmapUrl: robot.heatmapKey
+                    ? await this.storage.presignDownload(
+                          robot.heatmapKey,
+                          READ_URL_TTL_SECONDS,
+                      )
+                    : null,
+            })),
+        );
+
+        return {
+            status: video.analysisStatus,
+            error: video.analysisError,
+            mock: result?.mock ?? false,
+            totalFrames: result?.totalFrames ?? null,
+            robots,
+            // When the heatmap URLs stop working; null when there are none
+            expiresAt: robots.some((robot) => robot.heatmapUrl)
+                ? new Date(
+                      Date.now() + READ_URL_TTL_SECONDS * 1000,
+                  ).toISOString()
+                : null,
+        };
+    }
+
     private async assertOwned(matchId: string, userId: string) {
         // 404 match_not_found when it does not exist
         const match = await this.matchesService.findOne(matchId);
@@ -220,5 +272,6 @@ export class RecordingsService {
             this.logger.warn('match_not_found', { id: matchId });
             throw new NotFoundException('match_not_found');
         }
+        return match;
     }
 }

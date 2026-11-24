@@ -14,7 +14,8 @@ Each section says whether it is **done**, **in progress** or **planned**. Update
 | R2 access key | Cloudflare dashboard (#45) | Done |
 | `upload-url` and `complete` routes, `match_videos` table | `apps/api` (#45) | Done, not tested end to end |
 | Start processing after the upload, store the result | `apps/api`, `apps/cv-worker` (#21) | Done, tested end to end with Docker Compose (mock video) |
-| Show the analysis and heatmaps | `apps/api`, `apps/web` (#21) | Planned |
+| Show the analysis and heatmaps on the operator screen | `apps/api`, `apps/web` (#21) | Done |
+| Show the heatmaps on the public match page | `apps/api`, `apps/web` | Planned (the page is still a placeholder) |
 
 ## Flow
 
@@ -211,6 +212,31 @@ The uploaded video, with a presigned read URL made on each call (for the CV work
 | `failed` | `pending` or `running` | `failed`, `analysis_error` |
 
 So a result for a video that was since replaced by a re-record, a duplicate (a job redone after a worker crash) or a late message changes nothing (`analysis_result_ignored` in the log). A message that is not valid JSON, has an unknown status or no `videoKey` is dropped (`analysis_result_invalid`). A message acks only once stored; if storing fails it is requeued once, then dropped.
+
+### `GET /matches/:id/analysis`
+
+The analysis of the confirmed video, owner-only like the recording routes. Response `200`:
+
+```json
+{
+  "status": "done",
+  "error": null,
+  "mock": false,
+  "totalFrames": 450,
+  "robots": [
+    { "side": "A", "robotId": "…", "detectedPositions": 440, "heatmapUrl": "https://<ACCOUNT_ID>.r2.cloudflarestorage.com/crossliseu-videos/analyses/…/heatmap_robot1.png?X-Amz-…" },
+    { "side": "B", "robotId": "…", "detectedPositions": 12, "heatmapUrl": "…" }
+  ],
+  "expiresAt": "2026-11-23T23:15:00.000Z"
+}
+```
+
+- `robots` is empty and nothing is signed until `done`, so the web app polls it every 3 s while the analysis is `pending` or `running`. The heatmap URLs work for 15 minutes; the web app asks again when an image fails to load.
+- `analysis_result` is written by another program, so it is read field by field and only keys under `analyses/` are ever signed.
+- `mock: true` means the worker ran on its test video (`CV_MOCK_VIDEO`), and the screen says so.
+- `404 analysis_not_found` until a video has been confirmed; `404 match_not_found` as in the other routes.
+
+The operator screen (`/operator/:matchId`) shows it in `MatchAnalysisPanel`, under the recorder: the status while it runs, then one heatmap per side.
 
 `RABBITMQ_URL` is optional for the API, like the `R2_*` variables: without it the API starts and every analysis ends `failed` / `queue_unavailable`. Compose builds it from `RABBITMQ_USER` and `RABBITMQ_PASSWORD` for both the API and the worker.
 

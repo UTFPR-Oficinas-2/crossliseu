@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { MatchEndReason, MatchState } from '@/types'
 import { formatElapsed } from '@/utils/recording'
 import FightRecorderPanel, { type FightPhase } from './components/FightRecorderPanel.vue'
+import MatchAnalysisPanel from './components/MatchAnalysisPanel.vue'
 import RefereeLinkPanel from './components/RefereeLinkPanel.vue'
 import ResultConfirmation from './components/ResultConfirmation.vue'
 import { useFightControl } from './use-fight-control'
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   fightStatus: [matchId: string, status: MatchState, hasSelectedArena: boolean]
 }>()
 const auth = useAuthStore()
+/** Confirmed uploads on this screen; each one makes the analysis panel read again */
+const uploads = ref(0)
 // "Back to the operation" is the picker of the match's championship; /manage if it can't be told
 const championshipId = ref<string | null>(null)
 const operatorHome = computed<RouteLocationRaw>(() =>
@@ -244,10 +247,26 @@ function confirmResumeControls() {
     :key="matchId"
     :match-id="matchId"
     :fight-phase="phaseByStatus[state.status]"
+    @uploaded="uploads++"
+  />
+
+  <MatchAnalysisPanel
+    v-if="state"
+    :key="`analysis-${matchId}`"
+    class="fight-analysis"
+    :match-id="matchId"
+    :robots="{ A: state.robots.A.name, B: state.robots.B.name }"
+    :uploads="uploads"
   />
 </template>
 
 <style scoped>
+/* Same column as the recorder above it */
+.fight-analysis {
+  max-width: 720px;
+  margin-top: var(--space-6);
+}
+
 .fight-side {
   display: flex;
   flex-direction: column;
