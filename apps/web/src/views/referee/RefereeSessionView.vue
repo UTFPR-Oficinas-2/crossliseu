@@ -62,7 +62,7 @@ onBeforeUnmount(() => referee.dispose())
     :robots="{ A: referee.fight.robots.A.name, B: referee.fight.robots.B.name }"
     :score="referee.fight.score"
     :end-reason="referee.fight.endReason"
-    :winner-side="referee.winnerSide"
+    :surrendered-side="referee.surrenderedSide"
   />
 </template>
 

@@ -10,6 +10,8 @@ const snapshot: OperatorFightState = {
   score: { A: 0, B: 0 },
   closed: false,
   winnerSide: null,
+  draw: false,
+  proposal: null,
   hasSelectedArena: true,
 }
 

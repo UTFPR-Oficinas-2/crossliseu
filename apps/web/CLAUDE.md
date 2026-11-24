@@ -152,8 +152,10 @@ slots. Each component's Figma description repeats its Vue file and props.
   The web app has no surrender buttons; the operator ends the fight (`manual`) and can
   correct the reason before closing it (#57).
 - `endReason` labels: `time_out` = TEMPO ESGOTADO, `manual` = ENCERRADA PELO OPERADOR,
-  `surrender` = DESISTÊNCIA DO LADO A / B (the side opposite `winnerRobotId`);
-  `winnerRobotId: null` = EMPATE.
+  `surrender` = DESISTÊNCIA DO LADO A / B (the side of `surrenderedRobotId`, the robot that gave up).
+- The official result is confirmed when the operator closes the fight (#50): `winnerRobotId` is
+  the confirmed winner and `draw: true` = EMPATE. A finished fight with neither is still waiting
+  for confirmation, so never read `winnerRobotId: null` alone as EMPATE.
 - Arenas are global (not per championship), one ESP32 box each.
 - Referees join with the match's shared link and their name, without an account; the same name
   gets the same seat back, and the phone remembers it to rejoin after a reload. No "ready" step and

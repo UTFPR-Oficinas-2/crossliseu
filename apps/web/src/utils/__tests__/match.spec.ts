@@ -16,8 +16,12 @@ describe('endReasonLabel', () => {
     expect(endReasonLabel('manual', null)).toBe('Encerrada pelo operador')
   })
 
-  it('names the side that surrendered: the loser', () => {
-    expect(endReasonLabel('surrender', 'A')).toBe('Desistência do lado B')
-    expect(endReasonLabel('surrender', 'B')).toBe('Desistência do lado A')
+  it('names the side that surrendered', () => {
+    expect(endReasonLabel('surrender', 'A')).toBe('Desistência do lado A')
+    expect(endReasonLabel('surrender', 'B')).toBe('Desistência do lado B')
+  })
+
+  it('a surrender whose side is unknown reads as a plain surrender', () => {
+    expect(endReasonLabel('surrender', null)).toBe('Desistência')
   })
 })

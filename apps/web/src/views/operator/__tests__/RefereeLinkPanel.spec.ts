@@ -25,6 +25,8 @@ function fightState(overrides: Partial<OperatorFightState> = {}): OperatorFightS
     closed: false,
     hasSelectedArena: false,
     winnerSide: null,
+    draw: false,
+    proposal: null,
     ...overrides,
   }
 }

@@ -113,6 +113,8 @@ export interface MatchResult {
   endReason: MatchEndReason
   /** `null` on a draw (EMPATE) */
   winnerRobotId: string | null
+  /** A confirmed draw; a finished fight with neither a winner nor a draw is still unconfirmed */
+  draw: boolean
   scoreA: number
   scoreB: number
 }
