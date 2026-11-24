@@ -11,6 +11,7 @@ vi.mock('@/api/championships', () => ({
   listMyChampionships: vi.fn<typeof championshipsApi.listMyChampionships>(),
   createChampionship: vi.fn<typeof championshipsApi.createChampionship>(),
   updateChampionship: vi.fn<typeof championshipsApi.updateChampionship>(),
+  deleteChampionship: vi.fn<typeof championshipsApi.deleteChampionship>(),
 }))
 vi.mock('@/api/arenas', () => ({
   listArenas: vi.fn<typeof arenasApi.listArenas>(),
@@ -46,6 +47,7 @@ import {
   type ApiArena,
 } from '@/api/arenas'
 import {
+  deleteChampionship,
   getChampionship as fetchChampionship,
   listMyChampionships,
   type ApiChampionship,
@@ -67,6 +69,7 @@ import {
   getMyArenas,
   newArenaToken,
   removeArena,
+  removeChampionship,
   renameArena,
   getArenas,
   getChampionship,
@@ -318,6 +321,13 @@ describe('@/data', () => {
     expect(rotateArenaToken).toHaveBeenCalledWith('a1', 't')
     await removeArena('a1', 't')
     expect(deleteArena).toHaveBeenCalledWith('a1', 't')
+  })
+
+  it('removes a championship', async () => {
+    vi.mocked(deleteChampionship).mockResolvedValue(undefined)
+
+    await removeChampionship('c1', 't')
+    expect(deleteChampionship).toHaveBeenCalledWith('c1', 't')
   })
 
   it('lets arena errors through as ApiError', async () => {

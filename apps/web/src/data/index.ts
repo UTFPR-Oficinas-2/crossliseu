@@ -4,6 +4,7 @@
 import { ApiError } from '@/api/client'
 import {
   createChampionship as postChampionship,
+  deleteChampionship,
   getChampionship as fetchChampionship,
   listChampionships,
   listMyChampionships,
@@ -285,6 +286,11 @@ export async function renameArena(id: string, name: string, token: string): Prom
 /** POST /arenas/:id/token (JWT). The old token stops working; refused while a match is live. */
 export async function newArenaToken(id: string, token: string): Promise<DeviceCredentials> {
   return rotateArenaToken(id, token)
+}
+
+/** DELETE /championships/:id (JWT). Refused while a match is live. */
+export async function removeChampionship(id: string, token: string): Promise<void> {
+  return deleteChampionship(id, token)
 }
 
 /** DELETE /arenas/:id (JWT). Refused while a match is live. */
