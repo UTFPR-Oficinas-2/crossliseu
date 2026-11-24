@@ -183,4 +183,141 @@ describe('migrations on a fresh database', () => {
             await expect(ds.runMigrations()).rejects.toThrow('no live user');
         });
     });
+
+    describe('MatchResult', () => {
+        const MIGRATION = 'MatchResult1794700000000';
+
+        interface ResultRow {
+            id: string;
+            winner_robot_id: string | null;
+            surrendered_robot_id: string | null;
+            draw: boolean;
+        }
+
+        async function undoThrough(name: string): Promise<void> {
+            while (
+                (
+                    await ds.query(
+                        `SELECT 1 FROM "migrations" WHERE "name" = $1`,
+                        [name],
+                    )
+                ).length > 0
+            ) {
+                await ds.undoLastMigration();
+            }
+        }
+
+        async function columnsOfMatches(): Promise<string[]> {
+            const rows: { column_name: string }[] = await ds.query(
+                `SELECT column_name FROM information_schema.columns
+                 WHERE table_name = 'matches' ORDER BY column_name`,
+            );
+            return rows.map((row) => row.column_name);
+        }
+
+        /** A surrender match between A and B that B won; `closed` adds a `closed` event */
+        async function insertSurrender(
+            owner: { user: string; championship: string; a: string; b: string },
+            closed: boolean,
+        ): Promise<string> {
+            const [row]: { id: string }[] = await ds.query(
+                `INSERT INTO "matches" ("weight_class", "state", "end_reason", "championship_id",
+                    "robot_a_id", "robot_b_id", "winner_robot_id", "created_by_user_id")
+                 VALUES ('antweight', 'finished', 'surrender', $1, $2, $3, $3, $4) RETURNING "id"`,
+                [owner.championship, owner.a, owner.b, owner.user],
+            );
+            const id = row!.id;
+            await ds.query(
+                `INSERT INTO "match_events" ("match_id", "type", "occurred_at")
+                 VALUES ($1, 'finished', now())`,
+                [id],
+            );
+            if (closed) {
+                await ds.query(
+                    `INSERT INTO "match_events" ("match_id", "type", "occurred_at")
+                     VALUES ($1, 'closed', now() + interval '1 second')`,
+                    [id],
+                );
+            }
+            return id;
+        }
+
+        beforeEach(async () => {
+            await ds.runMigrations();
+            await ds.query(
+                `TRUNCATE "users", "championships", "robots", "matches", "match_events" CASCADE`,
+            );
+            await undoThrough(MIGRATION);
+        });
+
+        afterEach(async () => {
+            await ds.query(
+                `TRUNCATE "users", "championships", "robots", "matches", "match_events" CASCADE`,
+            );
+            await ds.runMigrations();
+        });
+
+        it('records who surrendered and keeps the winner only on closed fights', async () => {
+            const [user]: { id: string }[] = await ds.query(
+                `INSERT INTO "users" ("username", "email", "password")
+                 VALUES ('op', 'op@example.com', 'pw') RETURNING "id"`,
+            );
+            const [championship]: { id: string }[] = await ds.query(
+                `INSERT INTO "championships" ("name", "start_date", "end_date", "created_by_user_id")
+                 VALUES ('Cup', now(), now(), $1) RETURNING "id"`,
+                [user!.id],
+            );
+            const robots: { id: string }[] = await ds.query(
+                `INSERT INTO "robots" ("name", "weight_class", "team", "championship_id", "created_by_user_id")
+                 VALUES ('A', 'antweight', 'T', $1, $2), ('B', 'antweight', 'T', $1, $2)
+                 RETURNING "id"`,
+                [championship!.id, user!.id],
+            );
+            const owner = {
+                user: user!.id,
+                championship: championship!.id,
+                a: robots[0]!.id,
+                b: robots[1]!.id,
+            };
+            const open = await insertSurrender(owner, false);
+            const closed = await insertSurrender(owner, true);
+
+            await ds.runMigrations();
+
+            const rows: ResultRow[] = await ds.query(
+                `SELECT "id", "winner_robot_id", "surrendered_robot_id", "draw" FROM "matches"`,
+            );
+            expect(rows.find((row) => row.id === open)).toEqual({
+                id: open,
+                winner_robot_id: null,
+                surrendered_robot_id: owner.a,
+                draw: false,
+            });
+            expect(rows.find((row) => row.id === closed)).toEqual({
+                id: closed,
+                winner_robot_id: owner.b,
+                surrendered_robot_id: owner.a,
+                draw: false,
+            });
+        });
+
+        it('refuses a match with both a winner and a draw', async () => {
+            await ds.runMigrations();
+            const [check]: { def: string }[] = await ds.query(
+                `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+                 WHERE conname = 'CHK_matches_result'`,
+            );
+            expect(check?.def).toContain('draw');
+            expect(check?.def).toContain('winner_robot_id');
+        });
+
+        it('rolls back to no result columns', async () => {
+            await ds.runMigrations();
+            await undoThrough(MIGRATION);
+
+            const columns = await columnsOfMatches();
+            expect(columns).not.toContain('draw');
+            expect(columns).not.toContain('surrendered_robot_id');
+        });
+    });
 });

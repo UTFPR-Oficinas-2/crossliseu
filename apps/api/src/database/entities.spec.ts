@@ -82,6 +82,7 @@ describe('entity metadata', () => {
             'created_by_user_id → users',
             'robot_a_id → robots',
             'robot_b_id → robots',
+            'surrendered_robot_id → robots',
             'winner_robot_id → robots',
         ]);
     });
@@ -93,6 +94,7 @@ describe('entity metadata', () => {
             'created_at',
             'created_by_user_id',
             'deleted_at',
+            'draw',
             'end_reason',
             'id',
             'modified_at',
@@ -100,6 +102,7 @@ describe('entity metadata', () => {
             'robot_a_id',
             'robot_b_id',
             'state',
+            'surrendered_robot_id',
             'weight_class',
             'winner_robot_id',
         ]);
@@ -111,6 +114,7 @@ describe('entity metadata', () => {
             'deleted_at',
             'end_reason',
             'referee_token',
+            'surrendered_robot_id',
             'winner_robot_id',
         ]);
     });
