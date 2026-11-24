@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter, type RouteLocationRaw } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
@@ -11,6 +11,7 @@ import type { MatchEndReason, MatchState } from '@/types'
 import { formatElapsed } from '@/utils/recording'
 import FightRecorderPanel, { type FightPhase } from './components/FightRecorderPanel.vue'
 import RefereeLinkPanel from './components/RefereeLinkPanel.vue'
+import ResultConfirmation from './components/ResultConfirmation.vue'
 import { useFightControl } from './use-fight-control'
 
 const { matchId } = defineProps<{ matchId: string }>()
@@ -18,7 +19,6 @@ const emit = defineEmits<{
   fightStatus: [matchId: string, status: MatchState, hasSelectedArena: boolean]
 }>()
 const auth = useAuthStore()
-const router = useRouter()
 // "Back to the operation" is the picker of the match's championship; /manage if it can't be told
 const championshipId = ref<string | null>(null)
 const operatorHome = computed<RouteLocationRaw>(() =>
@@ -46,7 +46,6 @@ const {
   busy,
   error,
   uncertainCommand,
-  confirmedCloseMatchId,
   refresh,
   resumeControls,
   command,
@@ -73,10 +72,10 @@ const reasonLabel: Record<MatchEndReason, string> = {
   surrender: 'Desistência',
 }
 
-const loserSide = computed(() => {
-  const { winnerSide, endReason } = state.value ?? {}
-  return endReason === 'surrender' && winnerSide ? (winnerSide === 'A' ? 'B' : 'A') : null
-})
+// The side that gave up, from the server; kept after Close, even when closed as a draw (#50)
+const loserSide = computed(() =>
+  state.value?.endReason === 'surrender' ? state.value.surrenderedSide : null,
+)
 const reasonText = computed(() => {
   const reason = state.value?.endReason
   if (!reason) return ''
@@ -100,21 +99,11 @@ watch(state, (snapshot) => {
   if (snapshot) emit('fightStatus', snapshot.matchId, snapshot.status, snapshot.hasSelectedArena)
 })
 
-// The route guard may keep this view open so the operator can save the recording.
-watch(
-  confirmedCloseMatchId,
-  async (closedId) => {
-    if (closedId === matchId) await router.push(operatorHome.value)
-  },
-  { flush: 'post' },
-)
+// A confirmed Close stays on this view so the operator sees the official result (#50); they
+// leave with "Voltar à operação", where the route guard still protects an unsent recording.
 
 function confirmFinish() {
   if (window.confirm('Encerrar a luta agora?')) void command('finish')
-}
-
-function confirmClose() {
-  if (window.confirm('Fechar a luta e liberar a arena?')) void command('close')
 }
 
 function confirmResumeControls() {
@@ -190,8 +179,15 @@ function confirmResumeControls() {
             Encerrar luta
           </AppButton>
         </template>
-        <AppButton v-else :disabled="disabled" @click="confirmClose">Fechar luta</AppButton>
       </div>
+
+      <ResultConfirmation
+        v-if="state.status === 'finished'"
+        :state="state"
+        :disabled="disabled"
+        @confirm="command('close')"
+        @draw="command('close', { draw: true })"
+      />
 
       <p v-if="state.status === 'ongoing'" class="fight-card__note text-body-s">
         A luta termina quando o tempo acaba. A desistência só vale pelos botões da arena.

@@ -41,6 +41,9 @@ function snapshot(overrides: Partial<OperatorFightState> = {}): OperatorFightSta
     score: { A: 0, B: 0 },
     closed: false,
     winnerSide: null,
+    draw: false,
+    proposal: null,
+    surrenderedSide: null,
     hasSelectedArena: true,
     ...overrides,
   }
@@ -366,6 +369,32 @@ describe('useFightControl', () => {
     expect(fight.state.value).toMatchObject({ status: 'paused', remainingMs: 160_000 })
     expect(fight.busy.value).toBe(false)
     expect(fight.error.value).toBeNull()
+  })
+
+  it('ignores a frame with a malformed draw or proposal (#50)', () => {
+    const fight = startWith(finished)
+    channel().push({ ...finished, draw: 'no' })
+    channel().push({ ...finished, proposal: { outcome: 'C', basis: 'points' } })
+    channel().push({ ...finished, proposal: { outcome: 'A', basis: 'luck' } })
+    channel().push({ ...finished, proposal: undefined })
+    channel().push({ ...finished, surrenderedSide: 'C' })
+    expect(fight.state.value).toEqual(finished)
+
+    const proposed = { ...finished, proposal: { outcome: 'A', basis: 'points' } as const }
+    channel().push(proposed)
+    expect(fight.state.value).toEqual(proposed)
+  })
+
+  it('sends a draw call with Close', async () => {
+    post.mockResolvedValueOnce({ ...closed, draw: true })
+    const fight = startWith(finished)
+
+    await fight.command('close', { draw: true })
+
+    expect(post).toHaveBeenCalledExactlyOnceWith('m1', 'close', 'jwt', expect.any(AbortSignal), {
+      draw: true,
+    })
+    expect(fight.confirmedCloseMatchId.value).toBe('m1')
   })
 
   it('navigates on a confirmed Close even when a frame arrived first', async () => {

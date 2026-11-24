@@ -160,6 +160,27 @@ describe('referees on the live channel (e2e)', () => {
         expect(first.data).not.toHaveProperty('closed');
     });
 
+    it('after finish a referee gets the public state, without the proposal or the draw (#50)', async () => {
+        await command('start');
+        await command('finish');
+        const operator = await subscribe(jwt);
+        const referee = await subscribe(shared, 'Ana');
+
+        const [operatorFrame, refereeFrame] = await Promise.all([
+            within(operator.next(), 2_000),
+            within(referee.next(), 2_000),
+        ]);
+
+        expect(operatorFrame.data).toMatchObject({
+            status: 'finished',
+            proposal: { outcome: 'draw', basis: 'tied' },
+            draw: false,
+        });
+        expect(refereeFrame.data).toMatchObject({ status: 'finished' });
+        expect(refereeFrame.data).not.toHaveProperty('proposal');
+        expect(refereeFrame.data).not.toHaveProperty('draw');
+    });
+
     it('a score POST reaches another subscribed socket within 1 s', async () => {
         await command('start');
         const operator = await subscribed(jwt);

@@ -111,6 +111,14 @@ function setup({
         written: [] as MatchEvent[],
     };
 
+    const sideOf = (robotId: string | null) =>
+        robotId === null
+            ? null
+            : robotId === store.match.robotAId
+              ? ('A' as const)
+              : robotId === store.match.robotBId
+                ? ('B' as const)
+                : null;
     const clock = new FixedClock(now);
     const repo = {
         findOngoingIds: vi.fn(() =>
@@ -141,12 +149,11 @@ function setup({
                           },
                           events: [...store.events],
                           hasSelectedArena: store.arenaPointer !== null,
-                          winnerSide: !store.match.winnerRobotId
-                              ? null
-                              : store.match.winnerRobotId ===
-                                  store.match.robotA?.id
-                                ? 'A'
-                                : 'B',
+                          winnerSide: sideOf(store.match.winnerRobotId),
+                          draw: store.match.draw ?? false,
+                          surrenderedSide: sideOf(
+                              store.match.surrenderedRobotId ?? null,
+                          ),
                       },
             ),
         ),
@@ -263,6 +270,130 @@ describe('FightService', () => {
             closed: false,
             hasSelectedArena: true,
             winnerSide: null,
+            draw: false,
+            proposal: null,
+            surrenderedSide: null,
+        });
+    });
+
+    describe('operator state carries the proposal and the confirmed result (#50)', () => {
+        function finishedFight(
+            endReason: 'time_out' | 'surrender',
+            points: { A: number; B: number },
+            surrendered: 'a' | 'b' | null = null,
+        ) {
+            const fight = setup({
+                state: 'finished',
+                arenaId: ARENA_ID,
+                events: [
+                    event('started', T0),
+                    ...Array.from({ length: points.A }, (_, i) =>
+                        scoredEvent('a', 1, 1, at(1000 + i)),
+                    ),
+                    ...Array.from({ length: points.B }, (_, i) =>
+                        scoredEvent('b', 2, 1, at(2000 + i)),
+                    ),
+                    event('finished', at(90_000)),
+                ],
+                now: at(100_000),
+            });
+            fight.store.match.endReason = endReason;
+            fight.store.match.surrenderedRobotId = surrendered;
+            return fight;
+        }
+
+        it('a surrender of A, not closed, proposes B and has no confirmed winner', async () => {
+            const { service } = finishedFight('surrender', { A: 2, B: 0 }, 'a');
+
+            expect(await service.operatorState(MATCH_ID)).toMatchObject({
+                proposal: { outcome: 'B', basis: 'surrender' },
+                winnerSide: null,
+                draw: false,
+                closed: false,
+                surrenderedSide: 'A',
+            });
+        });
+
+        it('a time-out at 4-2 proposes A by points', async () => {
+            const { service } = finishedFight('time_out', { A: 4, B: 2 });
+
+            expect((await service.operatorState(MATCH_ID)).proposal).toEqual({
+                outcome: 'A',
+                basis: 'points',
+            });
+        });
+
+        it('equal points propose a draw', async () => {
+            const { service } = finishedFight('time_out', { A: 1, B: 1 });
+
+            expect((await service.operatorState(MATCH_ID)).proposal).toEqual({
+                outcome: 'draw',
+                basis: 'tied',
+            });
+        });
+
+        it('an ongoing fight has no proposal', async () => {
+            const { service } = setup({
+                state: 'ongoing',
+                events: [event('started', T0)],
+                now: at(10_000),
+            });
+
+            expect((await service.operatorState(MATCH_ID)).proposal).toBeNull();
+        });
+
+        it('after closing with a winner: the confirmed side, no proposal', async () => {
+            const { service } = finishedFight('time_out', { A: 4, B: 2 });
+
+            expect(
+                await service.operatorCommand(MATCH_ID, 'close', USER_ID),
+            ).toMatchObject({
+                closed: true,
+                winnerSide: 'A',
+                draw: false,
+                proposal: null,
+            });
+        });
+
+        it('after closing as a draw: draw, no winner, no proposal', async () => {
+            const { service } = finishedFight('time_out', { A: 4, B: 2 });
+
+            expect(
+                await service.operatorCommand(MATCH_ID, 'close', USER_ID, {
+                    draw: true,
+                }),
+            ).toMatchObject({
+                closed: true,
+                winnerSide: null,
+                draw: true,
+                proposal: null,
+            });
+        });
+
+        it('a surrender closed as a draw still names the side that gave up', async () => {
+            const { service } = finishedFight('surrender', { A: 0, B: 0 }, 'a');
+
+            expect(
+                await service.operatorCommand(MATCH_ID, 'close', USER_ID, {
+                    draw: true,
+                }),
+            ).toMatchObject({
+                closed: true,
+                draw: true,
+                winnerSide: null,
+                surrenderedSide: 'A',
+            });
+        });
+
+        it('the public state shows neither the proposal nor the draw', async () => {
+            const { service } = finishedFight('surrender', { A: 0, B: 0 }, 'a');
+
+            const state = await service.state(MATCH_ID);
+
+            expect(state).not.toHaveProperty('proposal');
+            expect(state).not.toHaveProperty('draw');
+            expect(state).not.toHaveProperty('winnerSide');
+            expect(state).not.toHaveProperty('surrenderedSide');
         });
     });
 
@@ -434,6 +565,162 @@ describe('FightService', () => {
         await service.command(MATCH_ID, 'close', USER_ID);
 
         expect(store.written.map((e) => e.type)).toEqual(['closed']);
+    });
+
+    describe('close confirms the official result (#50)', () => {
+        /** A finished fight with `endReason` and the referees' points as scored events */
+        function finished(
+            endReason: 'time_out' | 'manual' | 'surrender',
+            points: { A: number; B: number },
+            surrendered: 'a' | 'b' | null = null,
+        ) {
+            const scores = [
+                ...Array.from({ length: points.A }, (_, i) =>
+                    scoredEvent('a', 1, 1, at(1000 + i)),
+                ),
+                ...Array.from({ length: points.B }, (_, i) =>
+                    scoredEvent('b', 2, 1, at(2000 + i)),
+                ),
+            ];
+            const fight = setup({
+                state: 'finished',
+                events: [
+                    event('started', T0),
+                    ...scores,
+                    event('finished', at(90_000)),
+                ],
+                now: at(100_000),
+            });
+            fight.store.match.endReason = endReason;
+            fight.store.match.surrenderedRobotId = surrendered;
+            return fight;
+        }
+
+        it('after a time-out writes the side with more points as winner', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 3 });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.winnerRobotId).toBe('a');
+            expect(store.match.draw ?? false).toBe(false);
+            expect(store.written.map((e) => e.type)).toEqual(['closed']);
+        });
+
+        it('after a manual finish with equal points writes a draw and no winner', async () => {
+            const { service, store } = finished('manual', { A: 2, B: 2 });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.draw).toBe(true);
+            expect(store.match.winnerRobotId ?? null).toBeNull();
+        });
+
+        it('with no points at all writes a draw', async () => {
+            const { service, store } = finished('time_out', { A: 0, B: 0 });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.draw).toBe(true);
+            expect(store.match.winnerRobotId ?? null).toBeNull();
+        });
+
+        it('after a surrender of A writes B as winner, whatever the points', async () => {
+            const { service, store } = finished(
+                'surrender',
+                { A: 4, B: 0 },
+                'a',
+            );
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.winnerRobotId).toBe('b');
+            expect(store.match.draw ?? false).toBe(false);
+        });
+
+        it('a draw call writes a draw over a winning proposal', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 1 });
+
+            await service.command(MATCH_ID, 'close', USER_ID, { draw: true });
+
+            expect(store.match.draw).toBe(true);
+            expect(store.match.winnerRobotId ?? null).toBeNull();
+        });
+
+        it('the operator variant takes the draw call too', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 1 });
+
+            const state = await service.operatorCommand(
+                MATCH_ID,
+                'close',
+                USER_ID,
+                { draw: true },
+            );
+
+            expect(store.match.draw).toBe(true);
+            expect(state.closed).toBe(true);
+        });
+
+        it('a second close is 409 and leaves the result as confirmed', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 3 });
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            await expect(
+                service.command(MATCH_ID, 'close', USER_ID, { draw: true }),
+            ).rejects.toThrow(
+                new ConflictException('match_invalid_transition'),
+            );
+
+            expect(store.match.winnerRobotId).toBe('a');
+            expect(store.match.draw ?? false).toBe(false);
+            expect(store.written.map((e) => e.type)).toEqual(['closed']);
+        });
+
+        it.each<MatchState>(['scheduled', 'ongoing', 'paused'])(
+            'close from %s is 409 and writes no result',
+            async (state) => {
+                const { service, store } = setup({
+                    state,
+                    events: state === 'scheduled' ? [] : [event('started', T0)],
+                    now: at(10_000),
+                });
+                if (state === 'paused') {
+                    store.events.push(event('paused', at(5_000)));
+                }
+
+                await expect(
+                    service.command(MATCH_ID, 'close', USER_ID),
+                ).rejects.toThrow(
+                    new ConflictException('match_invalid_transition'),
+                );
+
+                expect(store.match.winnerRobotId ?? null).toBeNull();
+                expect(store.match.draw ?? false).toBe(false);
+                expect(store.written).toEqual([]);
+            },
+        );
+
+        it('close of an ongoing fight whose time ran out settles the time-out and writes the points winner', async () => {
+            const { service, store } = setup({
+                state: 'ongoing',
+                events: [
+                    event('started', T0),
+                    scoredEvent('a', 1, 1, at(1000)),
+                    scoredEvent('a', 2, 1, at(1001)),
+                    scoredEvent('a', 3, 1, at(1002)),
+                    scoredEvent('b', 1, 1, at(1003)),
+                ],
+                now: at(200_000),
+            });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.endReason).toBe('time_out');
+            expect(store.match.winnerRobotId).toBe('a');
+            expect(store.written.map((e) => e.type)).toEqual([
+                'finished',
+                'closed',
+            ]);
+        });
     });
 
     it('every disallowed command is 409 match_invalid_transition', async () => {
@@ -941,14 +1228,16 @@ describe('FightService.surrender', () => {
         });
     }
 
-    it('surrender by A on the ongoing current match finishes it with B as winner', async () => {
+    it('surrender by A on the ongoing current match finishes it, records A gave up, and writes no winner', async () => {
         const { service, store, changes } = ongoing();
 
         expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe('done');
 
         expect(store.match.state).toBe('finished');
         expect(store.match.endReason).toBe('surrender');
-        expect(store.match.winnerRobotId).toBe(store.match.robotBId);
+        expect(store.match.surrenderedRobotId).toBe(store.match.robotAId);
+        // The winner is written only when the operator confirms (#50)
+        expect(store.match.winnerRobotId ?? null).toBeNull();
         expect(store.written).toHaveLength(1);
         expect(store.written[0]).toMatchObject({
             type: 'finished',
@@ -958,12 +1247,13 @@ describe('FightService.surrender', () => {
         expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
     });
 
-    it("surrender by B sets A's robot as winner", async () => {
+    it("surrender by B records B's robot as the one that gave up", async () => {
         const { service, store } = ongoing();
 
         expect(await service.surrender(ARENA_ID, MATCH_ID, 'B')).toBe('done');
 
-        expect(store.match.winnerRobotId).toBe(store.match.robotAId);
+        expect(store.match.surrenderedRobotId).toBe(store.match.robotBId);
+        expect(store.match.winnerRobotId ?? null).toBeNull();
         expect(store.match.endReason).toBe('surrender');
     });
 
@@ -1070,7 +1360,7 @@ describe('FightService.surrender', () => {
             'not_ongoing',
         );
 
-        expect(store.match.winnerRobotId).toBe(store.match.robotBId);
+        expect(store.match.surrenderedRobotId).toBe(store.match.robotAId);
         expect(store.written).toHaveLength(1);
         expect(changes).toHaveLength(1);
     });

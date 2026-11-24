@@ -7,26 +7,25 @@ import { computed } from 'vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import type { MatchEndReason } from '@/types'
 
-const { robots, score, endReason, winnerSide } = defineProps<{
+const { robots, score, endReason, surrenderedSide } = defineProps<{
   robots: { A: string; B: string }
   score: { A: number; B: number }
   endReason: MatchEndReason | null
-  /** Only known after a surrender; undefined while unknown */
-  winnerSide: 'A' | 'B' | null | undefined
+  /** The side that gave up, only after a surrender; undefined while unknown */
+  surrenderedSide: 'A' | 'B' | null | undefined
 }>()
 
 const reasonLabel = computed(() => {
-  // No EMPATE here: before the operator confirms the result (#50) only a surrender has a winner,
-  // and once it is confirmed this link stops working.
+  // No EMPATE or winner here: the result is only confirmed when the operator closes the fight
+  // (#50), and then this link stops working.
   switch (endReason) {
     case 'time_out':
       return 'TEMPO ESGOTADO'
     case 'manual':
       return 'ENCERRADA PELO OPERADOR'
     case 'surrender':
-      // The side that gave up is the one opposite the winner
-      if (!winnerSide) return 'DESISTÊNCIA'
-      return `DESISTÊNCIA DO LADO ${winnerSide === 'A' ? 'B' : 'A'}`
+      if (!surrenderedSide) return 'DESISTÊNCIA'
+      return `DESISTÊNCIA DO LADO ${surrenderedSide}`
   }
   return null
 })

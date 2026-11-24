@@ -14,8 +14,10 @@ import {
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
+import { CloseMatchDto } from './dto/close-match.dto.js';
 import type { FightCommand } from './fight/fight-transitions.js';
 import { FightService } from './fight/fight.service.js';
+import type { CommandOptions } from './fight/fight.service.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
 import { CurrentUserId } from '../auth/current-user-id.decorator.js';
@@ -110,8 +112,13 @@ export class MatchesController {
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUserId() userId: string,
         @Query('view') view?: string,
+        @Body() body?: CloseMatchDto,
     ) {
-        return this.runFightCommand(id, 'close', userId, view);
+        // Confirms the official result: the server's proposal, or a draw with `{ draw: true }` (#50)
+        const options: CommandOptions = { draw: body?.draw === true };
+        return view === 'operator'
+            ? this.fightService.operatorCommand(id, 'close', userId, options)
+            : this.fightService.command(id, 'close', userId, options);
     }
 
     private runFightCommand(

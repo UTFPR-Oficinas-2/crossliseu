@@ -17,8 +17,12 @@ export interface ApiMatch {
   /** The arena the fight runs on (set at Start); kept after Close. `null` before Start */
   arenaId: string | null
   endReason: MatchEndReason | null
-  /** `null` until finished, and on a draw */
+  /** The confirmed winner: `null` until the operator closes the fight, and on a draw (#50) */
   winnerRobotId: string | null
+  /** `true` only for a draw the operator confirmed at close */
+  draw: boolean
+  /** The robot that gave up, set when the fight ended by surrender */
+  surrenderedRobotId: string | null
   championshipId: string
   robotAId: string
   robotBId: string
@@ -78,8 +82,23 @@ export interface OperatorFightState {
   score: { A: number; B: number }
   closed: boolean
   hasSelectedArena: boolean
-  /** Winning side when a surrender decided the fight */
+  /** The confirmed winner's side, set only once the fight is closed with a winner (#50) */
   winnerSide: 'A' | 'B' | null
+  /** `true` once the fight is closed as a draw */
+  draw: boolean
+  /** What closing would confirm; only while finished and not closed */
+  proposal: ResultProposal | null
+  /** The side that gave up when a surrender ended the fight; kept after close */
+  surrenderedSide: 'A' | 'B' | null
+}
+
+/** Why the server proposes the result: a surrender, more points, or equal points */
+export type ResultBasis = 'surrender' | 'points' | 'tied'
+
+/** The result closing the fight would confirm (`docs/fight-channel-protocol.md`) */
+export interface ResultProposal {
+  outcome: 'A' | 'B' | 'draw'
+  basis: ResultBasis
 }
 
 export type FightCommand = 'start' | 'pause' | 'resume' | 'finish' | 'close'
@@ -91,16 +110,19 @@ export function getFightState(id: string, signal?: AbortSignal): Promise<Operato
   })
 }
 
+/** `body` only on Close: `{ draw: true }` confirms a draw instead of the proposal (#50) */
 export function sendFightCommand(
   id: string,
   command: FightCommand,
   token: string,
   signal?: AbortSignal,
+  body?: { draw?: boolean },
 ): Promise<OperatorFightState> {
   return apiRequest(`/matches/${encodeURIComponent(id)}/${command}?view=operator`, {
     method: 'POST',
     token,
     signal,
+    body,
   })
 }
 

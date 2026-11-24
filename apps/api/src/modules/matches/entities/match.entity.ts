@@ -23,6 +23,7 @@ export type MatchEndReason = 'time_out' | 'manual' | 'surrender';
     'CHK_matches_end_reason',
     `"end_reason" IS NULL OR "end_reason" IN ('time_out', 'manual', 'surrender')`,
 )
+@Check('CHK_matches_result', `NOT ("draw" AND "winner_robot_id" IS NOT NULL)`)
 @Unique('UQ_matches_referee_token', ['refereeToken'])
 @Entity('matches')
 export class Match extends BaseEntity {
@@ -90,12 +91,28 @@ export class Match extends BaseEntity {
     @JoinColumn({ name: 'robot_b_id' })
     robotB?: Relation<Robot>;
 
+    /** The confirmed winner, written when the operator closes the fight (#50); null until then and on a draw */
     @Column({ name: 'winner_robot_id', type: 'uuid', nullable: true })
     winnerRobotId: string | null;
 
     @ManyToOne(() => Robot, { nullable: true })
     @JoinColumn({ name: 'winner_robot_id' })
     winnerRobot?: Relation<Robot> | null;
+
+    /** True only for a draw the operator confirmed at close; never together with a winner */
+    @Column({ name: 'draw', type: 'boolean', nullable: false, default: false })
+    draw: boolean;
+
+    /** The robot that gave up, set only when `endReason` is `surrender` */
+    @Column({ name: 'surrendered_robot_id', type: 'uuid', nullable: true })
+    surrenderedRobotId: string | null;
+
+    @ManyToOne(() => Robot, { nullable: true })
+    @JoinColumn({
+        name: 'surrendered_robot_id',
+        foreignKeyConstraintName: 'FK_matches_surrendered_robot_id',
+    })
+    surrenderedRobot?: Relation<Robot> | null;
 
     // Arena the match was played on; written at Start, not by any DTO
     @Column({ name: 'arena_id', type: 'uuid', nullable: true })

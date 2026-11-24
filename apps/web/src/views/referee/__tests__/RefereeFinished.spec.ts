@@ -6,14 +6,14 @@ import RefereeFinished from '../components/RefereeFinished.vue'
 
 function render(
   endReason: MatchEndReason | null,
-  winnerSide: 'A' | 'B' | null | undefined = undefined,
+  surrenderedSide: 'A' | 'B' | null | undefined = undefined,
 ) {
   return mount(RefereeFinished, {
     props: {
       robots: { A: 'Marte', B: 'Cobalto' },
       score: { A: 8, B: 2 },
       endReason,
-      winnerSide,
+      surrenderedSide,
     },
   })
 }
@@ -35,11 +35,11 @@ describe('RefereeFinished', () => {
   it.each([
     ['time_out', 'A', 'TEMPO ESGOTADO'],
     ['manual', 'B', 'ENCERRADA PELO OPERADOR'],
-    ['surrender', 'A', 'DESISTÊNCIA DO LADO B'],
-    ['surrender', 'B', 'DESISTÊNCIA DO LADO A'],
+    ['surrender', 'A', 'DESISTÊNCIA DO LADO A'],
+    ['surrender', 'B', 'DESISTÊNCIA DO LADO B'],
     ['surrender', undefined, 'DESISTÊNCIA'],
-  ] as const)('%s with winner %s reads %s', (endReason, winnerSide, label) => {
-    expect(reason(render(endReason, winnerSide)).text()).toBe(label)
+  ] as const)('%s with surrendered side %s reads %s', (endReason, surrenderedSide, label) => {
+    expect(reason(render(endReason, surrenderedSide)).text()).toBe(label)
   })
 
   // The API sets a winner only on a surrender; others get theirs when the result is confirmed

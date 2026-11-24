@@ -326,14 +326,15 @@ export const getMatch: (id: string) => Promise<Match | null> = async () => {
 }
 
 /**
- * The side whose robot won a finished match, or null on a draw (or before a winner is set).
- * The referee screen uses it to name the side that surrendered.
+ * The side whose robot gave up, or null when the fight did not end by surrender. The referee
+ * screen uses it to name that side; the winner itself is only set once the operator closes the
+ * fight (#50).
  */
-export async function getMatchWinnerSide(matchId: string): Promise<'A' | 'B' | null> {
+export async function getMatchSurrenderedSide(matchId: string): Promise<'A' | 'B' | null> {
   const match = await getMatchById(matchId)
-  if (match.winnerRobotId === null) return null
-  if (match.winnerRobotId === match.robotAId) return 'A'
-  if (match.winnerRobotId === match.robotBId) return 'B'
+  if (match.surrenderedRobotId === null) return null
+  if (match.surrenderedRobotId === match.robotAId) return 'A'
+  if (match.surrenderedRobotId === match.robotBId) return 'B'
   return null
 }
 

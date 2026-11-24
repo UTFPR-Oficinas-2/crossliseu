@@ -8,14 +8,14 @@ import type { FightChannelOptions } from '@/api/fight-channel'
 vi.mock('@/data', () => ({
   joinReferee: vi.fn<typeof import('@/data').joinReferee>(),
   submitScore: vi.fn<typeof import('@/data').submitScore>(),
-  getMatchWinnerSide: vi.fn<typeof import('@/data').getMatchWinnerSide>(),
+  getMatchSurrenderedSide: vi.fn<typeof import('@/data').getMatchSurrenderedSide>(),
 }))
 vi.mock('@/api/fight-channel', () => ({
   openFightChannel: vi.fn<typeof import('@/api/fight-channel').openFightChannel>(),
 }))
 
 import { openFightChannel } from '@/api/fight-channel'
-import { getMatchWinnerSide, joinReferee } from '@/data'
+import { getMatchSurrenderedSide, joinReferee } from '@/data'
 import RefereeSessionView from '../RefereeSessionView.vue'
 
 const KEY = 'crossliseu.referee.tok'
@@ -145,7 +145,7 @@ describe('RefereeSessionView', () => {
       name: 'Ana',
       counts: { A: 0, B: 0 },
     })
-    vi.mocked(getMatchWinnerSide).mockResolvedValue('A')
+    vi.mocked(getMatchSurrenderedSide).mockResolvedValue('A')
     const { wrapper } = await mountView()
 
     channel().options.onState(

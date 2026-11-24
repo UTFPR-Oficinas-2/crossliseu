@@ -233,7 +233,7 @@ Transitions, all driven by the server:
 | `manual` | The operator ended the match |
 | `surrender` | A competitor surrendered |
 
-The side that surrendered is not part of the value or of `state`: the API records the winner (`winner_robot_id`, the other side), and the box shows the same color for either side.
+The side that surrendered is not part of the value or of `state`: the API records the robot that gave up (`surrendered_robot_id`; the other side is the proposed winner the operator confirms when closing the match), and the box shows the same color for either side.
 
 **Planned (#57, Final delivery milestone): correcting the end reason.** Right after a match ends, in the step where the operator confirms closing it, the operator will be able to change `endReason` (for example from `manual` to `surrender` when the box was offline and a competitor asked to give up). Because the match is still `finished` at that point, a correction sends the box a new `state` with the new `endReason`. After closing, the result is final.
 

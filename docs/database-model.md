@@ -84,7 +84,9 @@ erDiagram
     uuid robot_a_id FK
     uuid robot_b_id FK
     uuid created_by_user_id FK
-    uuid winner_robot_id FK "nullable"
+    uuid winner_robot_id FK "nullable, the confirmed winner"
+    uuid surrendered_robot_id FK "nullable, the robot that gave up"
+    boolean draw "default false, a confirmed draw"
     uuid arena_id FK "nullable, set at Start"
     string weight_class "(fairyweight | antweight | beetleweight | hobbyweight | featherweight | lightweight)"
     string state "scheduled | ongoing | paused | finished"
@@ -133,3 +135,5 @@ case or extra spaces, so "João" and " joao " are the same referee. The API comp
 referee's points are the `scored` events with their `judge_seat`.
 
 A match's start and finish times are the `occurred_at` of its `started` and `finished` events in `match_events`.
+
+The official result is written only when the operator closes the fight (the `closed` event): `winner_robot_id` for a winner, `draw = true` for a draw, never both (`CHK_matches_result`). Before that both are empty, whatever the fight's state, so an empty winner on its own does not mean a draw. A surrender sets `surrendered_robot_id` (the robot whose side pressed) when it ends the fight; the proposed winner is the other robot. Otherwise the proposal comes from the points: the side with more `scored` points over the three referees wins, and equal points (including none) propose a draw.

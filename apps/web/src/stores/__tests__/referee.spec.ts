@@ -7,14 +7,14 @@ import type { FightChannelOptions } from '@/api/fight-channel'
 vi.mock('@/data', () => ({
   joinReferee: vi.fn<typeof import('@/data').joinReferee>(),
   submitScore: vi.fn<typeof import('@/data').submitScore>(),
-  getMatchWinnerSide: vi.fn<typeof import('@/data').getMatchWinnerSide>(),
+  getMatchSurrenderedSide: vi.fn<typeof import('@/data').getMatchSurrenderedSide>(),
 }))
 vi.mock('@/api/fight-channel', () => ({
   openFightChannel: vi.fn<typeof import('@/api/fight-channel').openFightChannel>(),
 }))
 
 import { openFightChannel } from '@/api/fight-channel'
-import { getMatchWinnerSide, joinReferee, submitScore } from '@/data'
+import { getMatchSurrenderedSide, joinReferee, submitScore } from '@/data'
 import { useRefereeStore } from '../referee'
 
 const TOKEN = 'tok'
@@ -61,8 +61,8 @@ describe('referee store', () => {
     setActivePinia(createPinia())
     vi.mocked(joinReferee).mockReset()
     vi.mocked(submitScore).mockReset()
-    vi.mocked(getMatchWinnerSide).mockReset()
-    vi.mocked(getMatchWinnerSide).mockResolvedValue(null)
+    vi.mocked(getMatchSurrenderedSide).mockReset()
+    vi.mocked(getMatchSurrenderedSide).mockResolvedValue(null)
     channels = []
     vi.mocked(openFightChannel).mockReset()
     vi.mocked(openFightChannel).mockImplementation((options) => {
@@ -201,7 +201,9 @@ describe('referee store', () => {
 
   describe('live state', () => {
     it('a frame fills the fight and the countdown runs while ongoing, stopping at 0', async () => {
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'performance'] })
+      vi.useFakeTimers({
+        toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'performance'],
+      })
       const store = await active({ remainingMs: 1_500 })
 
       expect(store.fight).toMatchObject({
@@ -217,7 +219,9 @@ describe('referee store', () => {
     })
 
     it('the countdown is frozen while paused', async () => {
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'performance'] })
+      vi.useFakeTimers({
+        toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'performance'],
+      })
       const store = await active({ status: 'paused', remainingMs: 60_000 })
 
       vi.advanceTimersByTime(5_000)
@@ -237,7 +241,9 @@ describe('referee store', () => {
     it('status finished moves to the finished phase', async () => {
       const store = await active()
 
-      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'time_out' }))
+      channel().options.onState(
+        frame({ status: 'finished', remainingMs: 0, endReason: 'time_out' }),
+      )
 
       expect(store.phase).toBe('finished')
       expect(store.fight?.endReason).toBe('time_out')
@@ -276,37 +282,45 @@ describe('referee store', () => {
   })
 
   describe('result', () => {
-    it('reads the winner side once when the fight finishes', async () => {
-      vi.mocked(getMatchWinnerSide).mockResolvedValue('A')
+    it('reads the surrendered side once when the fight finishes', async () => {
+      vi.mocked(getMatchSurrenderedSide).mockResolvedValue('A')
       const store = await active()
-      expect(store.winnerSide).toBeUndefined()
+      expect(store.surrenderedSide).toBeUndefined()
 
-      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }))
-      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }))
-      await vi.waitFor(() => expect(store.winnerSide).toBe('A'))
+      channel().options.onState(
+        frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }),
+      )
+      channel().options.onState(
+        frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }),
+      )
+      await vi.waitFor(() => expect(store.surrenderedSide).toBe('A'))
 
-      expect(getMatchWinnerSide).toHaveBeenCalledExactlyOnceWith(MATCH_ID)
+      expect(getMatchSurrenderedSide).toHaveBeenCalledExactlyOnceWith(MATCH_ID)
     })
 
-    it('does not read the winner unless the fight ended by surrender', async () => {
+    it('does not read the surrendered side unless the fight ended by surrender', async () => {
       const store = await active()
 
-      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'time_out' }))
+      channel().options.onState(
+        frame({ status: 'finished', remainingMs: 0, endReason: 'time_out' }),
+      )
       await Promise.resolve()
 
-      expect(getMatchWinnerSide).not.toHaveBeenCalled()
-      expect(store.winnerSide).toBeUndefined()
+      expect(getMatchSurrenderedSide).not.toHaveBeenCalled()
+      expect(store.surrenderedSide).toBeUndefined()
     })
 
-    it('a failed read leaves the winner side unknown', async () => {
-      vi.mocked(getMatchWinnerSide).mockRejectedValue(new ApiError(0, 'Network error'))
+    it('a failed read leaves the surrendered side unknown', async () => {
+      vi.mocked(getMatchSurrenderedSide).mockRejectedValue(new ApiError(0, 'Network error'))
       const store = await active()
 
-      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }))
-      await vi.waitFor(() => expect(getMatchWinnerSide).toHaveBeenCalled())
+      channel().options.onState(
+        frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }),
+      )
+      await vi.waitFor(() => expect(getMatchSurrenderedSide).toHaveBeenCalled())
       await Promise.resolve()
 
-      expect(store.winnerSide).toBeUndefined()
+      expect(store.surrenderedSide).toBeUndefined()
     })
   })
 
@@ -317,7 +331,14 @@ describe('referee store', () => {
 
       await store.score('A', 1)
 
-      expect(submitScore).toHaveBeenCalledWith(MATCH_ID, TOKEN, 'Ana', 'A', 1, expect.any(AbortSignal))
+      expect(submitScore).toHaveBeenCalledWith(
+        MATCH_ID,
+        TOKEN,
+        'Ana',
+        'A',
+        1,
+        expect.any(AbortSignal),
+      )
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.feedback).toEqual({
         tone: 'success',
@@ -401,7 +422,10 @@ describe('referee store', () => {
 
       await store.score('A', 1)
 
-      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.' })
+      expect(store.feedback).toEqual({
+        tone: 'danger',
+        text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.',
+      })
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.canScore).toBe(true)
     })
@@ -449,7 +473,10 @@ describe('referee store', () => {
       await pressing
 
       expect(signal?.aborted).toBe(true)
-      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.' })
+      expect(store.feedback).toEqual({
+        tone: 'danger',
+        text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.',
+      })
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.canScore).toBe(true)
     })

@@ -82,8 +82,19 @@ describe('entity metadata', () => {
             'created_by_user_id → users',
             'robot_a_id → robots',
             'robot_b_id → robots',
+            'surrendered_robot_id → robots',
             'winner_robot_id → robots',
         ]);
+    });
+
+    it('names the surrendered robot FK like its migration, so migration:generate leaves it alone', async () => {
+        const dataSource = await buildDataSource();
+        const fk = dataSource
+            .getMetadata(Match)
+            .foreignKeys.find((key) =>
+                key.columnNames.includes('surrendered_robot_id'),
+            );
+        expect(fk?.name).toBe('FK_matches_surrendered_robot_id');
     });
 
     it('match has the diagram columns', async () => {
@@ -93,6 +104,7 @@ describe('entity metadata', () => {
             'created_at',
             'created_by_user_id',
             'deleted_at',
+            'draw',
             'end_reason',
             'id',
             'modified_at',
@@ -100,6 +112,7 @@ describe('entity metadata', () => {
             'robot_a_id',
             'robot_b_id',
             'state',
+            'surrendered_robot_id',
             'weight_class',
             'winner_robot_id',
         ]);
@@ -111,6 +124,7 @@ describe('entity metadata', () => {
             'deleted_at',
             'end_reason',
             'referee_token',
+            'surrendered_robot_id',
             'winner_robot_id',
         ]);
     });

@@ -82,7 +82,7 @@ import {
   getMatchSummaries,
   getMatchSummary,
   matchChampionshipId,
-  getMatchWinnerSide,
+  getMatchSurrenderedSide,
   selectArenaMatch,
   ownsChampionship,
   getRobots,
@@ -134,6 +134,8 @@ const apiMatch: ApiMatch = {
   arenaId: 'a1',
   endReason: null,
   winnerRobotId: null,
+  draw: false,
+  surrenderedRobotId: null,
   robotAId: 'r1',
   robotBId: 'r2',
   robotA: apiRobot,
@@ -250,14 +252,23 @@ describe('@/data', () => {
     expect(await ownsChampionship('other', 't')).toBe(false)
   })
 
-  it('maps the winner robot to its side, null on a draw', async () => {
-    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: 'r1' })
-    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: 'r2' })
-    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: null })
+  it('maps the robot that surrendered to its side, null when nobody did', async () => {
+    // The winner is unconfirmed until the operator closes the fight (#50): it must not be read
+    vi.mocked(getMatchById).mockResolvedValueOnce({
+      ...apiMatch,
+      surrenderedRobotId: 'r1',
+      winnerRobotId: null,
+    })
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, surrenderedRobotId: 'r2' })
+    vi.mocked(getMatchById).mockResolvedValueOnce({
+      ...apiMatch,
+      surrenderedRobotId: null,
+      winnerRobotId: 'r1',
+    })
 
-    expect(await getMatchWinnerSide('m1')).toBe('A')
-    expect(await getMatchWinnerSide('m1')).toBe('B')
-    expect(await getMatchWinnerSide('m1')).toBeNull()
+    expect(await getMatchSurrenderedSide('m1')).toBe('A')
+    expect(await getMatchSurrenderedSide('m1')).toBe('B')
+    expect(await getMatchSurrenderedSide('m1')).toBeNull()
   })
 
   it('resolves a match to its championship id, or null for unknown or malformed ids', async () => {
@@ -422,6 +433,9 @@ describe('operator fight data', () => {
     score: { A: 0, B: 0 },
     closed: false,
     winnerSide: null,
+    draw: false,
+    proposal: null,
+    surrenderedSide: null,
     hasSelectedArena: true,
   }
 

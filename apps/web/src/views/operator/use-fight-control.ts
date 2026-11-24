@@ -34,6 +34,15 @@ function observesTransition(command: FightCommand, state: OperatorFightState): b
   }
 }
 
+function isProposal(value: unknown): value is OperatorFightState['proposal'] {
+  if (value === null) return true
+  const proposal = value as { outcome?: unknown; basis?: unknown } | undefined
+  return (
+    ['A', 'B', 'draw'].includes(proposal?.outcome as string) &&
+    ['surrender', 'points', 'tied'].includes(proposal?.basis as string)
+  )
+}
+
 function checkSnapshot(snapshot: OperatorFightState, matchId: string): OperatorFightState {
   if (
     snapshot?.matchId !== matchId ||
@@ -45,7 +54,10 @@ function checkSnapshot(snapshot: OperatorFightState, matchId: string): OperatorF
     typeof snapshot.hasSelectedArena !== 'boolean' ||
     typeof snapshot.robots?.A?.name !== 'string' ||
     typeof snapshot.robots?.B?.name !== 'string' ||
-    ![null, 'manual', 'surrender', 'time_out'].includes(snapshot.endReason)
+    ![null, 'manual', 'surrender', 'time_out'].includes(snapshot.endReason) ||
+    typeof snapshot.draw !== 'boolean' ||
+    !isProposal(snapshot.proposal) ||
+    ![null, 'A', 'B'].includes(snapshot.surrenderedSide)
   ) {
     throw new Error('Invalid operator fight snapshot')
   }
@@ -234,7 +246,8 @@ export function useFightControl(
     }
   }
 
-  async function command(action: FightCommand): Promise<void> {
+  /** `options.draw` only matters for Close: it confirms a draw instead of the proposal (#50) */
+  async function command(action: FightCommand, options?: { draw?: boolean }): Promise<void> {
     const snapshot = state.value
     const jwt = toValue(token)
     if (
@@ -260,7 +273,9 @@ export function useFightControl(
 
     try {
       const updated = await requestWithTimeout(controller, (signal) =>
-        sendFightCommand(snapshot.matchId, action, jwt, signal),
+        options
+          ? sendFightCommand(snapshot.matchId, action, jwt, signal, options)
+          : sendFightCommand(snapshot.matchId, action, jwt, signal),
       )
       if (version !== generation) return
       checkSnapshot(updated, snapshot.matchId)

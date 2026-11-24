@@ -134,6 +134,88 @@ describe('fight (e2e)', () => {
         ]);
     });
 
+    describe('close confirms the official result (#50)', () => {
+        const result = async () =>
+            (
+                await ds.query(
+                    `SELECT "winner_robot_id", "draw" FROM "matches" WHERE "id" = $1`,
+                    [ids.match],
+                )
+            )[0] as { winner_robot_id: string | null; draw: boolean };
+        const closedEvents = async () =>
+            (await events()).filter((e) => e.type === 'closed').length;
+        /** Starts the fight, gives A three points and B one, and finishes it by hand */
+        const finishedWithPoints = async () => {
+            await command('start').expect(200);
+            for (const [robotId, seat] of [
+                [ids.a, 1],
+                [ids.a, 2],
+                [ids.a, 3],
+                [ids.b, 1],
+            ] as const) {
+                await ds.query(
+                    `INSERT INTO "match_events" ("match_id", "type", "occurred_at", "robot_id", "judge_seat", "action")
+                     VALUES ($1, 'scored', $2, $3, $4, 1)`,
+                    [ids.match, clock.now(), robotId, seat],
+                );
+            }
+            clock.advance(10_000);
+            await command('finish').expect(200);
+        };
+
+        it('stores the points winner together with the closed event', async () => {
+            await finishedWithPoints();
+            expect(await result()).toEqual({
+                winner_robot_id: null,
+                draw: false,
+            });
+
+            await command('close').expect(200);
+
+            expect(await result()).toEqual({
+                winner_robot_id: ids.a,
+                draw: false,
+            });
+            expect(await closedEvents()).toBe(1);
+        });
+
+        it('stores a draw when the operator calls one, whatever the points', async () => {
+            await finishedWithPoints();
+
+            await command('close').send({ draw: true }).expect(200);
+
+            expect(await result()).toEqual({
+                winner_robot_id: null,
+                draw: true,
+            });
+        });
+
+        it('rejects a body with a winner in it', async () => {
+            await finishedWithPoints();
+
+            await command('close').send({ winnerRobotId: ids.b }).expect(400);
+
+            expect(await result()).toEqual({
+                winner_robot_id: null,
+                draw: false,
+            });
+            expect(await closedEvents()).toBe(0);
+        });
+
+        it('a second close is 409 and leaves the confirmed result as it was', async () => {
+            await finishedWithPoints();
+            await command('close').expect(200);
+
+            await command('close').send({ draw: true }).expect(409);
+
+            expect(await result()).toEqual({
+                winner_robot_id: ids.a,
+                draw: false,
+            });
+            expect(await closedEvents()).toBe(1);
+        });
+    });
+
     it('both state views sum the scored events of every seat per side', async () => {
         await command('start').expect(200);
         const scored = (robotId: string, seat: number, action: number) =>
