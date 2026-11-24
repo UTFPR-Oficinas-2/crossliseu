@@ -102,6 +102,15 @@ describe('RefereeLinkPanel', () => {
     expect(wrapper.text()).toContain('Copiado.')
   })
 
+  it('shows the link on one line with the full value on hover', async () => {
+    const wrapper = await mountPanel()
+    const link = `${window.location.origin}/referee/${TOKEN}`
+
+    const url = wrapper.get('.referee-link__url')
+    expect(url.attributes('title')).toBe(link)
+    expect(url.text()).toBe(link)
+  })
+
   it('requests again for another match', async () => {
     const wrapper = await mountPanel()
 

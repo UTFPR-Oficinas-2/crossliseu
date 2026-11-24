@@ -113,13 +113,15 @@ async function copy() {
 
 <template>
   <section v-if="link || failed" class="referee-link" aria-labelledby="referee-link-title">
-    <h2 id="referee-link-title" class="text-heading-m">Link dos árbitros</h2>
-    <template v-if="link">
-      <p class="referee-link__note text-body-s">
+    <header class="referee-link__header">
+      <h2 id="referee-link-title" class="text-heading-m">Link dos árbitros</h2>
+      <p v-if="link" class="referee-link__note text-body-s">
         Envie este link aos três árbitros. Cada um entra com o próprio nome.
       </p>
-      <code class="referee-link__url text-mono-m">{{ link }}</code>
+    </header>
+    <template v-if="link">
       <div class="referee-link__actions">
+        <code class="referee-link__url text-mono-m" :title="link">{{ link }}</code>
         <AppButton variant="secondary" @click="copy">Copiar link</AppButton>
         <span v-if="copied" class="text-body-s" aria-live="polite">Copiado.</span>
         <span v-if="copyFailed" class="text-body-s" role="alert">
@@ -158,20 +160,32 @@ async function copy() {
 .referee-link {
   display: flex;
   flex-direction: column;
-  gap: var(--space-14px);
-  padding: var(--space-6);
+  gap: var(--space-3);
+  padding: var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
+}
+
+.referee-link__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
 }
 
 .referee-link__note {
   color: var(--color-muted);
 }
 
+/* One line; the full link is in the title and is what Copiar link copies */
 .referee-link__url {
-  overflow-wrap: anywhere;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .referee-link__actions {
@@ -183,8 +197,8 @@ async function copy() {
 
 .referee-link__seats {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -198,8 +212,8 @@ async function copy() {
 }
 
 .referee-link__name {
-  flex: 1;
   min-width: 0;
+  max-width: 20ch;
   overflow-wrap: anywhere;
   color: var(--color-text);
 }

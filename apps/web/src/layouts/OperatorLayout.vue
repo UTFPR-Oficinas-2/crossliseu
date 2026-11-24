@@ -200,6 +200,21 @@ function exitOperation() {
   padding: var(--space-7) var(--space-8) var(--space-9);
 }
 
+/* Desktop: the fight console fits the window; main scrolls only as a last resort */
+@media (min-width: 768px) {
+  .operator-layout {
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .operator-layout__content {
+    min-height: 0;
+    overflow-y: auto;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-8);
+  }
+}
+
 @media (max-width: 767px) {
   .operator-layout__content {
     padding-inline: var(--space-page-x-mobile);
@@ -251,6 +266,12 @@ function exitOperation() {
 
   .operator-steps__item {
     padding-inline: var(--space-2);
+  }
+}
+
+@media (min-width: 768px) {
+  .operator-steps__item {
+    padding-block: var(--space-2);
   }
 }
 </style>
