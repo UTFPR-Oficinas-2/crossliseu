@@ -97,6 +97,46 @@ describe('useMatchAnalysis', () => {
     expect(current.value?.status).toBe('pending')
   })
 
+  it('keeps polling after a failed read while the job runs', async () => {
+    get
+      .mockResolvedValueOnce(analysis('processing'))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(analysis('completed'))
+    const {
+      analysis: current,
+      loadState,
+      refresh,
+    } = useMatchAnalysis(
+      () => 'm1',
+      () => 'jwt',
+    )
+
+    await refresh()
+    await vi.advanceTimersByTimeAsync(ANALYSIS_POLL_MS)
+    expect(loadState.value).toBe('error')
+    await vi.advanceTimersByTimeAsync(ANALYSIS_POLL_MS)
+
+    expect(loadState.value).toBe('ready')
+    expect(current.value?.status).toBe('completed')
+    await vi.advanceTimersByTimeAsync(ANALYSIS_POLL_MS * 3)
+    expect(get).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not poll after a failed read once the job is over', async () => {
+    get.mockResolvedValueOnce(analysis('completed')).mockRejectedValueOnce(new Error('offline'))
+    const { loadState, refresh } = useMatchAnalysis(
+      () => 'm1',
+      () => 'jwt',
+    )
+
+    await refresh()
+    await refresh()
+    await vi.advanceTimersByTimeAsync(ANALYSIS_POLL_MS * 3)
+
+    expect(loadState.value).toBe('error')
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
   it('stop() ends the polling', async () => {
     get.mockResolvedValue(analysis('processing'))
     const { refresh, stop } = useMatchAnalysis(

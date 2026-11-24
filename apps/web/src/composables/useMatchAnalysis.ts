@@ -9,7 +9,8 @@ export const ANALYSIS_POLL_MS = 3_000
  * The analysis of a match's uploaded video (#21). `refresh()` reads it once; while it is pending or
  * processing it keeps asking every ANALYSIS_POLL_MS until it ends, the view goes away or `stop()`.
  *
- * `analysis` is null while the match has no uploaded video yet.
+ * `analysis` is null while the match has no uploaded video yet. After a failed read it keeps the
+ * last answer, and `loadState` is 'error' until a read succeeds.
  */
 export function useMatchAnalysis(matchId: () => string, token: () => string) {
   const analysis = ref<MatchAnalysis | null>(null)
@@ -37,8 +38,9 @@ export function useMatchAnalysis(matchId: () => string, token: () => string) {
     } catch {
       if (read !== latest) return
       loadState.value = 'error'
-      return
     }
+    // A failed read while the job runs (network blip, API restart) is retried on the same schedule:
+    // the worker keeps going, so the screen should too
     if (inProgress.value && !stopped) timer = setTimeout(refresh, ANALYSIS_POLL_MS)
   }
 

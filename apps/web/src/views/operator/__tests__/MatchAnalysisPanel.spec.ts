@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getMatchAnalysis } from '@/data'
 import type { MatchAnalysis } from '@/types'
+import { ANALYSIS_POLL_MS } from '@/composables/useMatchAnalysis'
 import MatchAnalysisPanel from '../components/MatchAnalysisPanel.vue'
 
 vi.mock('@/data', () => ({ getMatchAnalysis: vi.fn<typeof getMatchAnalysis>() }))
@@ -131,6 +132,41 @@ describe('MatchAnalysisPanel', () => {
     await flushPromises()
 
     expect(get).toHaveBeenCalledTimes(2)
+  })
+
+  it('asks again each time a new set of image URLs expires', async () => {
+    const fresh = completed()
+    fresh.heatmaps = fresh.heatmaps.map((h) => ({ ...h, imageUrl: `${h.imageUrl}2` }))
+    get.mockResolvedValueOnce(completed()).mockResolvedValueOnce(fresh).mockResolvedValue(fresh)
+    const wrapper = await mountPanel()
+
+    await wrapper.findAll('img')[0]!.trigger('error')
+    await flushPromises()
+    expect(wrapper.findAll('img')[0]!.attributes('src')).toBe('https://r2.example/a.png?sig2')
+    await wrapper.findAll('img')[0]!.trigger('error')
+    await flushPromises()
+
+    expect(get).toHaveBeenCalledTimes(3)
+  })
+
+  it('a failed read keeps the last status on screen, with a warning', async () => {
+    vi.useFakeTimers()
+    try {
+      get
+        .mockResolvedValueOnce({ ...completed(), status: 'processing', heatmaps: [] })
+        .mockRejectedValueOnce(new Error('offline'))
+      const wrapper = await mountPanel()
+
+      await vi.advanceTimersByTimeAsync(ANALYSIS_POLL_MS)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Processando')
+      expect(wrapper.text()).toContain('Sem resposta do servidor. Tentando de novo…')
+      expect(wrapper.text()).not.toContain('Não foi possível carregar a análise.')
+      expect(wrapper.find('button').exists()).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('load error: offers to try again', async () => {

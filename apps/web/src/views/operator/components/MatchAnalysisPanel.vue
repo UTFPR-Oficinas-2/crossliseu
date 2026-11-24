@@ -19,7 +19,7 @@ const { matchId, robots, uploads } = defineProps<{
 }>()
 
 const auth = useAuthStore()
-const { analysis, loadState, refresh } = useMatchAnalysis(
+const { analysis, loadState, inProgress, refresh } = useMatchAnalysis(
   () => matchId,
   () => auth.token ?? '',
 )
@@ -61,11 +61,13 @@ function caption(detected: number | null) {
   return total ? `Encontrado em ${detected} de ${total} quadros` : `${detected} posições`
 }
 
-// The image URLs are signed for a few minutes: a page left open asks for fresh ones once
-let reloadedForExpiredImage = false
+// The image URLs are signed for a few minutes: a page left open asks for fresh ones when they
+// stop loading. Only once per set of URLs, so a link that is broken for another reason can't loop.
+let reloadedFor: string | null = null
 function onImageError() {
-  if (reloadedForExpiredImage) return
-  reloadedForExpiredImage = true
+  const urls = analysis.value?.heatmaps.map((heatmap) => heatmap.imageUrl).join(' ') ?? ''
+  if (urls === reloadedFor) return
+  reloadedFor = urls
   void refresh()
 }
 </script>
@@ -81,7 +83,7 @@ function onImageError() {
       Carregando a análise…
     </p>
 
-    <div v-else-if="loadState === 'error'" class="analysis__error">
+    <div v-else-if="loadState === 'error' && !analysis" class="analysis__error">
       <p class="text-body-m" role="alert">Não foi possível carregar a análise.</p>
       <AppButton variant="secondary" @click="refresh">Tentar de novo</AppButton>
     </div>
@@ -91,6 +93,19 @@ function onImageError() {
     </p>
 
     <template v-else>
+      <div v-if="loadState === 'error'" class="analysis__stale">
+        <p class="text-body-s" role="alert">
+          {{
+            inProgress
+              ? 'Sem resposta do servidor. Tentando de novo…'
+              : 'Não foi possível atualizar a análise.'
+          }}
+        </p>
+        <AppButton v-if="!inProgress" variant="secondary" @click="refresh"
+          >Tentar de novo</AppButton
+        >
+      </div>
+
       <p
         v-if="analysis.status === 'pending' || analysis.status === 'processing'"
         class="analysis__note text-body-s"
@@ -170,7 +185,15 @@ function onImageError() {
   gap: var(--space-3);
 }
 
+.analysis__stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .analysis__error [role='alert'],
+.analysis__stale [role='alert'],
 .analysis__failed {
   color: var(--color-red);
 }
