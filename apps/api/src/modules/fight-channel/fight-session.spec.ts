@@ -112,7 +112,7 @@ describe('FightSession', () => {
             expect(deps.subscribe).toHaveBeenCalledTimes(1);
             expect(deps.subscribe).toHaveBeenCalledWith(
                 MATCH_ID,
-                'operator',
+                { role: 'operator', userId: expect.any(String) },
                 socket,
             );
             expect(socket.sent).toEqual([]);

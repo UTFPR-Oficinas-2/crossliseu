@@ -163,11 +163,3 @@ export interface Match extends MatchSummary {
   heatmaps: RobotHeatmap[]
 }
 
-/** What a referee link resolves to */
-export interface RefereeAccess {
-  token: string
-  matchId: string
-  seat: RefereeSeat
-  /** Link expired or already used on another device */
-  expired: boolean
-}

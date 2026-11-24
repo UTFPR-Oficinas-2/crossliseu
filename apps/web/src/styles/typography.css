@@ -118,3 +118,19 @@
   line-height: var(--text-timer-l-line-height);
   letter-spacing: var(--text-timer-l-tracking);
 }
+
+.text-timer-m {
+  font-family: var(--text-timer-m-family);
+  font-weight: var(--text-timer-m-weight);
+  font-size: var(--text-timer-m-size);
+  line-height: var(--text-timer-m-line-height);
+  letter-spacing: var(--text-timer-m-tracking);
+}
+
+.text-numeric-xl {
+  font-family: var(--text-numeric-xl-family);
+  font-weight: var(--text-numeric-xl-weight);
+  font-size: var(--text-numeric-xl-size);
+  line-height: var(--text-numeric-xl-line-height);
+  letter-spacing: var(--text-numeric-xl-tracking);
+}

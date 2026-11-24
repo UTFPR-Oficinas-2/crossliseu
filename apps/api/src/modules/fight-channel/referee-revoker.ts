@@ -6,13 +6,16 @@ import {
 } from '@nestjs/common';
 import { FightEvents } from '../matches/fight/fight-events.js';
 import { FightService } from '../matches/fight/fight.service.js';
+import { nameKey } from '../matches/referees/name-key.js';
+import { RefereesService } from '../matches/referees/referees.service.js';
 import { FightCloseCode } from './fight-channel-protocol.js';
 import { FightConnections } from './fight-connections.js';
 
 /**
- * The channel checks a credential only at `auth`, and a referee token stops working once the
- * fight is confirmed: on every change of a match with referee sockets, this closes them with
- * 4001 once the match has its `closed` event. Operator sockets stay open.
+ * The channel checks a credential only at `auth`, so a referee credential revoked later is
+ * enforced here, on every change of a match with referee sockets: all of them are closed with
+ * 4001 once the match has its `closed` event, and before Start a referee whose seat the operator
+ * freed is closed too (seats can only be freed while `scheduled`). Operator sockets stay open.
  */
 @Injectable()
 export class RefereeRevoker implements OnModuleInit, OnModuleDestroy {
@@ -24,6 +27,7 @@ export class RefereeRevoker implements OnModuleInit, OnModuleDestroy {
         private readonly connections: FightConnections,
         private readonly fight: FightService,
         private readonly events: FightEvents,
+        private readonly referees: RefereesService,
     ) {}
 
     onModuleInit(): void {
@@ -46,7 +50,7 @@ export class RefereeRevoker implements OnModuleInit, OnModuleDestroy {
             return;
         }
         try {
-            const { closed } = await this.fight.operatorState(matchId);
+            const { closed, status } = await this.fight.operatorState(matchId);
             if (closed) {
                 this.connections.closeRole(
                     matchId,
@@ -54,7 +58,22 @@ export class RefereeRevoker implements OnModuleInit, OnModuleDestroy {
                     FightCloseCode.BadCredentials,
                     'bad_credentials',
                 );
+                return;
             }
+            if (status !== 'scheduled') {
+                return;
+            }
+            const seated = new Set(
+                (await this.referees.seatedNames(matchId)).map(nameKey),
+            );
+            this.connections.closeWhere(
+                matchId,
+                (s) =>
+                    s.role !== 'referee' ||
+                    (s.name !== null && seated.has(nameKey(s.name))),
+                FightCloseCode.BadCredentials,
+                'bad_credentials',
+            );
         } catch (error) {
             this.logger.warn('referee_revoke_failed', {
                 matchId,

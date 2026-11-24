@@ -149,7 +149,7 @@ describe('FightStatePusher', () => {
 
         expect(referee.sent).toHaveLength(1);
         expect(connections.subscribers(MATCH_ID)).toEqual([
-            { role: 'referee', socket: referee },
+            { role: 'referee', name: null, socket: referee },
         ]);
     });
 

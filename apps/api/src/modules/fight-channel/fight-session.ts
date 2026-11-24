@@ -31,7 +31,7 @@ export type FightSessionDeps = {
     /** Registers the socket and sends it the first snapshot; false when the match doesn't exist */
     subscribe(
         matchId: string,
-        role: FightAccess['role'],
+        access: FightAccess,
         socket: FightSocket,
     ): Promise<boolean>;
 };
@@ -163,7 +163,7 @@ export class FightSession {
         let found: boolean;
         try {
             found = await this.withCheckTimeout(
-                this.deps.subscribe(auth.matchId, access.role, this.socket),
+                this.deps.subscribe(auth.matchId, access, this.socket),
                 false,
             );
         } catch (error) {

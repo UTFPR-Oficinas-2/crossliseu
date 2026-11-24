@@ -79,9 +79,9 @@ import {
   getMatchSummaries,
   getMatchSummary,
   matchChampionshipId,
+  getMatchWinnerSide,
   selectArenaMatch,
   ownsChampionship,
-  getRefereeAccess,
   getRobots,
 } from '@/data'
 
@@ -244,6 +244,16 @@ describe('@/data', () => {
     expect(await ownsChampionship('other', 't')).toBe(false)
   })
 
+  it('maps the winner robot to its side, null on a draw', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: 'r1' })
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: 'r2' })
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: null })
+
+    expect(await getMatchWinnerSide('m1')).toBe('A')
+    expect(await getMatchWinnerSide('m1')).toBe('B')
+    expect(await getMatchWinnerSide('m1')).toBeNull()
+  })
+
   it('resolves a match to its championship id, or null for unknown or malformed ids', async () => {
     vi.mocked(getMatchById).mockResolvedValueOnce(apiMatch)
     vi.mocked(getMatchById).mockRejectedValueOnce(new ApiError(404, 'match_not_found'))
@@ -258,7 +268,6 @@ describe('@/data', () => {
 
   it('rejects data the API does not provide yet instead of serving demo data', async () => {
     await expect(getMatch('m1')).rejects.toMatchObject({ status: 501 })
-    await expect(getRefereeAccess('token')).rejects.toMatchObject({ status: 501 })
   })
 
   it('maps API arenas to ManagedArena, without id or online of the match', async () => {

@@ -59,9 +59,15 @@ export class FightChannelGateway
                 },
             },
             logger: this.logger,
-            subscribe: async (matchId, role, target) => {
+            subscribe: async (matchId, access, target) => {
+                const { role } = access;
                 // Registered first: a change that lands while the snapshot is read is pushed too
-                this.connections.add(matchId, role, target);
+                this.connections.add(
+                    matchId,
+                    role,
+                    target,
+                    access.role === 'referee' ? access.name : null,
+                );
                 try {
                     const found = await this.pusher.sendSnapshot(
                         matchId,

@@ -85,6 +85,37 @@ describe('openFightChannel', () => {
     expect(onStatus).toHaveBeenLastCalledWith('open')
   })
 
+  it('sends the referee name in the auth frame', () => {
+    openFightChannel({ matchId: 'm-1', token: 'tok', name: 'Ana', onState, onStatus })
+    last().open()
+    expect(JSON.parse(last().sent[0]!)).toEqual({
+      event: 'auth',
+      data: { matchId: 'm-1', token: 'tok', name: 'Ana' },
+    })
+  })
+
+  it('omits name for the operator', () => {
+    start()
+    last().open()
+    expect(JSON.parse(last().sent[0]!).data).not.toHaveProperty('name')
+  })
+
+  it('a referee 4001 reports rejected without logging out', () => {
+    openFightChannel({
+      matchId: 'm-1',
+      token: 'tok',
+      name: 'Ana',
+      logOutOnReject: false,
+      onState,
+      onStatus,
+    })
+    last().serverClose(4001)
+    expect(onStatus).toHaveBeenLastCalledWith('rejected')
+    expect(unauthorized).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(60_000)
+    expect(FakeWebSocket.instances).toHaveLength(1)
+  })
+
   it('forwards state data and ignores other events, bad JSON and pings', () => {
     start()
     last().open()

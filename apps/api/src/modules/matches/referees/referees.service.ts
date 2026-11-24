@@ -101,6 +101,12 @@ export class RefereesService {
         return session;
     }
 
+    /** Server-internal, no owner check: the names holding a seat on the match */
+    async seatedNames(matchId: string): Promise<string[]> {
+        const seats = await this.repo.listSeats(matchId);
+        return seats.map((s) => s.name);
+    }
+
     /** Owner-only. Who holds each seat. 404 match_not_found. */
     async listSeats(
         matchId: string,
