@@ -21,6 +21,8 @@ import {
 const CHAMPIONSHIP_ID = '11111111-1111-4111-8111-111111111111';
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const ROBOT_A_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ROBOT_B_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const KEY = `recordings/${MATCH_ID}.mp4`;
 const SIZE = 5000;
 
@@ -88,7 +90,12 @@ function setup({
     const matchesService = {
         findOne: vi.fn(async (id: string) => {
             if (missingMatch) throw new NotFoundException('match_not_found');
-            return { id, championshipId: CHAMPIONSHIP_ID } as Match;
+            return {
+                id,
+                championshipId: CHAMPIONSHIP_ID,
+                robotAId: ROBOT_A_ID,
+                robotBId: ROBOT_B_ID,
+            } as Match;
         }),
     };
     const championshipsService = {
@@ -489,6 +496,114 @@ describe('RecordingsService.complete: analysis job (#21)', () => {
             service.complete(MATCH_ID, { key: KEY, size: 10 }, USER_ID),
         ).rejects.toEqual(new ConflictException('recording_not_uploaded'));
         expect(published).toEqual([]);
+    });
+});
+
+describe('RecordingsService.getAnalysis', () => {
+    const heatmap = (n: number) => `analyses/${MATCH_ID}/heatmap_robot${n}.png`;
+
+    function analysedVideo(): MatchVideo {
+        const video = uploadedVideo();
+        video.analysisStatus = 'done';
+        video.analysisError = null;
+        video.analysisResult = {
+            mock: true,
+            totalFrames: 450,
+            trajectoriesKey: `analyses/${MATCH_ID}/trajectories.csv`,
+            robots: {
+                A: {
+                    detectedPositions: 440,
+                    totalFrames: 450,
+                    heatmapKey: heatmap(1),
+                },
+                B: {
+                    detectedPositions: 12,
+                    totalFrames: 450,
+                    heatmapKey: heatmap(2),
+                },
+            },
+        };
+        return video;
+    }
+
+    it('returns each robot with its match robot id and a signed heatmap URL', async () => {
+        const { service, storage } = setup({ existing: analysedVideo() });
+
+        const answer = await service.getAnalysis(MATCH_ID, USER_ID);
+
+        expect(answer).toMatchObject({
+            status: 'done',
+            error: null,
+            mock: true,
+            totalFrames: 450,
+            robots: [
+                {
+                    side: 'A',
+                    robotId: ROBOT_A_ID,
+                    detectedPositions: 440,
+                    heatmapUrl: `https://r2.example/${heatmap(1)}?read-signature=fake`,
+                },
+                {
+                    side: 'B',
+                    robotId: ROBOT_B_ID,
+                    detectedPositions: 12,
+                    heatmapUrl: `https://r2.example/${heatmap(2)}?read-signature=fake`,
+                },
+            ],
+        });
+        expect(answer.expiresAt).toEqual(expect.any(String));
+        expect(storage.readSigned.map((s) => s.expiresIn)).toEqual([
+            READ_URL_TTL_SECONDS,
+            READ_URL_TTL_SECONDS,
+        ]);
+    });
+
+    it('while running: the status only, nothing signed', async () => {
+        const video = uploadedVideo();
+        video.analysisStatus = 'running';
+        video.analysisError = null;
+        video.analysisResult = null;
+        const { service, storage } = setup({ existing: video });
+
+        expect(await service.getAnalysis(MATCH_ID, USER_ID)).toEqual({
+            status: 'running',
+            error: null,
+            mock: false,
+            totalFrames: null,
+            robots: [],
+            expiresAt: null,
+        });
+        expect(storage.readSigned).toEqual([]);
+    });
+
+    it('failed: returns the error code', async () => {
+        const video = uploadedVideo();
+        video.analysisStatus = 'failed';
+        video.analysisError = 'video_unreadable';
+        video.analysisResult = null;
+        const { service } = setup({ existing: video });
+
+        expect(await service.getAnalysis(MATCH_ID, USER_ID)).toMatchObject({
+            status: 'failed',
+            error: 'video_unreadable',
+            robots: [],
+        });
+    });
+
+    it('answers 404 analysis_not_found before any video was confirmed', async () => {
+        const { service } = setup({ existing: uploadingVideo() });
+
+        await expect(service.getAnalysis(MATCH_ID, USER_ID)).rejects.toEqual(
+            new NotFoundException('analysis_not_found'),
+        );
+    });
+
+    it('answers 404 match_not_found for a match in someone else championship', async () => {
+        const { service } = setup({ owner: false, existing: analysedVideo() });
+
+        await expect(service.getAnalysis(MATCH_ID, USER_ID)).rejects.toEqual(
+            new NotFoundException('match_not_found'),
+        );
     });
 });
 
