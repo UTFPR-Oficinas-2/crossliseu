@@ -65,7 +65,7 @@ describe('matchRows', () => {
       robotBId: 'gone',
       arenaId: null,
       state: 'scheduled',
-      scheduledAt: '',
+      startedAt: null,
       createdAt: '',
       modifiedAt: '',
     }

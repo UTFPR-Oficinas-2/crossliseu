@@ -12,8 +12,8 @@ export interface ApiMatch {
   /** Shared by both robots; the API takes it from them */
   weightClass: WeightClass
   state: ApiMatchState
-  /** ISO timestamps */
-  scheduledAt: string
+  /** When the fight started (ISO), from its `started` event. `null` before Start */
+  startedAt: string | null
   /** The arena the fight runs on (set at Start); kept after Close. `null` before Start */
   arenaId: string | null
   endReason: MatchEndReason | null
@@ -35,12 +35,10 @@ export interface ApiCreateMatch {
   championshipId: string
   robotAId: string
   robotBId: string
-  /** ISO timestamp */
-  scheduledAt: string
 }
 
 /** `UpdateMatchDto` */
-export type ApiUpdateMatch = Partial<Pick<ApiCreateMatch, 'robotAId' | 'robotBId' | 'scheduledAt'>>
+export type ApiUpdateMatch = Partial<Pick<ApiCreateMatch, 'robotAId' | 'robotBId'>>
 
 /** GET /matches?championshipId= (public), in creation order */
 export function listMatches(championshipId: string): Promise<ApiMatch[]> {

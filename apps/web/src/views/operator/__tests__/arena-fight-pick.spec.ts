@@ -12,7 +12,7 @@ import {
 
 const at = '2026-10-01T00:00:00.000Z'
 
-function match(id: string, state: MatchState, scheduledAt: string): MatchSummary {
+function match(id: string, state: MatchState, createdAt: string): MatchSummary {
   return {
     id,
     championshipId: 'c1',
@@ -21,8 +21,8 @@ function match(id: string, state: MatchState, scheduledAt: string): MatchSummary
     robotBId: 'r2',
     arenaId: null,
     state,
-    scheduledAt,
-    createdAt: at,
+    startedAt: null,
+    createdAt,
     modifiedAt: at,
   }
 }
@@ -44,7 +44,7 @@ const robots: Robot[] = [
 ]
 
 describe('fightOptions', () => {
-  it('keeps only scheduled fights, earliest first', () => {
+  it('keeps only scheduled fights, oldest created first', () => {
     const options = fightOptions(
       [
         match('late', 'scheduled', '2026-12-09T15:00:00.000Z'),

@@ -95,24 +95,23 @@ describe('matches API', () => {
     expect(lastRequest(fetchMock).url).toMatch(/\/matches\?championshipId=c1$/)
   })
 
-  it('creates with scheduledAt and without a weight class; updates robots or time', async () => {
+  it('creates without a weight class or a date; updates the robots', async () => {
     const fetchMock = stubFetch()
 
-    const scheduledAt = '2026-12-09T13:00:00.000Z'
-    await createMatch({ championshipId: 'c1', robotAId: 'r1', robotBId: 'r2', scheduledAt }, 'tok')
+    await createMatch({ championshipId: 'c1', robotAId: 'r1', robotBId: 'r2' }, 'tok')
     // toEqual: an extra key such as weightClass is a 400 in production (forbidNonWhitelisted)
     expect(lastRequest(fetchMock)).toEqual({
       url: expect.stringMatching(/\/matches$/),
       method: 'POST',
-      body: { championshipId: 'c1', robotAId: 'r1', robotBId: 'r2', scheduledAt },
+      body: { championshipId: 'c1', robotAId: 'r1', robotBId: 'r2' },
       authorization: 'Bearer tok',
     })
 
-    await updateMatch('m1', { robotBId: 'r3', scheduledAt }, 'tok')
+    await updateMatch('m1', { robotBId: 'r3' }, 'tok')
     expect(lastRequest(fetchMock)).toEqual({
       url: expect.stringMatching(/\/matches\/m1$/),
       method: 'PATCH',
-      body: { robotBId: 'r3', scheduledAt },
+      body: { robotBId: 'r3' },
       authorization: 'Bearer tok',
     })
   })

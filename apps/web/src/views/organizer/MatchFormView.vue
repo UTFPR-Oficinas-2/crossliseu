@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Figma: `ORG-07a/b Nova luta` (nodes 196:430 and 126:530) and `ORG-08 Editar luta` (153:1135).
-// Creating takes two steps on one route: step 1 picks the category and the planned time, step 2
+// Creating takes two steps on one route: step 1 picks the category, step 2
 // the two robots of that category. Editing is a single step with the robot pickers only: the
 // category is fixed by the match. Only scheduled matches can be edited or deleted. ORG-06 has no
 // delete action, so "Excluir luta" lives here in edit mode.
@@ -8,7 +8,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import AppButton from '@/components/ui/AppButton.vue'
-import InputField from '@/components/ui/InputField.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
@@ -73,7 +72,7 @@ let isUnmounted = false
 
 const busy = computed(() => saving.value || deleting.value)
 const fields = Object.keys(values) as MatchFormField[]
-const step1Fields: MatchFormField[] = ['weightClass', 'scheduledAt']
+const step1Fields: MatchFormField[] = ['weightClass']
 const robotFields: RobotField[] = ['robotAId', 'robotBId']
 const clientErrors = computed<MatchFormErrors>(() => ({
   ...validateStep1(values),
@@ -91,7 +90,7 @@ const weightClassOptions = WEIGHT_CLASSES.map((value) => ({ value, label: value 
 const subtitle = computed(() => {
   if (mode === 'edit') return 'Só lutas programadas podem ser editadas ou excluídas.'
   return step.value === 1
-    ? 'Passo 1 de 2 · escolha a categoria e o horário previsto.'
+    ? 'Passo 1 de 2 · escolha a categoria.'
     : 'Passo 2 de 2 · escolha dois robôs da categoria escolhida.'
 })
 const listRoute = computed(() => ({ name: 'championship-matches', params: { championshipId } }))
@@ -309,9 +308,7 @@ onBeforeUnmount(() => {
         @submit.prevent="onSubmit"
       >
         <template v-if="step === 1">
-          <h2 id="match-form-heading" class="match-form__heading text-heading-m">
-            Categoria e horário
-          </h2>
+          <h2 id="match-form-heading" class="match-form__heading text-heading-m">Categoria</h2>
 
           <div class="match-form__fields">
             <SelectField
@@ -324,15 +321,6 @@ onBeforeUnmount(() => {
               required
               @update:model-value="pickWeightClass"
               @focusout="touched.add('weightClass')"
-            />
-            <InputField
-              v-model="values.scheduledAt"
-              type="datetime-local"
-              name="scheduledAt"
-              label="Data e horário *"
-              :error="fieldError('scheduledAt')"
-              required
-              @focusout="touched.add('scheduledAt')"
             />
           </div>
 
@@ -435,8 +423,8 @@ onBeforeUnmount(() => {
           <section class="match-form__panel">
             <h2 class="match-form__heading text-heading-s">Como funciona</h2>
             <p class="match-form__muted text-body-s">
-              Escolha a categoria de peso e o horário previsto. No passo seguinte, só aparecem os
-              robôs inscritos nessa categoria.
+              Escolha a categoria de peso. No passo seguinte, só aparecem os robôs inscritos nessa
+              categoria.
             </p>
           </section>
           <section class="match-form__panel match-form__panel--rules">

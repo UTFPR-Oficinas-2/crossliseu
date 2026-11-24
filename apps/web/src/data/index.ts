@@ -189,7 +189,7 @@ function toMatchSummary(api: ApiMatch): MatchSummary {
     robotBId: api.robotBId,
     arenaId: api.arenaId,
     state: api.state,
-    scheduledAt: api.scheduledAt,
+    startedAt: api.startedAt,
     createdAt: api.createdAt,
     modifiedAt: api.modifiedAt,
   }
@@ -214,8 +214,6 @@ export async function getMatchSummaries(championshipId: string): Promise<MatchSu
 export interface MatchInput {
   robotAId: string
   robotBId: string
-  /** ISO timestamp */
-  scheduledAt: string
 }
 
 /** POST /matches (JWT) */

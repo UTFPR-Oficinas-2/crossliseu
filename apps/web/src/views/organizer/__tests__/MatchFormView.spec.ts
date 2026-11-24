@@ -9,7 +9,7 @@ import { liveToken } from '@/stores/__tests__/token-helpers'
 import type { MatchInput } from '@/data'
 import type { Championship, MatchState, MatchSummary, Robot, WeightClass } from '@/types'
 import MatchFormView from '../MatchFormView.vue'
-import { MATCH_MESSAGES, toScheduledAtIso } from '../match-form'
+import { MATCH_MESSAGES } from '../match-form'
 
 vi.mock('@/data', () => ({
   getChampionship: vi.fn<(id: string) => Promise<Championship | null>>(),
@@ -56,7 +56,7 @@ const summary = (state: MatchState = 'scheduled'): MatchSummary => ({
   robotBId: 'marte',
   arenaId: null,
   state,
-  scheduledAt: '2026-12-09T14:00:00.000Z',
+  startedAt: null,
 })
 
 let token = ''
@@ -127,18 +127,18 @@ const subtitle = (wrapper: Wrapper) => wrapper.get('.match-form__subtitle').text
 const PREVIEW_NOTE =
   'Assim a luta aparece na lista do campeonato. O lado de cada robô é escolhido pelo operador antes de iniciar.'
 
-/** Step 1: category and time, then "Próximo" */
-async function fillStep1(
-  wrapper: Wrapper,
-  weightClass = 'beetleweight',
-  when = '2026-12-09T14:30',
-) {
+/** Picks the category in step 1 */
+async function pickWeightClass(wrapper: Wrapper, weightClass = 'beetleweight') {
   await comboboxes(wrapper)[0]!.trigger('click')
   await wrapper
     .findAll('[role="option"]')
     .find((o) => o.text().includes(weightClass))!
     .trigger('click')
-  await wrapper.get('input[type="datetime-local"]').setValue(when)
+}
+
+/** Step 1: the category, then "Próximo" */
+async function fillStep1(wrapper: Wrapper, weightClass = 'beetleweight') {
+  await pickWeightClass(wrapper, weightClass)
   await buttonByText(wrapper, 'Próximo')!.trigger('click')
   await flushPromises()
 }
@@ -169,17 +169,17 @@ describe('MatchFormView', () => {
       'Lutas',
       'Nova luta',
     ])
-    expect(subtitle(wrapper)).toBe('Passo 1 de 2 · escolha a categoria e o horário previsto.')
-    expect(wrapper.get('#match-form-heading').text()).toBe('Categoria e horário')
+    expect(subtitle(wrapper)).toBe('Passo 1 de 2 · escolha a categoria.')
+    expect(wrapper.get('#match-form-heading').text()).toBe('Categoria')
     expect(comboboxes(wrapper).map((c) => c.text())).toEqual(['Selecione a categoria'])
-    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(true)
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(false)
     expect(cancelLink(wrapper).attributes('href')).toBe('/manage/c1/matches')
     expect(buttonByText(wrapper, 'Próximo')).toBeDefined()
     expect(buttonByText(wrapper, 'Criar luta')).toBeUndefined()
     const aside = wrapper.get('aside').text()
     expect(aside).toContain('Como funciona')
     expect(aside).toContain(
-      'Escolha a categoria de peso e o horário previsto. No passo seguinte, só aparecem os robôs inscritos nessa categoria.',
+      'Escolha a categoria de peso. No passo seguinte, só aparecem os robôs inscritos nessa categoria.',
     )
     expect(aside).toContain('Regras do confronto')
     expect(aside).toContain(
@@ -188,14 +188,14 @@ describe('MatchFormView', () => {
     expect(getMatchSummaries).not.toHaveBeenCalled()
   })
 
-  it('create: "Próximo" with empty fields shows both step-1 messages', async () => {
+  it('create: "Próximo" with no category shows the step-1 message', async () => {
     const { wrapper } = await mountView('/manage/c1/matches/new')
 
     await buttonByText(wrapper, 'Próximo')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('Escolha a categoria de peso.')
-    expect(wrapper.text()).toContain('Informe a data e o horário.')
+    expect(wrapper.text()).not.toContain('Informe a data')
     expect(subtitle(wrapper)).toContain('Passo 1 de 2')
   })
 
@@ -215,9 +215,6 @@ describe('MatchFormView', () => {
 
     expect(subtitle(wrapper)).toContain('Passo 1 de 2')
     expect(comboboxes(wrapper)[0]!.text()).toBe('beetleweight')
-    expect(wrapper.get<HTMLInputElement>('input[type="datetime-local"]').element.value).toBe(
-      '2026-12-09T14:30',
-    )
   })
 
   it('create: step 2 lists only the chosen category and disables the other pick', async () => {
@@ -258,7 +255,6 @@ describe('MatchFormView', () => {
       {
         robotAId: 'marte',
         robotBId: 'cobalto',
-        scheduledAt: toScheduledAtIso('2026-12-09T14:30'),
       },
       token,
     )
@@ -325,11 +321,7 @@ describe('MatchFormView', () => {
     await pick(wrapper, 1, 'Cobalto')
     await submit(wrapper)
 
-    expect(updateMatch).toHaveBeenCalledWith(
-      'm1',
-      { robotAId: 'tita', robotBId: 'cobalto', scheduledAt: '2026-12-09T14:00:00.000Z' },
-      token,
-    )
+    expect(updateMatch).toHaveBeenCalledWith('m1', { robotAId: 'tita', robotBId: 'cobalto' }, token)
     expect(router.currentRoute.value.name).toBe('championship-matches')
   })
 
@@ -421,7 +413,7 @@ describe('MatchFormView', () => {
 
   it('asks before leaving with unsaved changes', async () => {
     const { wrapper, router } = await mountView('/manage/c1/matches/new')
-    await wrapper.get('input[type="datetime-local"]').setValue('2026-12-09T14:30')
+    await pickWeightClass(wrapper)
 
     confirmSpy.mockReturnValue(false)
     await cancelLink(wrapper).trigger('click')
