@@ -225,6 +225,7 @@ onMounted(loadCameras)
     />
 
     <CameraPreview
+      class="recorder__preview"
       :stream="stream"
       :caption="isRecording ? 'Ao vivo' : 'Pré-visualização ao vivo'"
       :signal="signal"
@@ -236,12 +237,6 @@ onMounted(loadCameras)
       {{ error }}
       <AppButton variant="secondary" @click="retry">Tentar de novo</AppButton>
     </p>
-
-    <div class="recorder__controls">
-      <span class="recorder__timer text-timer-l" aria-label="Tempo de gravação">
-        {{ formatElapsed(elapsedSeconds) }}
-      </span>
-    </div>
 
     <p v-if="notRecorded" class="recorder__note text-body-s">Esta luta não foi gravada.</p>
 
@@ -298,8 +293,10 @@ onMounted(loadCameras)
 .recorder {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 720px;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -330,16 +327,11 @@ onMounted(loadCameras)
   color: var(--color-red);
 }
 
-.recorder__controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.recorder__timer {
-  color: var(--color-text);
+/* Fills the column's leftover height; shrinks first when the result block appears */
+.recorder__preview {
+  flex: 1 1 0;
+  min-height: var(--size-preview-min);
+  aspect-ratio: auto;
 }
 
 .recorder__note {

@@ -123,6 +123,22 @@ describe('FightRecorderPanel', () => {
     expect(wrapper.text()).toContain('Baixar')
   })
 
+  it('shows the recording time only inside the preview while recording', async () => {
+    withCamera()
+    const wrapper = mountPanel('running')
+    await flushPromises()
+
+    expect(recorder.state.value).toBe('recording')
+    expect(wrapper.findAll('[aria-label="Tempo de gravação"]')).toHaveLength(1)
+    expect(wrapper.find('.recorder__timer').exists()).toBe(false)
+  })
+
+  it('shows no recording time when the camera is idle', () => {
+    const wrapper = mountPanel('before')
+
+    expect(wrapper.findAll('[aria-label="Tempo de gravação"]')).toHaveLength(0)
+  })
+
   it('has no manual record button and no result before the fight', () => {
     withCamera()
     const wrapper = mountPanel('before')
