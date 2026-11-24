@@ -315,8 +315,9 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
 
     /**
      * A surrender button press from the box in `arenaId` (docs/arena-protocol.md, `surrender`).
-     * Counts only when `matchId` is that arena's current match and it is `ongoing`; the other
-     * side wins. A time-out that was due is settled first, so a press after time ran out is
+     * Counts only when `matchId` is that arena's current match and it is `ongoing`; it records the
+     * robot that gave up, and the other side is proposed as winner until the operator closes the
+     * fight (#50). A time-out that was due is settled first, so a press after time ran out is
      * `not_ongoing` and the match ends as `time_out`.
      */
     async surrender(
@@ -352,8 +353,9 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 await writes.updateMatch({
                     state: 'finished',
                     endReason: 'surrender',
-                    winnerRobotId:
-                        side === 'A' ? match.robotBId : match.robotAId,
+                    // The winner waits for the operator's confirmation at close (#50)
+                    surrenderedRobotId:
+                        side === 'A' ? match.robotAId : match.robotBId,
                 });
                 await writes.appendEvent(
                     'finished',

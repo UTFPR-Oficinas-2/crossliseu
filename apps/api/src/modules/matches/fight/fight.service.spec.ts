@@ -941,14 +941,16 @@ describe('FightService.surrender', () => {
         });
     }
 
-    it('surrender by A on the ongoing current match finishes it with B as winner', async () => {
+    it('surrender by A on the ongoing current match finishes it, records A gave up, and writes no winner', async () => {
         const { service, store, changes } = ongoing();
 
         expect(await service.surrender(ARENA_ID, MATCH_ID, 'A')).toBe('done');
 
         expect(store.match.state).toBe('finished');
         expect(store.match.endReason).toBe('surrender');
-        expect(store.match.winnerRobotId).toBe(store.match.robotBId);
+        expect(store.match.surrenderedRobotId).toBe(store.match.robotAId);
+        // The winner is written only when the operator confirms (#50)
+        expect(store.match.winnerRobotId ?? null).toBeNull();
         expect(store.written).toHaveLength(1);
         expect(store.written[0]).toMatchObject({
             type: 'finished',
@@ -958,12 +960,13 @@ describe('FightService.surrender', () => {
         expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
     });
 
-    it("surrender by B sets A's robot as winner", async () => {
+    it("surrender by B records B's robot as the one that gave up", async () => {
         const { service, store } = ongoing();
 
         expect(await service.surrender(ARENA_ID, MATCH_ID, 'B')).toBe('done');
 
-        expect(store.match.winnerRobotId).toBe(store.match.robotAId);
+        expect(store.match.surrenderedRobotId).toBe(store.match.robotBId);
+        expect(store.match.winnerRobotId ?? null).toBeNull();
         expect(store.match.endReason).toBe('surrender');
     });
 
@@ -1070,7 +1073,7 @@ describe('FightService.surrender', () => {
             'not_ongoing',
         );
 
-        expect(store.match.winnerRobotId).toBe(store.match.robotBId);
+        expect(store.match.surrenderedRobotId).toBe(store.match.robotAId);
         expect(store.written).toHaveLength(1);
         expect(changes).toHaveLength(1);
     });

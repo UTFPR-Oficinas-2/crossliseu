@@ -207,13 +207,14 @@ describe('/arena gateway (db)', () => {
     const matchRow = async (matchId: string) =>
         (
             await ds.query(
-                `SELECT "state", "end_reason", "winner_robot_id" FROM "matches" WHERE "id" = $1`,
+                `SELECT "state", "end_reason", "winner_robot_id", "surrendered_robot_id" FROM "matches" WHERE "id" = $1`,
                 [matchId],
             )
         )[0] as {
             state: string;
             end_reason: string | null;
             winner_robot_id: string | null;
+            surrendered_robot_id: string | null;
         };
     const finishedEvents = async (matchId: string) =>
         (
@@ -568,7 +569,7 @@ describe('/arena gateway (db)', () => {
     });
 
     describe('surrender', () => {
-        it('surrender while ongoing finishes it; GET /matches/:id shows endReason surrender and the other robot as winner', async () => {
+        it('surrender while ongoing finishes it; GET /matches/:id shows endReason surrender, who gave up, and no winner yet', async () => {
             const fight = await seedFight();
             const { box: opened } = await welcomedBox();
             await pick(fight.id);
@@ -591,7 +592,9 @@ describe('/arena gateway (db)', () => {
             expect(response.body).toMatchObject({
                 state: 'finished',
                 endReason: 'surrender',
-                winnerRobotId: fight.b,
+                surrenderedRobotId: fight.a,
+                winnerRobotId: null,
+                draw: false,
             });
         });
 
@@ -609,6 +612,7 @@ describe('/arena gateway (db)', () => {
                     state,
                     end_reason: null,
                     winner_robot_id: null,
+                    surrendered_robot_id: null,
                 });
                 expect(await finishedEvents(fight.id)).toBe(0);
             };
@@ -680,7 +684,8 @@ describe('/arena gateway (db)', () => {
             expect(await matchRow(fight.id)).toEqual({
                 state: 'finished',
                 end_reason: 'surrender',
-                winner_robot_id: fight.a,
+                winner_robot_id: null,
+                surrendered_robot_id: fight.b,
             });
         });
     });
