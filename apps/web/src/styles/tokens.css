@@ -70,6 +70,9 @@
   --size-card-min: 416px; /* championship card grid column (Figma desktop width) */
   --size-form-card: 480px; /* sign-in card width */
   --size-dot: 8px; /* status dot, e.g. the error banner marker */
+  --size-dot-lg: 10px; /* referee waiting card marker */
+  --size-referee-side-bar-width: 4px; /* ARB-01 competitor color bar */
+  --size-referee-side-bar-height: 40px;
   --size-aside: 360px; /* organizer form aside column */
   --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
   --size-menu-max: 320px; /* select menu height before it scrolls */
