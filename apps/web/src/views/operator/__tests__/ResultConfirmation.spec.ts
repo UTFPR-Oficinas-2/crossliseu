@@ -16,6 +16,7 @@ const finished: OperatorFightState = {
   winnerSide: null,
   draw: false,
   proposal: { outcome: 'A', basis: 'points' },
+  surrenderedSide: null,
 }
 
 function render(state: Partial<OperatorFightState>, disabled = false) {
@@ -67,6 +68,12 @@ describe('ResultConfirmation', () => {
     for (const button of wrapper.findAll('button')) {
       expect(button.attributes('disabled')).toBeDefined()
     }
+  })
+
+  it('says so when a closed fight has no recorded result', () => {
+    const wrapper = render({ closed: true, proposal: null })
+
+    expect(wrapper.text()).toContain('Resultado não registrado')
   })
 
   it('shows the confirmed winner or draw once closed, without actions', () => {

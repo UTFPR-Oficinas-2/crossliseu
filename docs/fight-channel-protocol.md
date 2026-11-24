@@ -35,7 +35,9 @@ A socket follows exactly one match. To follow another, open another socket.
 | `ping` | Every 10 s on a subscribed socket | `null` |
 | `error` | A frame the server refuses; the socket stays open | `{ "code": string, "message": string }` |
 
-**Operator extras.** A socket authenticated as an operator receives the same `state` plus `closed`, `hasSelectedArena`, `winnerSide`, `draw` and `proposal`. Referees get only the public shape.
+**Operator extras.** A socket authenticated as an operator receives the same `state` plus `closed`, `hasSelectedArena`, `winnerSide`, `draw`, `proposal` and `surrenderedSide`. Referees get only the public shape.
+
+- `surrenderedSide`: `"A"` / `"B"` when a surrender ended the fight (the side that gave up), kept after close, including when the operator closes it as a draw; otherwise `null`.
 
 - `proposal`: what closing the fight would confirm (#50), `{ "outcome": "A" | "B" | "draw", "basis": "surrender" | "points" | "tied" }`. Present only while the fight is `finished` and not closed, otherwise `null`. A surrender proposes the other side; otherwise the side with more points over the three referees, and equal points (including none) propose a draw.
 - `winnerSide`: the confirmed winner, set only once the fight is closed with a winner; `null` before that and on a draw.

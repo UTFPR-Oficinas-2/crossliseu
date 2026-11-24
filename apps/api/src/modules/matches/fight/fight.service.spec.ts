@@ -272,6 +272,7 @@ describe('FightService', () => {
             winnerSide: null,
             draw: false,
             proposal: null,
+            surrenderedSide: null,
         });
     });
 
@@ -309,6 +310,7 @@ describe('FightService', () => {
                 winnerSide: null,
                 draw: false,
                 closed: false,
+                surrenderedSide: 'A',
             });
         });
 
@@ -368,6 +370,21 @@ describe('FightService', () => {
             });
         });
 
+        it('a surrender closed as a draw still names the side that gave up', async () => {
+            const { service } = finishedFight('surrender', { A: 0, B: 0 }, 'a');
+
+            expect(
+                await service.operatorCommand(MATCH_ID, 'close', USER_ID, {
+                    draw: true,
+                }),
+            ).toMatchObject({
+                closed: true,
+                draw: true,
+                winnerSide: null,
+                surrenderedSide: 'A',
+            });
+        });
+
         it('the public state shows neither the proposal nor the draw', async () => {
             const { service } = finishedFight('surrender', { A: 0, B: 0 }, 'a');
 
@@ -376,6 +393,7 @@ describe('FightService', () => {
             expect(state).not.toHaveProperty('proposal');
             expect(state).not.toHaveProperty('draw');
             expect(state).not.toHaveProperty('winnerSide');
+            expect(state).not.toHaveProperty('surrenderedSide');
         });
     });
 

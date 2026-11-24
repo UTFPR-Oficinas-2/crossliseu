@@ -37,7 +37,7 @@ const confirmedText = computed(() => {
   <section class="result" aria-labelledby="result-title">
     <template v-if="state.closed">
       <h2 id="result-title" class="text-overline">Resultado oficial</h2>
-      <p v-if="confirmedText" class="text-heading-m">{{ confirmedText }}</p>
+      <p class="text-heading-m">{{ confirmedText ?? 'Resultado não registrado' }}</p>
     </template>
     <template v-else>
       <h2 id="result-title" class="text-overline">Resultado proposto</h2>

@@ -12,6 +12,7 @@ const snapshot: OperatorFightState = {
   winnerSide: null,
   draw: false,
   proposal: null,
+  surrenderedSide: null,
   hasSelectedArena: true,
 }
 

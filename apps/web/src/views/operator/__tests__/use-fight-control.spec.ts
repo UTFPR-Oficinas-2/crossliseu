@@ -43,6 +43,7 @@ function snapshot(overrides: Partial<OperatorFightState> = {}): OperatorFightSta
     winnerSide: null,
     draw: false,
     proposal: null,
+    surrenderedSide: null,
     hasSelectedArena: true,
     ...overrides,
   }
@@ -376,6 +377,7 @@ describe('useFightControl', () => {
     channel().push({ ...finished, proposal: { outcome: 'C', basis: 'points' } })
     channel().push({ ...finished, proposal: { outcome: 'A', basis: 'luck' } })
     channel().push({ ...finished, proposal: undefined })
+    channel().push({ ...finished, surrenderedSide: 'C' })
     expect(fight.state.value).toEqual(finished)
 
     const proposed = { ...finished, proposal: { outcome: 'A', basis: 'points' } as const }

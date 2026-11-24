@@ -257,6 +257,143 @@ describe('migrations on a fresh database', () => {
             await ds.runMigrations();
         });
 
+        type Owner = {
+            user: string;
+            championship: string;
+            a: string;
+            b: string;
+        };
+
+        async function seedOwner(): Promise<Owner> {
+            const [user]: { id: string }[] = await ds.query(
+                `INSERT INTO "users" ("username", "email", "password")
+                 VALUES ('op', 'op@example.com', 'pw') RETURNING "id"`,
+            );
+            const [championship]: { id: string }[] = await ds.query(
+                `INSERT INTO "championships" ("name", "start_date", "end_date", "created_by_user_id")
+                 VALUES ('Cup', now(), now(), $1) RETURNING "id"`,
+                [user!.id],
+            );
+            const robots: { id: string }[] = await ds.query(
+                `INSERT INTO "robots" ("name", "weight_class", "team", "championship_id", "created_by_user_id")
+                 VALUES ('A', 'antweight', 'T', $1, $2), ('B', 'antweight', 'T', $1, $2)
+                 RETURNING "id"`,
+                [championship!.id, user!.id],
+            );
+            return {
+                user: user!.id,
+                championship: championship!.id,
+                a: robots[0]!.id,
+                b: robots[1]!.id,
+            };
+        }
+
+        /** A time-out with the given points per side (one seat each), with no winner, as before #50 */
+        async function insertTimeOut(
+            owner: Owner,
+            points: { A: number; B: number },
+            closed: boolean,
+        ): Promise<string> {
+            const [row]: { id: string }[] = await ds.query(
+                `INSERT INTO "matches" ("weight_class", "state", "end_reason", "championship_id",
+                    "robot_a_id", "robot_b_id", "created_by_user_id")
+                 VALUES ('antweight', 'finished', 'time_out', $1, $2, $3, $4) RETURNING "id"`,
+                [owner.championship, owner.a, owner.b, owner.user],
+            );
+            const id = row!.id;
+            const scores = [
+                ...Array.from({ length: points.A }, () => owner.a),
+                ...Array.from({ length: points.B }, () => owner.b),
+            ];
+            for (const robotId of scores) {
+                await ds.query(
+                    `INSERT INTO "match_events" ("match_id", "type", "occurred_at", "robot_id", "judge_seat", "action")
+                     VALUES ($1, 'scored', now(), $2, 1, 1)`,
+                    [id, robotId],
+                );
+            }
+            // A referee's +1 then -1 for A must not count
+            await ds.query(
+                `INSERT INTO "match_events" ("match_id", "type", "occurred_at", "robot_id", "judge_seat", "action")
+                 VALUES ($1, 'scored', now(), $2, 2, 1), ($1, 'scored', now(), $2, 2, -1)`,
+                [id, owner.a],
+            );
+            if (closed) {
+                await ds.query(
+                    `INSERT INTO "match_events" ("match_id", "type", "occurred_at")
+                     VALUES ($1, 'closed', now() + interval '1 second')`,
+                    [id],
+                );
+            }
+            return id;
+        }
+
+        async function resultOf(id: string) {
+            const [row]: ResultRow[] = await ds.query(
+                `SELECT "id", "winner_robot_id", "surrendered_robot_id", "draw" FROM "matches" WHERE "id" = $1`,
+                [id],
+            );
+            return row;
+        }
+
+        it('gives fights closed before #50 without a winner their result from the points', async () => {
+            const owner = await seedOwner();
+            const aAhead = await insertTimeOut(owner, { A: 2, B: 1 }, true);
+            const bAhead = await insertTimeOut(owner, { A: 0, B: 3 }, true);
+            const tied = await insertTimeOut(owner, { A: 1, B: 1 }, true);
+            const scoreless = await insertTimeOut(owner, { A: 0, B: 0 }, true);
+            const open = await insertTimeOut(owner, { A: 2, B: 0 }, false);
+
+            await ds.runMigrations();
+
+            expect(await resultOf(aAhead)).toMatchObject({
+                winner_robot_id: owner.a,
+                draw: false,
+            });
+            expect(await resultOf(bAhead)).toMatchObject({
+                winner_robot_id: owner.b,
+                draw: false,
+            });
+            expect(await resultOf(tied)).toMatchObject({
+                winner_robot_id: null,
+                draw: true,
+            });
+            expect(await resultOf(scoreless)).toMatchObject({
+                winner_robot_id: null,
+                draw: true,
+            });
+            // Not closed yet: the operator confirms it
+            expect(await resultOf(open)).toMatchObject({
+                winner_robot_id: null,
+                draw: false,
+            });
+        });
+
+        it('a rollback keeps a surrender closed as a draw without a winner', async () => {
+            const owner = await seedOwner();
+            await ds.runMigrations();
+            const [row]: { id: string }[] = await ds.query(
+                `INSERT INTO "matches" ("weight_class", "state", "end_reason", "championship_id",
+                    "robot_a_id", "robot_b_id", "created_by_user_id", "surrendered_robot_id", "draw")
+                 VALUES ('antweight', 'finished', 'surrender', $1, $2, $3, $4, $2, true) RETURNING "id"`,
+                [owner.championship, owner.a, owner.b, owner.user],
+            );
+            await ds.query(
+                `INSERT INTO "match_events" ("match_id", "type", "occurred_at")
+                 VALUES ($1, 'closed', now())`,
+                [row!.id],
+            );
+
+            await undoThrough(MIGRATION);
+
+            const [after]: { winner_robot_id: string | null }[] =
+                await ds.query(
+                    `SELECT "winner_robot_id" FROM "matches" WHERE "id" = $1`,
+                    [row!.id],
+                );
+            expect(after?.winner_robot_id).toBeNull();
+        });
+
         it('records who surrendered and keeps the winner only on closed fights', async () => {
             const [user]: { id: string }[] = await ds.query(
                 `INSERT INTO "users" ("username", "email", "password")

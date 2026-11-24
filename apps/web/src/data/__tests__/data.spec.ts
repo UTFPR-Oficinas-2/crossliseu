@@ -435,6 +435,7 @@ describe('operator fight data', () => {
     winnerSide: null,
     draw: false,
     proposal: null,
+    surrenderedSide: null,
     hasSelectedArena: true,
   }
 

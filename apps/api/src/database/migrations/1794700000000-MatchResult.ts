@@ -28,17 +28,44 @@ export class MatchResult1794700000000 implements MigrationInterface {
                  WHERE "match_events"."match_id" = "matches"."id" AND "match_events"."type" = 'closed'
              )`,
         );
+        // Fights closed before #50 after a time-out or a manual finish never got a winner (an empty
+        // one read as a draw). Give them the official result now, by the same rule as close: more
+        // points over the three referees wins, equal points (including none) is a draw.
+        await queryRunner.query(
+            `WITH "totals" AS (
+                 SELECT "m"."id",
+                        COALESCE(SUM("e"."action") FILTER (WHERE "e"."robot_id" = "m"."robot_a_id"), 0) AS "a",
+                        COALESCE(SUM("e"."action") FILTER (WHERE "e"."robot_id" = "m"."robot_b_id"), 0) AS "b"
+                 FROM "matches" "m"
+                 LEFT JOIN "match_events" "e" ON "e"."match_id" = "m"."id" AND "e"."type" = 'scored'
+                 WHERE "m"."winner_robot_id" IS NULL
+                   AND "m"."end_reason" IS DISTINCT FROM 'surrender'
+                   AND EXISTS (
+                       SELECT 1 FROM "match_events" "c"
+                       WHERE "c"."match_id" = "m"."id" AND "c"."type" = 'closed'
+                   )
+                 GROUP BY "m"."id"
+             )
+             UPDATE "matches"
+             SET "winner_robot_id" = CASE
+                     WHEN "totals"."a" > "totals"."b" THEN "matches"."robot_a_id"
+                     WHEN "totals"."b" > "totals"."a" THEN "matches"."robot_b_id"
+                 END,
+                 "draw" = "totals"."a" = "totals"."b"
+             FROM "totals" WHERE "matches"."id" = "totals"."id"`,
+        );
         await queryRunner.query(
             `ALTER TABLE "matches" ADD CONSTRAINT "CHK_matches_result" CHECK (NOT ("draw" AND "winner_robot_id" IS NOT NULL))`,
         );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        // Unclosed surrender fights get back the winner a surrender used to write at once
+        // Unconfirmed surrender fights get back the winner a surrender used to write at once; a
+        // surrender the operator closed as a draw stays without a winner (the old "empty = draw")
         await queryRunner.query(
             `UPDATE "matches"
              SET "winner_robot_id" = CASE WHEN "surrendered_robot_id" = "robot_a_id" THEN "robot_b_id" ELSE "robot_a_id" END
-             WHERE "surrendered_robot_id" IS NOT NULL AND "winner_robot_id" IS NULL`,
+             WHERE "surrendered_robot_id" IS NOT NULL AND "winner_robot_id" IS NULL AND NOT "draw"`,
         );
         await queryRunner.query(
             `ALTER TABLE "matches" DROP CONSTRAINT "CHK_matches_result"`,

@@ -88,6 +88,8 @@ export interface OperatorFightState {
   draw: boolean
   /** What closing would confirm; only while finished and not closed */
   proposal: ResultProposal | null
+  /** The side that gave up when a surrender ended the fight; kept after close */
+  surrenderedSide: 'A' | 'B' | null
 }
 
 /** Why the server proposes the result: a surrender, more points, or equal points */

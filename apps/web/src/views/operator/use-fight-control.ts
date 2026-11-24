@@ -56,7 +56,8 @@ function checkSnapshot(snapshot: OperatorFightState, matchId: string): OperatorF
     typeof snapshot.robots?.B?.name !== 'string' ||
     ![null, 'manual', 'surrender', 'time_out'].includes(snapshot.endReason) ||
     typeof snapshot.draw !== 'boolean' ||
-    !isProposal(snapshot.proposal)
+    !isProposal(snapshot.proposal) ||
+    ![null, 'A', 'B'].includes(snapshot.surrenderedSide)
   ) {
     throw new Error('Invalid operator fight snapshot')
   }

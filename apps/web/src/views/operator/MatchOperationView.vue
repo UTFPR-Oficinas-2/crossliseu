@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
@@ -18,7 +17,6 @@ const emit = defineEmits<{
   fightStatus: [matchId: string, status: MatchState, hasSelectedArena: boolean]
 }>()
 const auth = useAuthStore()
-const router = useRouter()
 const operatorHome = { name: 'operator' } as const
 const {
   state,
@@ -27,7 +25,6 @@ const {
   busy,
   error,
   uncertainCommand,
-  confirmedCloseMatchId,
   refresh,
   resumeControls,
   command,
@@ -54,14 +51,10 @@ const reasonLabel: Record<MatchEndReason, string> = {
   surrender: 'Desistência',
 }
 
-// The side that gave up: opposite the proposed winner before Close, the confirmed one after (#50)
-const loserSide = computed(() => {
-  const { endReason, proposal, winnerSide } = state.value ?? {}
-  if (endReason !== 'surrender') return null
-  const winner =
-    proposal?.outcome === 'A' || proposal?.outcome === 'B' ? proposal.outcome : winnerSide
-  return winner ? (winner === 'A' ? 'B' : 'A') : null
-})
+// The side that gave up, from the server; kept after Close, even when closed as a draw (#50)
+const loserSide = computed(() =>
+  state.value?.endReason === 'surrender' ? state.value.surrenderedSide : null,
+)
 const reasonText = computed(() => {
   const reason = state.value?.endReason
   if (!reason) return ''
@@ -85,14 +78,8 @@ watch(state, (snapshot) => {
   if (snapshot) emit('fightStatus', snapshot.matchId, snapshot.status, snapshot.hasSelectedArena)
 })
 
-// The route guard may keep this view open so the operator can save the recording.
-watch(
-  confirmedCloseMatchId,
-  async (closedId) => {
-    if (closedId === matchId) await router.push(operatorHome)
-  },
-  { flush: 'post' },
-)
+// A confirmed Close stays on this view so the operator sees the official result (#50); they
+// leave with "Voltar à operação", where the route guard still protects an unsent recording.
 
 function confirmFinish() {
   if (window.confirm('Encerrar a luta agora?')) void command('finish')

@@ -80,6 +80,7 @@ const scheduled: OperatorFightState = {
   winnerSide: null,
   draw: false,
   proposal: null,
+  surrenderedSide: null,
   hasSelectedArena: true,
 }
 const finished: OperatorFightState = {
@@ -268,8 +269,8 @@ describe('MatchOperationView', () => {
   })
 
   it.each([
-    ['before Close, from the proposal', { proposal: { outcome: 'A', basis: 'surrender' } }],
-    ['after Close, from the winner', { closed: true, proposal: null, winnerSide: 'A' }],
+    ['before Close', { proposal: { outcome: 'A', basis: 'surrender' }, surrenderedSide: 'B' }],
+    ['after Close', { closed: true, proposal: null, winnerSide: 'A', surrenderedSide: 'B' }],
   ] as const)('shows which side surrendered %s', async (_, result) => {
     firstFrame = { ...finished, endReason: 'surrender', ...result }
     const { wrapper } = await mountFight()
@@ -277,6 +278,23 @@ describe('MatchOperationView', () => {
     expect(wrapper.text()).toContain('Desistência do lado B')
     expect(wrapper.get('.fight-card__side--b').text()).toContain('Desistiu')
     expect(wrapper.get('.fight-card__side--a').text()).not.toContain('Desistiu')
+  })
+
+  it('keeps the side that surrendered after the fight is closed as a draw', async () => {
+    firstFrame = {
+      ...finished,
+      endReason: 'surrender',
+      closed: true,
+      proposal: null,
+      winnerSide: null,
+      draw: true,
+      surrenderedSide: 'A',
+    }
+    const { wrapper } = await mountFight()
+
+    expect(wrapper.text()).toContain('Desistência do lado A')
+    expect(wrapper.get('.fight-card__side--a').text()).toContain('Desistiu')
+    expect(wrapper.text()).toContain('Empate')
   })
 
   it('confirms the proposed result with Close and no confirm dialog (#50)', async () => {
@@ -415,38 +433,50 @@ describe('MatchOperationView', () => {
     },
   )
 
-  it('returns to operator home after the POST confirms a local Close', async () => {
+  it('stays on the fight after the POST confirms a local Close, showing the result (#50)', async () => {
     firstFrame = finished
     post.mockResolvedValueOnce(closed)
-    const { click, router } = await mountFight()
+    const { wrapper, click, router, link } = await mountFight()
     await click('Confirmar resultado')
+
+    expect(router.currentRoute.value.name).toBe('match-operation')
+    expect(wrapper.text()).toContain('Luta fechada')
+    expect(wrapper.text()).toContain('Vencedor: Tritura')
+
+    await link('Voltar à operação')!.trigger('click')
+    await flushPromises()
     expect(router.currentRoute.value.name).toBe('operator')
   })
 
-  it('returns to operator home after a later pushed frame confirms an uncertain Close', async () => {
+  it('stays on the fight when a later pushed frame confirms an uncertain Close', async () => {
     firstFrame = finished
     get.mockResolvedValueOnce(finished)
     post.mockRejectedValueOnce(new ApiError(0, 'offline'))
-    const { click, router } = await mountFight()
+    const { wrapper, click, router } = await mountFight()
     await click('Confirmar resultado')
     expect(router.currentRoute.value.name).toBe('match-operation')
 
     await push(closed)
-    expect(router.currentRoute.value.name).toBe('operator')
+    expect(router.currentRoute.value.name).toBe('match-operation')
+    expect(wrapper.text()).toContain('Vencedor: Tritura')
     expect(post).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the closed fight and the unsent video when navigation is canceled', async () => {
+  it('keeps the closed fight and the unsent video when leaving is canceled', async () => {
     firstFrame = finished
     post.mockResolvedValueOnce(closed)
-    vi.mocked(window.confirm).mockReturnValueOnce(true)
     const { wrapper, router, click, link, button } = await mountFight()
     video.value = new Blob(['partial video'], { type: 'video/webm' })
     await flushPromises()
     const recorder = wrapper.getComponent(FightRecorderPanel).element
     await click('Confirmar resultado')
 
+    // Closing no longer leaves the screen, so nothing asks about the video yet
     expect(router.currentRoute.value.name).toBe('match-operation')
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+
+    await link('Voltar à operação')!.trigger('click')
+    await flushPromises()
     // The unsent video is guarded by the in-app window, not by a native dialog, and Close has none
     expect(window.confirm).not.toHaveBeenCalled()
     expect(wrapper.get('[role="alertdialog"]').text()).toContain('a gravação será perdida')
@@ -454,7 +484,6 @@ describe('MatchOperationView', () => {
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
     expect(router.currentRoute.value.name).toBe('match-operation')
     expect(wrapper.text()).toContain('Luta fechada')
-    expect(link('Voltar à operação')?.attributes('href')).toBe('/operator')
     expect(button('Confirmar resultado')).toBeUndefined()
     expect(button('Enviar')).toBeDefined()
     expect(button('Baixar')).toBeDefined()

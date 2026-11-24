@@ -53,6 +53,8 @@ export interface OperatorFightState extends FightState {
     draw: boolean;
     /** What closing would confirm; only while the fight is finished and not closed */
     proposal: ResultProposal | null;
+    /** The side that gave up when a surrender ended the fight, kept after close */
+    surrenderedSide: 'A' | 'B' | null;
 }
 
 export type SurrenderResult = 'done' | 'not_current_match' | 'not_ongoing';
@@ -556,7 +558,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         if (!snapshot) {
             throw this.notFound(matchId);
         }
-        const { events, robotIds, surrenderedSide, ...state } = snapshot;
+        const { events, robotIds, ...state } = snapshot;
         const score = scoreTotals(events, robotIds);
         const closed = events.some((event) => event.type === 'closed');
         return {
@@ -568,7 +570,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                 state.status === 'finished' && !closed
                     ? proposeResult({
                           endReason: state.endReason,
-                          surrenderedSide,
+                          surrenderedSide: state.surrenderedSide,
                           totals: score,
                       })
                     : null,

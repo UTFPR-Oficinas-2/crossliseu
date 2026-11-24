@@ -27,6 +27,7 @@ function fightState(overrides: Partial<OperatorFightState> = {}): OperatorFightS
     winnerSide: null,
     draw: false,
     proposal: null,
+    surrenderedSide: null,
     ...overrides,
   }
 }
