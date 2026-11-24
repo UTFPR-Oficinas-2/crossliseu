@@ -29,6 +29,16 @@ import {
   updateMatch as patchMatch,
   type ApiMatch,
 } from '@/api/matches'
+
+// The referee's own endpoints already return what the referee screen needs.
+export {
+  joinReferee,
+  submitScore,
+  type RefereeAction,
+  type RefereeCounts,
+  type RefereeJoin,
+  type RefereeSide,
+} from '@/api/referees'
 import {
   createRobot as postRobot,
   deleteRobot as removeRobot,
