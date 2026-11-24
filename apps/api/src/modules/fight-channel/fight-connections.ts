@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { FightAccess } from './fight-access.js';
 import type { FightSocket } from './fight-session.js';
 
-type Subscriber = { role: FightAccess['role']; socket: FightSocket };
+export type Subscriber = {
+    role: FightAccess['role'];
+    /** The referee's name; null for operators */
+    name: string | null;
+    socket: FightSocket;
+};
 
 /**
  * The sockets subscribed to each match on /fights, in memory. Assumes one API process, like
@@ -14,14 +19,19 @@ export class FightConnections {
     private readonly matchOf = new Map<FightSocket, string>();
 
     /** A socket follows one match: adding it again moves it */
-    add(matchId: string, role: FightAccess['role'], socket: FightSocket): void {
+    add(
+        matchId: string,
+        role: FightAccess['role'],
+        socket: FightSocket,
+        name: string | null = null,
+    ): void {
         this.remove(socket);
         let sockets = this.byMatch.get(matchId);
         if (!sockets) {
             sockets = new Map();
             this.byMatch.set(matchId, sockets);
         }
-        sockets.set(socket, { role, socket });
+        sockets.set(socket, { role, name, socket });
         this.matchOf.set(socket, matchId);
     }
 
@@ -59,8 +69,18 @@ export class FightConnections {
         code: number,
         reason: string,
     ): void {
+        this.closeWhere(matchId, (s) => s.role !== role, code, reason);
+    }
+
+    /** Closes and forgets the subscribers of the match for which `keep` is false */
+    closeWhere(
+        matchId: string,
+        keep: (subscriber: Subscriber) => boolean,
+        code: number,
+        reason: string,
+    ): void {
         this.closeAll(
-            this.subscribers(matchId).filter((s) => s.role === role),
+            this.subscribers(matchId).filter((s) => !keep(s)),
             code,
             reason,
         );

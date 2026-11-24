@@ -36,6 +36,12 @@ function setup({
             }),
         ),
         freeSeat: vi.fn(() => Promise.resolve(freeResult)),
+        listSeats: vi.fn(() =>
+            Promise.resolve([
+                { seat: 1 as const, name: 'Ana' },
+                { seat: 3 as const, name: 'Bia' },
+            ]),
+        ),
         claimToken: vi.fn((_id: string, next: string) => {
             store.token ??= next;
             return Promise.resolve();
@@ -141,5 +147,18 @@ describe('RefereesService change events', () => {
             new ConflictException('match_started'),
         );
         expect(changes).toEqual([]);
+    });
+});
+
+describe('RefereesService.seatedNames', () => {
+    it('returns the seated names without an owner check', async () => {
+        const { service, repo } = setup({ owner: false });
+
+        await expect(service.seatedNames(MATCH_ID)).resolves.toEqual([
+            'Ana',
+            'Bia',
+        ]);
+        expect(repo.listSeats).toHaveBeenCalledWith(MATCH_ID);
+        expect(repo.findMatch).not.toHaveBeenCalled();
     });
 });

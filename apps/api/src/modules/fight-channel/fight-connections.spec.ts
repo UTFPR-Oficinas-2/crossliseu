@@ -29,8 +29,8 @@ describe('FightConnections', () => {
         connections.add('m2', 'referee', other);
 
         expect(connections.subscribers('m1')).toEqual([
-            { role: 'referee', socket: a },
-            { role: 'operator', socket: b },
+            { role: 'referee', name: null, socket: a },
+            { role: 'operator', name: null, socket: b },
         ]);
         expect(connections.hasSubscribers('m1')).toBe(true);
         expect(connections.hasSubscribers('m3')).toBe(false);
@@ -102,7 +102,7 @@ describe('FightConnections', () => {
         expect(operator.close).not.toHaveBeenCalled();
         expect(elsewhere.close).not.toHaveBeenCalled();
         expect(connections.subscribers('m1')).toEqual([
-            { role: 'operator', socket: operator },
+            { role: 'operator', name: null, socket: operator },
         ]);
     });
 
@@ -119,5 +119,38 @@ describe('FightConnections', () => {
 
         expect(next.close).toHaveBeenCalled();
         expect(connections.hasSubscribers('m1')).toBe(false);
+    });
+
+    it('stores the referee name given on add', () => {
+        const a = fakeSocket();
+        connections.add('m1', 'referee', a, 'Ana');
+
+        expect(connections.subscribers('m1')).toEqual([
+            { role: 'referee', name: 'Ana', socket: a },
+        ]);
+    });
+
+    it('closeWhere closes and forgets only the subscribers not kept', () => {
+        const ana = fakeSocket();
+        const ze = fakeSocket();
+        const operator = fakeSocket();
+        connections.add('m1', 'referee', ana, 'Ana');
+        connections.add('m1', 'referee', ze, 'Zé');
+        connections.add('m1', 'operator', operator);
+
+        connections.closeWhere(
+            'm1',
+            (s) => s.role !== 'referee' || s.name === 'Ana',
+            4001,
+            'bad_credentials',
+        );
+
+        expect(ze.close).toHaveBeenCalledWith(4001, 'bad_credentials');
+        expect(ana.close).not.toHaveBeenCalled();
+        expect(operator.close).not.toHaveBeenCalled();
+        expect(connections.subscribers('m1').map((s) => s.socket)).toEqual([
+            ana,
+            operator,
+        ]);
     });
 });
