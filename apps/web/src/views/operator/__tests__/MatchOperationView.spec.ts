@@ -10,6 +10,7 @@ import {
   getFightState,
   getRefereeSeats,
   getRefereeToken,
+  matchChampionshipId,
   sendFightCommand,
   type OperatorFightState,
 } from '@/data'
@@ -36,6 +37,7 @@ vi.mock('@/data', () => ({
   getRefereeSeats: vi.fn<typeof getRefereeSeats>(() => Promise.resolve([])),
   freeRefereeSeat: vi.fn<typeof freeRefereeSeat>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
+  matchChampionshipId: vi.fn<typeof matchChampionshipId>(() => Promise.resolve('c1')),
 }))
 vi.mock('@/api/fight-channel', () => ({
   openFightChannel: vi.fn<typeof openFightChannel>(),
@@ -92,7 +94,12 @@ async function mountFight() {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/operator', name: 'operator', component: { template: '<p>Escolher luta</p>' } },
+      { path: '/manage', name: 'my-championships', component: { template: '<p>Campeonatos</p>' } },
+      {
+        path: '/manage/:championshipId/operation',
+        name: 'championship-operation',
+        component: { template: '<p>Escolher luta</p>' },
+      },
       {
         path: '/operator/:matchId',
         name: 'match-operation',
@@ -281,7 +288,7 @@ describe('MatchOperationView', () => {
     const { button, link } = await mountFight()
     expect(button('Iniciar luta')).toBeDefined()
     expect(button('Iniciar luta')?.attributes('disabled')).toBeUndefined()
-    expect(link('Selecionar arena')?.attributes('href')).toBe('/operator')
+    expect(link('Selecionar arena')?.attributes('href')).toBe('/manage/c1/operation')
   })
 
   it('sends Start when the operator clicks it without an arena', async () => {
@@ -355,7 +362,16 @@ describe('MatchOperationView', () => {
     post.mockResolvedValueOnce(closed)
     const { click, router } = await mountFight()
     await click('Fechar luta')
-    expect(router.currentRoute.value.name).toBe('operator')
+    expect(router.currentRoute.value.fullPath).toBe('/manage/c1/operation')
+  })
+
+  it("falls back to /manage when the match's championship cannot be resolved", async () => {
+    vi.mocked(matchChampionshipId).mockResolvedValueOnce(null)
+    firstFrame = finished
+    post.mockResolvedValueOnce(closed)
+    const { click, router } = await mountFight()
+    await click('Fechar luta')
+    expect(router.currentRoute.value.name).toBe('my-championships')
   })
 
   it('returns to operator home after a later pushed frame confirms an uncertain Close', async () => {
@@ -367,7 +383,7 @@ describe('MatchOperationView', () => {
     expect(router.currentRoute.value.name).toBe('match-operation')
 
     await push(closed)
-    expect(router.currentRoute.value.name).toBe('operator')
+    expect(router.currentRoute.value.fullPath).toBe('/manage/c1/operation')
     expect(post).toHaveBeenCalledTimes(1)
   })
 
@@ -389,7 +405,7 @@ describe('MatchOperationView', () => {
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
     expect(router.currentRoute.value.name).toBe('match-operation')
     expect(wrapper.text()).toContain('Luta fechada')
-    expect(link('Voltar à operação')?.attributes('href')).toBe('/operator')
+    expect(link('Voltar à operação')?.attributes('href')).toBe('/manage/c1/operation')
     expect(button('Fechar luta')).toBeUndefined()
     expect(button('Enviar')).toBeDefined()
     expect(button('Baixar')).toBeDefined()
