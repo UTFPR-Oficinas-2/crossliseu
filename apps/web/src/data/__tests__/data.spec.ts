@@ -79,6 +79,7 @@ import {
   getMatchSummaries,
   getMatchSummary,
   matchChampionshipId,
+  getMatchWinnerSide,
   selectArenaMatch,
   ownsChampionship,
   getRobots,
@@ -241,6 +242,16 @@ describe('@/data', () => {
 
     expect(await ownsChampionship('c1', 't')).toBe(true)
     expect(await ownsChampionship('other', 't')).toBe(false)
+  })
+
+  it('maps the winner robot to its side, null on a draw', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: 'r1' })
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: 'r2' })
+    vi.mocked(getMatchById).mockResolvedValueOnce({ ...apiMatch, winnerRobotId: null })
+
+    expect(await getMatchWinnerSide('m1')).toBe('A')
+    expect(await getMatchWinnerSide('m1')).toBe('B')
+    expect(await getMatchWinnerSide('m1')).toBeNull()
   })
 
   it('resolves a match to its championship id, or null for unknown or malformed ids', async () => {

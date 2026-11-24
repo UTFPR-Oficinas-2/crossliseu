@@ -5,6 +5,7 @@
 import { onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRefereeStore } from '@/stores/referee'
+import RefereeFinished from './components/RefereeFinished.vue'
 import RefereeNameForm from './components/RefereeNameForm.vue'
 import RefereeScoring from './components/RefereeScoring.vue'
 import RefereeWaiting from './components/RefereeWaiting.vue'
@@ -52,6 +53,13 @@ onBeforeUnmount(() => referee.dispose())
   />
   <RefereeScoring
     v-else-if="referee.fight?.status === 'ongoing' || referee.fight?.status === 'paused'"
+  />
+  <RefereeFinished
+    v-else-if="referee.phase === 'finished' && referee.fight"
+    :robots="{ A: referee.fight.robots.A.name, B: referee.fight.robots.B.name }"
+    :score="referee.fight.score"
+    :end-reason="referee.fight.endReason"
+    :winner-side="referee.winnerSide"
   />
 </template>
 

@@ -7,13 +7,14 @@ import type { FightChannelOptions } from '@/api/fight-channel'
 vi.mock('@/data', () => ({
   joinReferee: vi.fn<typeof import('@/data').joinReferee>(),
   submitScore: vi.fn<typeof import('@/data').submitScore>(),
+  getMatchWinnerSide: vi.fn<typeof import('@/data').getMatchWinnerSide>(),
 }))
 vi.mock('@/api/fight-channel', () => ({
   openFightChannel: vi.fn<typeof import('@/api/fight-channel').openFightChannel>(),
 }))
 
 import { openFightChannel } from '@/api/fight-channel'
-import { joinReferee, submitScore } from '@/data'
+import { getMatchWinnerSide, joinReferee, submitScore } from '@/data'
 import { useRefereeStore } from '../referee'
 
 const TOKEN = 'tok'
@@ -60,6 +61,8 @@ describe('referee store', () => {
     setActivePinia(createPinia())
     vi.mocked(joinReferee).mockReset()
     vi.mocked(submitScore).mockReset()
+    vi.mocked(getMatchWinnerSide).mockReset()
+    vi.mocked(getMatchWinnerSide).mockResolvedValue(null)
     channels = []
     vi.mocked(openFightChannel).mockReset()
     vi.mocked(openFightChannel).mockImplementation((options) => {
@@ -269,6 +272,41 @@ describe('referee store', () => {
 
       expect(store.connection).toBe('live')
       expect(store.canScore).toBe(true)
+    })
+  })
+
+  describe('result', () => {
+    it('reads the winner side once when the fight finishes', async () => {
+      vi.mocked(getMatchWinnerSide).mockResolvedValue('A')
+      const store = await active()
+      expect(store.winnerSide).toBeUndefined()
+
+      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }))
+      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }))
+      await vi.waitFor(() => expect(store.winnerSide).toBe('A'))
+
+      expect(getMatchWinnerSide).toHaveBeenCalledExactlyOnceWith(MATCH_ID)
+    })
+
+    it('does not read the winner unless the fight ended by surrender', async () => {
+      const store = await active()
+
+      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'time_out' }))
+      await Promise.resolve()
+
+      expect(getMatchWinnerSide).not.toHaveBeenCalled()
+      expect(store.winnerSide).toBeUndefined()
+    })
+
+    it('a failed read leaves the winner side unknown', async () => {
+      vi.mocked(getMatchWinnerSide).mockRejectedValue(new ApiError(0, 'Network error'))
+      const store = await active()
+
+      channel().options.onState(frame({ status: 'finished', remainingMs: 0, endReason: 'surrender' }))
+      await vi.waitFor(() => expect(getMatchWinnerSide).toHaveBeenCalled())
+      await Promise.resolve()
+
+      expect(store.winnerSide).toBeUndefined()
     })
   })
 

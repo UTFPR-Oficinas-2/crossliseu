@@ -8,13 +8,14 @@ import type { FightChannelOptions } from '@/api/fight-channel'
 vi.mock('@/data', () => ({
   joinReferee: vi.fn<typeof import('@/data').joinReferee>(),
   submitScore: vi.fn<typeof import('@/data').submitScore>(),
+  getMatchWinnerSide: vi.fn<typeof import('@/data').getMatchWinnerSide>(),
 }))
 vi.mock('@/api/fight-channel', () => ({
   openFightChannel: vi.fn<typeof import('@/api/fight-channel').openFightChannel>(),
 }))
 
 import { openFightChannel } from '@/api/fight-channel'
-import { joinReferee } from '@/data'
+import { getMatchWinnerSide, joinReferee } from '@/data'
 import RefereeSessionView from '../RefereeSessionView.vue'
 
 const KEY = 'crossliseu.referee.tok'
@@ -134,6 +135,26 @@ describe('RefereeSessionView', () => {
 
     expect(wrapper.text()).toContain('TEMPO RESTANTE')
     expect(wrapper.text()).not.toContain('Aguardando o operador iniciar')
+  })
+
+  it('shows the final totals once finished', async () => {
+    localStorage.setItem(KEY, 'Ana')
+    vi.mocked(joinReferee).mockResolvedValue({
+      matchId: 'm-1',
+      seat: 1,
+      name: 'Ana',
+      counts: { A: 0, B: 0 },
+    })
+    vi.mocked(getMatchWinnerSide).mockResolvedValue('A')
+    const { wrapper } = await mountView()
+
+    channel().options.onState(
+      frame({ status: 'finished', remainingMs: 0, endReason: 'time_out', score: { A: 8, B: 2 } }),
+    )
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('LUTA ENCERRADA')
+    expect(wrapper.text()).toContain('Pontuação final')
   })
 
   it('redirects to the invalid-access page when the session becomes invalid', async () => {

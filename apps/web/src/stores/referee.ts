@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { ApiError } from '@/api/client'
 import { openFightChannel, type FightChannelStatus } from '@/api/fight-channel'
 import {
+  getMatchWinnerSide,
   joinReferee,
   submitScore,
   type RefereeAction,
@@ -108,6 +109,8 @@ export const useRefereeStore = defineStore('referee', () => {
   const connection = ref<'live' | 'reconnecting'>('live')
   const feedback = ref<RefereeFeedback | null>(null)
   const pressing = ref(false)
+  /** Winning side after a surrender: undefined until known (or if the read failed) */
+  const winnerSide = ref<'A' | 'B' | null | undefined>(undefined)
 
   const canScore = computed(
     () =>
@@ -152,7 +155,20 @@ export const useRefereeStore = defineStore('referee', () => {
         if (remainingMs.value === 0) clearInterval(countdown)
       }, COUNTDOWN_INTERVAL_MS)
     }
-    if (read.fight.status === 'finished') phase.value = 'finished'
+    if (read.fight.status === 'finished' && phase.value !== 'finished') {
+      phase.value = 'finished'
+      // Only a surrender has a winner before the result is confirmed (#50)
+      if (read.fight.endReason === 'surrender') void loadWinner(generation, matchId.value)
+    }
+  }
+
+  async function loadWinner(current: number, id: string) {
+    try {
+      const side = await getMatchWinnerSide(id)
+      if (current === generation) winnerSide.value = side
+    } catch {
+      // The finished screen then says just "DESISTÊNCIA"
+    }
   }
 
   function onChannelStatus(status: FightChannelStatus) {
@@ -192,6 +208,7 @@ export const useRefereeStore = defineStore('referee', () => {
     connection.value = 'live'
     feedback.value = null
     pressing.value = false
+    winnerSide.value = undefined
 
     const remembered = readName(nextToken)
     if (remembered) await join(remembered)
@@ -292,6 +309,7 @@ export const useRefereeStore = defineStore('referee', () => {
     connection,
     feedback,
     pressing,
+    winnerSide,
     canScore,
     start,
     join,

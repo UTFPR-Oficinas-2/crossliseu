@@ -321,6 +321,18 @@ export const getMatch: (id: string) => Promise<Match | null> = async () => {
   throw notImplemented()
 }
 
+/**
+ * The side whose robot won a finished match, or null on a draw (or before a winner is set).
+ * The referee screen uses it to name the side that surrendered.
+ */
+export async function getMatchWinnerSide(matchId: string): Promise<'A' | 'B' | null> {
+  const match = await getMatchById(matchId)
+  if (match.winnerRobotId === null) return null
+  if (match.winnerRobotId === match.robotAId) return 'A'
+  if (match.winnerRobotId === match.robotBId) return 'B'
+  return null
+}
+
 // The video itself goes directly to R2. The API authorizes and confirms the upload.
 export interface RecordingUploadTarget {
   url: string
