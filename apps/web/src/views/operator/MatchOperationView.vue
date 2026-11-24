@@ -234,7 +234,7 @@ function confirmResumeControls() {
         </p>
       </section>
 
-      <RefereeLinkPanel class="fight-main__referees" :match-id="matchId" :state="state" />
+      <RefereeLinkPanel :match-id="matchId" :state="state" />
     </div>
 
     <FightRecorderPanel
@@ -264,7 +264,8 @@ function confirmResumeControls() {
   min-width: 0;
 }
 
-.fight-main__referees {
+/* The fight card takes the column's spare height; the referee strip keeps its own */
+.fight-main > .fight-card {
   flex: 1 1 auto;
 }
 
@@ -303,6 +304,7 @@ function confirmResumeControls() {
 
 .fight-card__scoreboard {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
   align-self: stretch;
   gap: var(--space-5);
