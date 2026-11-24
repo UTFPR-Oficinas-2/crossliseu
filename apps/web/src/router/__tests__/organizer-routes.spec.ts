@@ -68,3 +68,19 @@ describe('championship management entry', () => {
     expect(router.hasRoute('championship-overview')).toBe(false)
   })
 })
+
+describe('operation route', () => {
+  it('lives under the championship, requires sign-in and checks ownership', () => {
+    const resolved = router.resolve({ name: 'championship-operation', params: { championshipId: 'c1' } })
+
+    expect(resolved.path).toBe('/manage/c1/operation')
+    expect(resolved.meta.requiresAuth).toBe(true)
+    expect(resolved.meta.ownership).toBe('championship')
+  })
+
+  it('sends the old /operator address to the championship list', () => {
+    const resolved = router.resolve('/operator')
+
+    expect(resolved.matched.at(-1)?.redirect).toEqual({ name: 'my-championships' })
+  })
+})

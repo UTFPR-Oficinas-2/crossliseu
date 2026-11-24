@@ -34,6 +34,7 @@ async function mountAt(path: string) {
             meta: { sidebar: 'championship-participants' },
           },
           { path: ':championshipId/matches', name: 'championship-matches', component: stub },
+          { path: ':championshipId/operation', name: 'championship-operation', component: stub },
           {
             path: ':championshipId/matches/:matchId/edit',
             name: 'match-edit',
@@ -73,13 +74,17 @@ describe('OrganizerLayout sidebar', () => {
     expect(await currentItems('/manage/c1/matches/m1/edit')).toEqual(['Lutas'])
   })
 
-  it('lists Participantes, Lutas and Configurações, without a note', async () => {
+  it('lists Participantes, Lutas, Operação and Configurações, without a note', async () => {
     const wrapper = await mountAt('/manage/c1/participants')
 
     expect(
       wrapper.findAll('nav[aria-label="Gerenciar campeonato"] a').map((a) => a.text()),
-    ).toEqual(['Participantes', 'Lutas', 'Configurações'])
+    ).toEqual(['Participantes', 'Lutas', 'Operação', 'Configurações'])
     expect(wrapper.text()).not.toContain('Somente organizadores autorizados')
+  })
+
+  it('highlights Operação on its own page', async () => {
+    expect(await currentItems('/manage/c1/operation')).toEqual(['Operação'])
   })
 
   it('highlights a route without meta by its own name', async () => {
