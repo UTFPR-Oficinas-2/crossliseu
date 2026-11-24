@@ -201,6 +201,24 @@ describe('MatchOperationView', () => {
     expect(wrapper.text()).toContain('/referee/abcdefghijklmnopqrstuv')
   })
 
+  it.each([
+    [{ ...scheduled, hasSelectedArena: false }, 'Sem arena'],
+    [scheduled, 'Arena selecionada'],
+    [closed, 'Arena liberada'],
+  ] as const)('shows the arena state in the fight status line (%#)', async (snapshot, label) => {
+    firstFrame = snapshot
+    const { wrapper } = await mountFight()
+
+    expect(wrapper.get('.fight-card__status').text()).toContain(label)
+    expect(wrapper.find('#fight-arena-title').exists()).toBe(false)
+  })
+
+  it('places the recorder in the operation grid', async () => {
+    const { wrapper } = await mountFight()
+
+    expect(wrapper.get('.fight-operation').text()).toContain('Gravação da luta')
+  })
+
   it('follows the fight over the channel with the operator JWT', async () => {
     const { button } = await mountFight()
     expect(open).toHaveBeenCalledOnce()
@@ -226,7 +244,7 @@ describe('MatchOperationView', () => {
     channel!.onStatus('not-found')
     await flushPromises()
     expect(wrapper.text()).toContain('Luta não encontrada')
-    expect(wrapper.find('.fight-operation').exists()).toBe(false)
+    expect(wrapper.find('.fight-card').exists()).toBe(false)
     expect(button('Iniciar luta')).toBeUndefined()
     expect(wrapper.findComponent(FightRecorderPanel).exists()).toBe(true)
   })

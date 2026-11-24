@@ -86,6 +86,13 @@ const reasonText = computed(() => {
 
 const status = computed(() => state.value?.status ?? 'scheduled')
 const display = computed(() => displayByStatus[status.value])
+const arenaLabel = computed(() =>
+  state.value?.hasSelectedArena
+    ? 'Arena selecionada'
+    : state.value?.closed
+      ? 'Arena liberada'
+      : 'Sem arena',
+)
 const clock = computed(() => formatElapsed(Math.ceil(remainingMs.value / 1000)))
 // An arena can only be attached before the fight starts
 const canSelectArena = computed(
@@ -123,107 +130,6 @@ function confirmResumeControls() {
     <AppButton :to="operatorHome" variant="secondary">Voltar à operação</AppButton>
   </div>
 
-  <div v-if="state && loadState !== 'not-found'" class="fight-operation">
-    <section class="fight-card" aria-label="Controle da luta">
-      <div class="fight-card__status" role="status">
-        <StatusPill :label="state.closed ? 'Luta fechada' : display.label" :tone="display.tone" />
-        <span v-if="state.endReason" class="text-overline">{{ reasonText }}</span>
-      </div>
-
-      <div class="fight-card__scoreboard">
-        <CompetitorTile
-          class="fight-card__side fight-card__side--a"
-          :class="{ 'fight-card__side--surrendered': loserSide === 'A' }"
-          side="A"
-          :robot="state.robots.A.name"
-        >
-          <StatusPill v-if="loserSide === 'A'" label="Desistiu" tone="danger" />
-        </CompetitorTile>
-        <div class="fight-card__clock" :class="`fight-card__clock--${state.status}`">
-          <span class="text-overline">{{ display.timer }}</span>
-          <span class="fight-card__time text-timer-l" role="timer" :aria-label="display.timer">{{
-            clock
-          }}</span>
-        </div>
-        <CompetitorTile
-          class="fight-card__side fight-card__side--b"
-          :class="{ 'fight-card__side--surrendered': loserSide === 'B' }"
-          side="B"
-          :robot="state.robots.B.name"
-        >
-          <StatusPill v-if="loserSide === 'B'" label="Desistiu" tone="danger" />
-        </CompetitorTile>
-      </div>
-
-      <div class="fight-card__controls">
-        <AppButton v-if="state.closed" :to="operatorHome" variant="secondary">
-          Voltar à operação
-        </AppButton>
-        <template v-else-if="state.status === 'scheduled'">
-          <AppButton :disabled="disabled" @click="command('start')">Iniciar luta</AppButton>
-          <AppButton v-if="canSelectArena" :to="operatorHome" variant="secondary">
-            Selecionar arena
-          </AppButton>
-        </template>
-        <template v-else-if="state.status === 'ongoing' || state.status === 'paused'">
-          <AppButton
-            v-if="state.status === 'ongoing'"
-            variant="secondary"
-            :disabled="disabled"
-            @click="command('pause')"
-          >
-            Pausar
-          </AppButton>
-          <AppButton v-else :disabled="disabled" @click="command('resume')">Retomar</AppButton>
-          <AppButton variant="destructive" :disabled="disabled" @click="confirmFinish">
-            Encerrar luta
-          </AppButton>
-        </template>
-      </div>
-
-      <ResultConfirmation
-        v-if="state.status === 'finished'"
-        :state="state"
-        :disabled="disabled"
-        @confirm="command('close')"
-        @draw="command('close', { draw: true })"
-      />
-
-      <p v-if="state.status === 'ongoing'" class="fight-card__note text-body-s">
-        A luta termina quando o tempo acaba. A desistência só vale pelos botões da arena.
-      </p>
-      <p v-else-if="state.status === 'paused'" class="fight-card__note text-body-s">
-        Com a luta pausada, os botões de desistência da arena não valem.
-      </p>
-      <p
-        v-else-if="state.status === 'finished' && !state.closed && state.hasSelectedArena"
-        class="fight-card__note text-body-s"
-      >
-        Fechar libera a arena para a próxima luta. Até lá, a arena mostra o resultado.
-      </p>
-    </section>
-
-    <div class="fight-side">
-      <aside class="fight-arena" aria-labelledby="fight-arena-title">
-        <h2 id="fight-arena-title" class="text-heading-m">Arena</h2>
-        <StatusPill
-          :label="
-            state.hasSelectedArena
-              ? 'Selecionada'
-              : state.closed
-                ? 'Liberada'
-                : 'Sem arena selecionada'
-          "
-          :tone="state.hasSelectedArena ? 'success' : 'neutral'"
-        />
-        <p v-if="state.hasSelectedArena" class="fight-card__note text-body-s">
-          A caixa da arena mostra o cronômetro e recebe as desistências pelos botões de cada lado.
-        </p>
-      </aside>
-      <RefereeLinkPanel :match-id="matchId" :state="state" />
-    </div>
-  </div>
-
   <div v-if="error || uncertainCommand" class="fight-feedback">
     <p class="text-body-m" role="alert">{{ error }}</p>
     <div v-if="loadState === 'error' || uncertainCommand" class="fight-card__controls">
@@ -239,37 +145,141 @@ function confirmResumeControls() {
     </div>
   </div>
 
-  <FightRecorderPanel
-    v-if="state"
-    :key="matchId"
-    :match-id="matchId"
-    :fight-phase="phaseByStatus[state.status]"
-  />
+  <!-- The recorder outlives a vanished match so an unsent recording isn't lost -->
+  <div v-if="state" class="fight-operation">
+    <div v-if="loadState !== 'not-found'" class="fight-main">
+      <section class="fight-card" aria-label="Controle da luta">
+        <div class="fight-card__status" role="status">
+          <StatusPill :label="state.closed ? 'Luta fechada' : display.label" :tone="display.tone" />
+          <StatusPill :label="arenaLabel" :tone="state.hasSelectedArena ? 'success' : 'neutral'" />
+          <span v-if="state.endReason" class="text-overline">{{ reasonText }}</span>
+        </div>
+
+        <div class="fight-card__scoreboard">
+          <CompetitorTile
+            class="fight-card__side fight-card__side--a"
+            :class="{ 'fight-card__side--surrendered': loserSide === 'A' }"
+            side="A"
+            :robot="state.robots.A.name"
+          >
+            <StatusPill v-if="loserSide === 'A'" label="Desistiu" tone="danger" />
+          </CompetitorTile>
+          <div class="fight-card__clock" :class="`fight-card__clock--${state.status}`">
+            <span class="text-overline">{{ display.timer }}</span>
+            <span class="fight-card__time text-timer-l" role="timer" :aria-label="display.timer">{{
+              clock
+            }}</span>
+          </div>
+          <CompetitorTile
+            class="fight-card__side fight-card__side--b"
+            :class="{ 'fight-card__side--surrendered': loserSide === 'B' }"
+            side="B"
+            :robot="state.robots.B.name"
+          >
+            <StatusPill v-if="loserSide === 'B'" label="Desistiu" tone="danger" />
+          </CompetitorTile>
+        </div>
+
+        <div class="fight-card__controls">
+          <AppButton v-if="state.closed" :to="operatorHome" variant="secondary">
+            Voltar à operação
+          </AppButton>
+          <template v-else-if="state.status === 'scheduled'">
+            <AppButton :disabled="disabled" @click="command('start')">Iniciar luta</AppButton>
+            <AppButton v-if="canSelectArena" :to="operatorHome" variant="secondary">
+              Selecionar arena
+            </AppButton>
+          </template>
+          <template v-else-if="state.status === 'ongoing' || state.status === 'paused'">
+            <AppButton
+              v-if="state.status === 'ongoing'"
+              variant="secondary"
+              :disabled="disabled"
+              @click="command('pause')"
+            >
+              Pausar
+            </AppButton>
+            <AppButton v-else :disabled="disabled" @click="command('resume')">Retomar</AppButton>
+            <AppButton variant="destructive" :disabled="disabled" @click="confirmFinish">
+              Encerrar luta
+            </AppButton>
+          </template>
+        </div>
+
+        <ResultConfirmation
+          v-if="state.status === 'finished'"
+          :state="state"
+          :disabled="disabled"
+          @confirm="command('close')"
+          @draw="command('close', { draw: true })"
+        />
+
+        <p v-if="state.status === 'ongoing'" class="fight-card__note text-body-s">
+          A luta termina quando o tempo acaba. A desistência só vale pelos botões da arena.
+        </p>
+        <p v-else-if="state.status === 'paused'" class="fight-card__note text-body-s">
+          Com a luta pausada, os botões de desistência da arena não valem.
+        </p>
+        <p
+          v-else-if="state.status === 'scheduled' && state.hasSelectedArena"
+          class="fight-card__note text-body-s"
+        >
+          A caixa da arena mostra o cronômetro e recebe as desistências pelos botões de cada lado.
+        </p>
+        <p
+          v-else-if="state.status === 'finished' && !state.closed && state.hasSelectedArena"
+          class="fight-card__note text-body-s"
+        >
+          Fechar libera a arena para a próxima luta. Até lá, a arena mostra o resultado.
+        </p>
+      </section>
+
+      <RefereeLinkPanel class="fight-main__referees" :match-id="matchId" :state="state" />
+    </div>
+
+    <FightRecorderPanel
+      :key="matchId"
+      class="fight-operation__recorder"
+      :match-id="matchId"
+      :fight-phase="phaseByStatus[state.status]"
+    />
+  </div>
 </template>
 
 <style scoped>
-.fight-side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
+/* One console: fight + referees on the left, recording on the right, filling the screen */
 .fight-operation {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 2fr);
-  align-items: start;
-  gap: var(--space-6);
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: stretch;
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+.fight-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  min-height: 0;
+}
+
+.fight-main__referees {
+  flex: 1 1 auto;
+}
+
+.fight-operation__recorder {
+  grid-column: 2;
 }
 
 .fight-card,
-.fight-arena,
 .fight-feedback {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-6);
-  padding: var(--space-6);
+  gap: var(--space-4);
+  padding: var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
@@ -326,8 +336,8 @@ function confirmResumeControls() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-6) var(--space-2);
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2);
   border: 1px solid var(--color-orange);
   border-radius: var(--radius-sm);
   background: var(--color-bg);
@@ -358,13 +368,8 @@ function confirmResumeControls() {
   text-align: center;
 }
 
-.fight-arena,
 .fight-feedback {
   gap: var(--space-3);
-}
-
-.fight-arena h2 {
-  text-transform: uppercase;
 }
 
 .fight-feedback [role='alert'] {
@@ -379,6 +384,10 @@ function confirmResumeControls() {
 @media (max-width: 767px) {
   .fight-operation {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fight-operation__recorder {
+    grid-column: auto;
   }
 
   .fight-card__scoreboard {
