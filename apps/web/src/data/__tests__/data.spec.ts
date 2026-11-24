@@ -81,7 +81,6 @@ import {
   matchChampionshipId,
   selectArenaMatch,
   ownsChampionship,
-  getRefereeAccess,
   getRobots,
 } from '@/data'
 
@@ -258,7 +257,6 @@ describe('@/data', () => {
 
   it('rejects data the API does not provide yet instead of serving demo data', async () => {
     await expect(getMatch('m1')).rejects.toMatchObject({ status: 501 })
-    await expect(getRefereeAccess('token')).rejects.toMatchObject({ status: 501 })
   })
 
   it('maps API arenas to ManagedArena, without id or online of the match', async () => {

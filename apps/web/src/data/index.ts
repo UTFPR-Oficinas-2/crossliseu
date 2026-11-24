@@ -53,7 +53,6 @@ import type {
   ManagedArena,
   Match,
   MatchSummary,
-  RefereeAccess,
   Robot,
   WeightClass,
 } from '@/types'
@@ -241,7 +240,7 @@ export async function deleteMatch(id: string, token: string): Promise<void> {
   return removeMatch(id, token)
 }
 
-// The richer match and referee views have no data source yet. These reject with a clear
+// The richer match view has no data source yet. These reject with a clear
 // error instead of inventing endpoints; replace each with a request once the API provides it.
 const notImplemented = () => new ApiError(501, 'not_implemented', ['not_implemented'])
 
@@ -319,11 +318,6 @@ export async function selectArenaMatch(
 
 /** A match with its operator data (fights, end reason). The API only has `MatchSummary`. */
 export const getMatch: (id: string) => Promise<Match | null> = async () => {
-  throw notImplemented()
-}
-
-/** A referee's link, without an account. No API yet. */
-export const getRefereeAccess: (token: string) => Promise<RefereeAccess | null> = async () => {
   throw notImplemented()
 }
 

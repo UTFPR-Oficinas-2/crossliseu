@@ -1,51 +1,23 @@
 <script setup lang="ts">
 // Figma: `15 / Árbitro · Pontuação` (node 26:544), designed at 390 × 844. Shared frame for the
 // referee screens: the compact `Referee / Header` with the seat tag and the mobile content
-// padding. The page content (join, scoring, finished, invalid access) is rendered by the child
-// route.
-import { computed, ref, watch } from 'vue'
+// padding. The page content (name form, waiting, scoring, finished, invalid access) is rendered
+// by the child route; the session itself lives in the `referee` store.
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { getRefereeAccess } from '@/data'
-import type { RefereeAccess } from '@/types'
+import { useRefereeStore } from '@/stores/referee'
 
-/** Every match has exactly three referee seats (see `RefereeSeat`) */
+/** Every match has exactly three referee seats */
 const SEAT_COUNT = 3
 
 const route = useRoute()
+const referee = useRefereeStore()
 
-const access = ref<RefereeAccess | null>(null)
-
-// Data loading lives here. The API has no referee access yet, so a failed load is treated like
-// an unknown link (header without the seat tag).
-let loadId = 0
-async function load(token: string | null) {
-  const current = ++loadId
-  if (!token) {
-    access.value = null
-    return
-  }
-  let loaded: RefereeAccess | null = null
-  try {
-    loaded = await getRefereeAccess(token)
-  } catch (error) {
-    console.error('Could not load the referee access', error)
-  }
-  // Ignore a stale response if the token changed while loading
-  if (current === loadId) access.value = loaded
-}
-
-const accessToken = computed(() => {
-  if (route.name === 'referee-invalid-access') return null
-  const param = route.params.accessToken
-  return typeof param === 'string' && param ? param : null
-})
-
-watch(accessToken, (token) => load(token), { immediate: true })
-
-/** Unknown or expired links show the header without the tag */
+/** The seat once joined, ACESSO NEGADO on the invalid-access page (ARB-05), else nothing */
 const roleLabel = computed(() => {
-  if (!accessToken.value || !access.value || access.value.expired) return null
-  return `ÁRBITRO ${access.value.seat} DE ${SEAT_COUNT}`
+  if (route.name === 'referee-invalid-access' || referee.phase === 'invalid') return 'ACESSO NEGADO'
+  if (referee.seat === null || referee.phase === 'name' || referee.phase === 'idle') return null
+  return `ÁRBITRO ${referee.seat} DE ${SEAT_COUNT}`
 })
 </script>
 

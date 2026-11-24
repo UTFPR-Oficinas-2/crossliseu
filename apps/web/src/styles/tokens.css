@@ -44,6 +44,7 @@
   --space-18px: 18px; /* operator step horizontal padding */
   --space-22px: 22px;
   --space-28px: 28px; /* home live strip gap and left padding */
+  --space-referee-invalid-top: 120px; /* ARB-05 spacer above the invalid-access message */
 
   /* Sizes (component dimensions from Figma) */
   --size-control: 44px; /* button, tab and sidebar item height */
