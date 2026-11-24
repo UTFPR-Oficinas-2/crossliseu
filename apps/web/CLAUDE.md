@@ -5,7 +5,7 @@ organizers manage them; an operator runs each fight; three referees score from t
 
 ## Stack and commands
 
-- Client-rendered SPA. The backend is NestJS in `apps/api`; the operator screen follows the fight over the `/fights` WebSocket (`src/api/fight-channel.ts`; protocol in `docs/fight-channel-protocol.md`), while commands stay on HTTP.
+- Client-rendered SPA. The backend is NestJS in `apps/api`; the operator screen and the referee phone screen follow the fight over the `/fights` WebSocket (`src/api/fight-channel.ts`; protocol in `docs/fight-channel-protocol.md`), while commands and score presses stay on HTTP. The referee session lives in `src/stores/referee.ts`.
 - No Tailwind, no UI kit, no React. Styling is plain CSS with custom properties.
 
 Before saying a task is done: run `type-check` and `lint`, and fix what they report.
@@ -113,8 +113,7 @@ slots. Each component's Figma description repeats its Vue file and props.
 - Format dates and numbers with `Intl` using `pt-BR`.
 - Every page gets its data from the API through `src/data/` (which uses `src/api/`). No mocks, no
   demo data, no build-mode gates: what runs locally is what ships. Where `apps/api` has no
-  endpoint yet (such as referee access) the `src/data/` function rejects with
-  `not_implemented`; don't invent endpoints unless asked. Keep data loading in one place per view.
+  endpoint yet the `src/data/` function rejects with `not_implemented`; don't invent endpoints unless asked. Keep data loading in one place per view.
 - Don't add dependencies other than the `@fontsource` packages without asking.
 
 ## Fight recording (operator)
@@ -156,7 +155,9 @@ slots. Each component's Figma description repeats its Vue file and props.
   `surrender` = DESISTÊNCIA DO LADO A / B (the side opposite `winnerRobotId`);
   `winnerRobotId: null` = EMPATE.
 - Arenas are global (not per championship), one ESP32 box each.
-- Referees join with their own link, without an account. No "ready" step and no correction window.
+- Referees join with the match's shared link and their name, without an account; the same name
+  gets the same seat back, and the phone remembers it to rejoin after a reload. No "ready" step and
+  no correction window.
   Scoring is +1 / −1 per side, nothing else.
 - A fight can end in a draw (EMPATE). The public sees scheduled fights as well as results.
 - Robô 1 / Robô 2 have no side when the fight is created; the operator assigns Lado A / Lado B
