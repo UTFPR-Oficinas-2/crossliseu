@@ -53,6 +53,15 @@ describe('referee API', () => {
     expect(request.headers).not.toHaveProperty('Authorization')
   })
 
+  it('passes the abort signal to fetch', async () => {
+    const fetchMock = respond(201, { counts: { A: 0, B: 0 } })
+    const controller = new AbortController()
+
+    await submitScore('m1', 'tok', 'Ana', 'A', 1, controller.signal)
+
+    expect(fetchMock.mock.calls[0]![1]?.signal).toBe(controller.signal)
+  })
+
   it('rejects with the server code', async () => {
     respond(409, { statusCode: 409, message: 'referee_seats_full', error: 'Conflict' })
 

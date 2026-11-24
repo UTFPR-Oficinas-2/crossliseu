@@ -33,9 +33,11 @@ export function submitScore(
   name: string,
   side: RefereeSide,
   action: RefereeAction,
+  signal?: AbortSignal,
 ): Promise<{ counts: RefereeCounts }> {
   return apiRequest(`/matches/${encodeURIComponent(matchId)}/scores`, {
     method: 'POST',
     body: { token, name, side, action },
+    signal,
   })
 }

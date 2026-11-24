@@ -171,6 +171,8 @@ describe('RefereeSessionView', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe('referee-invalid-access')
+    // Kept in the URL so "Tentar novamente" survives a reload of the invalid page
+    expect(router.currentRoute.value.query.t).toBe('tok')
   })
 
   it('starts again when the link changes', async () => {

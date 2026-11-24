@@ -4,11 +4,12 @@
 // fight already has three referees. The reason comes from the `referee` store, which keeps it
 // after the session view unmounts.
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { useRefereeStore } from '@/stores/referee'
 
+const route = useRoute()
 const router = useRouter()
 const referee = useRefereeStore()
 
@@ -26,7 +27,7 @@ const copy = computed(() =>
     : {
         pill: 'ACESSO EXPIRADO',
         title: 'Este link não vale mais',
-        text: 'Este link não existe ou a luta desta arbitragem já teve o resultado confirmado.',
+        text: 'Este link não existe, a luta desta arbitragem já teve o resultado confirmado ou seu lugar foi liberado pelo operador.',
         steps: [
           'Peça ao operador o link certo para esta luta.',
           'Confirme que você está na luta certa.',
@@ -34,10 +35,16 @@ const copy = computed(() =>
       },
 )
 
+/** The link from the store, or from the URL after this page was reloaded */
+const token = computed(() => {
+  const fromUrl = route.query.t
+  return referee.token ?? (typeof fromUrl === 'string' && fromUrl ? fromUrl : null)
+})
+
 /** Figma: reloads the same link */
 function retry() {
-  if (referee.token) {
-    void router.replace({ name: 'referee-session', params: { accessToken: referee.token } })
+  if (token.value) {
+    void router.replace({ name: 'referee-session', params: { accessToken: token.value } })
   } else {
     window.location.reload()
   }

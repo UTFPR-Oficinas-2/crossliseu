@@ -8,7 +8,7 @@ import InvalidAccessView from '../InvalidAccessView.vue'
 
 const stub = { render: () => null }
 
-async function mountView() {
+async function mountView(path = '/referee/invalid-access') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -16,7 +16,7 @@ async function mountView() {
       { path: '/referee/:accessToken', name: 'referee-session', component: stub },
     ],
   })
-  await router.push('/referee/invalid-access')
+  await router.push(path)
   const pinia = createPinia()
   setActivePinia(pinia)
   const store = useRefereeStore()
@@ -59,6 +59,22 @@ describe('InvalidAccessView', () => {
 
     expect(router.currentRoute.value.name).toBe('referee-session')
     expect(router.currentRoute.value.params.accessToken).toBe('tok')
+  })
+
+  it('"Tentar novamente" still finds the link after the page reloaded (empty store)', async () => {
+    const { wrapper, router } = await mountView('/referee/invalid-access?t=tok')
+
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('referee-session')
+    expect(router.currentRoute.value.params.accessToken).toBe('tok')
+  })
+
+  it('a freed seat is not described as a dead link only', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.text()).toContain('seu lugar foi liberado pelo operador')
   })
 
   it('"Tentar novamente" reloads the page when no link is known', async () => {

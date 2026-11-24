@@ -20,6 +20,8 @@ import { formatElapsed } from '@/utils/recording'
 const STORAGE_PREFIX = 'crossliseu.referee.'
 const NAME_MAX_LENGTH = 40
 const COUNTDOWN_INTERVAL_MS = 100
+// A press with no answer by then fails, so a dead connection can't lock the buttons for the fight
+const SCORE_TIMEOUT_MS = 5_000
 
 const STATUSES: readonly MatchState[] = ['scheduled', 'ongoing', 'paused', 'finished']
 const END_REASONS: readonly (MatchEndReason | null)[] = [null, 'time_out', 'manual', 'surrender']
@@ -255,6 +257,26 @@ export const useRefereeStore = defineStore('referee', () => {
     }
   }
 
+  /** Aborts the request after SCORE_TIMEOUT_MS; the timeout fails like a network error */
+  async function submitWithTimeout(side: RefereeSide, action: RefereeAction) {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort()
+        reject(new ApiError(0, 'Score request timed out'))
+      }, SCORE_TIMEOUT_MS)
+    })
+    try {
+      return await Promise.race([
+        submitScore(matchId.value!, token.value!, name.value!, side, action, controller.signal),
+        timedOut,
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   async function score(side: RefereeSide, action: RefereeAction): Promise<void> {
     if (!canScore.value || !fight.value) return
     const current = generation
@@ -263,7 +285,7 @@ export const useRefereeStore = defineStore('referee', () => {
     const robot = fight.value.robots[side].name
     pressing.value = true
     try {
-      const result = await submitScore(matchId.value!, token.value!, name.value!, side, action)
+      const result = await submitWithTimeout(side, action)
       if (current !== generation) return
       ownCounts.value = result.counts
       feedback.value = {

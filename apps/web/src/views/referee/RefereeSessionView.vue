@@ -24,7 +24,10 @@ watch(
 watch(
   () => referee.phase,
   (phase) => {
-    if (phase === 'invalid') void router.replace({ name: 'referee-invalid-access' })
+    // The link rides along so "Tentar novamente" still works after a reload of that page
+    if (phase === 'invalid') {
+      void router.replace({ name: 'referee-invalid-access', query: { t: accessToken } })
+    }
   },
   { immediate: true },
 )

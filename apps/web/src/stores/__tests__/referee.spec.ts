@@ -317,7 +317,7 @@ describe('referee store', () => {
 
       await store.score('A', 1)
 
-      expect(submitScore).toHaveBeenCalledWith(MATCH_ID, TOKEN, 'Ana', 'A', 1)
+      expect(submitScore).toHaveBeenCalledWith(MATCH_ID, TOKEN, 'Ana', 'A', 1, expect.any(AbortSignal))
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.feedback).toEqual({
         tone: 'success',
@@ -401,6 +401,26 @@ describe('referee store', () => {
 
       await store.score('A', 1)
 
+      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível enviar. Tente de novo.' })
+      expect(store.ownCounts).toEqual({ A: 1, B: 0 })
+      expect(store.canScore).toBe(true)
+    })
+
+    it('a press with no answer for 5 s fails, is aborted and unlocks the buttons', async () => {
+      const store = await active({}, { A: 1, B: 0 })
+      vi.useFakeTimers()
+      let signal: AbortSignal | undefined
+      vi.mocked(submitScore).mockImplementation((...args) => {
+        signal = args[5]
+        return new Promise(() => {})
+      })
+
+      const pressing = store.score('A', 1)
+      expect(store.canScore).toBe(false)
+      await vi.advanceTimersByTimeAsync(5_000)
+      await pressing
+
+      expect(signal?.aborted).toBe(true)
       expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível enviar. Tente de novo.' })
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.canScore).toBe(true)
