@@ -294,9 +294,6 @@ onMounted(loadCameras)
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  box-sizing: border-box;
-  height: 100%;
-  min-height: 0;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -388,5 +385,13 @@ onMounted(loadCameras)
 
 .recorder__upload-done {
   color: var(--color-green);
+}
+
+/* Phones: the column has no set height, so keep the preview's own proportions */
+@media (max-width: 767px) {
+  .recorder__preview {
+    flex: none;
+    aspect-ratio: 380 / 214;
+  }
 }
 </style>

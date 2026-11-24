@@ -262,7 +262,6 @@ function confirmResumeControls() {
   flex-direction: column;
   gap: var(--space-5);
   min-width: 0;
-  min-height: 0;
 }
 
 .fight-main__referees {
@@ -310,6 +309,7 @@ function confirmResumeControls() {
 }
 
 .fight-card__side {
+  padding-block: var(--space-4);
   padding-inline: var(--space-3);
   border: 1px solid;
   background: var(--color-raised);
