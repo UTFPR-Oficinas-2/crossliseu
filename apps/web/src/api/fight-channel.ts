@@ -1,14 +1,19 @@
 // Browser client for the API's `/fights` WebSocket (see docs/fight-channel-protocol.md). It
 // authenticates, forwards `state` frames, and reconnects with jittered backoff until closed or
-// told the failure is terminal (4001 bad credentials, 4005 match not found).
+// told the failure is terminal (4001 bad credentials, 4005 match not found). Operators send their
+// JWT; referees send the shared referee token and their name.
 import { apiWebSocketUrl, reportUnauthorized } from './client'
 
 export type FightChannelStatus = 'connecting' | 'open' | 'reconnecting' | 'rejected' | 'not-found'
 
 export interface FightChannelOptions {
   matchId: string
-  /** Operator login JWT */
+  /** Operator login JWT, or the match's shared referee token */
   token: string
+  /** Referee name, sent with the shared referee token */
+  name?: string
+  /** Whether a 4001 logs the operator out (default true); referees pass false */
+  logOutOnReject?: boolean
   onState: (data: unknown) => void
   onStatus: (status: FightChannelStatus) => void
 }
@@ -22,7 +27,7 @@ const CLOSE_BAD_CREDENTIALS = 4001
 const CLOSE_MATCH_NOT_FOUND = 4005
 
 export function openFightChannel(options: FightChannelOptions): { close(): void } {
-  const { matchId, token, onState, onStatus } = options
+  const { matchId, token, name, logOutOnReject = true, onState, onStatus } = options
   let socket: WebSocket | null = null
   let watchdog: ReturnType<typeof setTimeout> | null = null
   let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -67,7 +72,8 @@ export function openFightChannel(options: FightChannelOptions): { close(): void 
 
     ws.onopen = () => {
       if (!current()) return
-      ws.send(JSON.stringify({ event: 'auth', data: { matchId, token } }))
+      const data = name === undefined ? { matchId, token } : { matchId, token, name }
+      ws.send(JSON.stringify({ event: 'auth', data }))
     }
 
     ws.onmessage = (event) => {
@@ -95,7 +101,7 @@ export function openFightChannel(options: FightChannelOptions): { close(): void 
       watchdog = null
       if (event.code === CLOSE_BAD_CREDENTIALS) {
         onStatus('rejected')
-        reportUnauthorized()
+        if (logOutOnReject) reportUnauthorized()
       } else if (event.code === CLOSE_MATCH_NOT_FOUND) {
         onStatus('not-found')
       } else {
