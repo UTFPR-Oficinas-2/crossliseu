@@ -75,6 +75,12 @@ const appRoutes: RouteRecordRaw[] = [
         props: true,
       },
       {
+        path: ':championshipId/operation',
+        name: 'championship-operation',
+        meta: { ownership: 'championship' },
+        component: () => import('../views/organizer/OperationView.vue'),
+      },
+      {
         path: ':championshipId/participants/new',
         name: 'participant-create',
         component: () => import('../views/organizer/ParticipantFormView.vue'),
@@ -132,18 +138,13 @@ const appRoutes: RouteRecordRaw[] = [
       },
     ],
   },
+  // The picker lives in each championship now (`championship-operation`); keeps old links working
+  { path: '/operator', redirect: { name: 'my-championships' } },
   {
     path: '/operator',
     component: () => import('../layouts/OperatorLayout.vue'),
     meta: { requiresAuth: true },
     children: [
-      {
-        // Pick an arena and a scheduled fight (#37). Lists only the account's own data, so it
-        // needs no ownership check.
-        path: '',
-        name: 'operator',
-        component: () => import('../views/operator/OperatorHomeView.vue'),
-      },
       {
         // One view with three states: preparation, running, closing
         path: ':matchId',

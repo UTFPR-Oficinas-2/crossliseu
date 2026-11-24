@@ -43,6 +43,7 @@ watch(
 const sidebarItems: { routeName: RouteRecordName; label: string }[] = [
   { routeName: 'championship-participants', label: 'Participantes' },
   { routeName: 'championship-matches', label: 'Lutas' },
+  { routeName: 'championship-operation', label: 'Operação' },
   { routeName: 'championship-settings', label: 'Configurações' },
 ]
 

@@ -28,25 +28,16 @@ describe('AppNav', () => {
     expect(wrapper.text()).toContain('Meus campeonatos')
   })
 
-  it('links to Operação when the operator route exists', () => {
-    const wrapper = mountNav([{ path: '/operator', name: 'operator', component: stub }])
-
-    const link = wrapper.findAll('a').find((a) => a.text() === 'Operação')
-    expect(link?.attributes('href')).toBe('/operator')
-  })
-
-  it('lists Campeonatos, Meus campeonatos, Arenas and Operação in order', () => {
+  it('lists Campeonatos, Meus campeonatos, and Arenas in order', () => {
     const wrapper = mountNav([
       { path: '/manage', name: 'my-championships', component: stub },
       { path: '/arenas', name: 'arenas', component: stub },
-      { path: '/operator', name: 'operator', component: stub },
     ])
 
     expect(wrapper.findAll('nav a').map((a) => a.text())).toEqual([
       'Campeonatos',
       'Meus campeonatos',
       'Arenas',
-      'Operação',
     ])
   })
 

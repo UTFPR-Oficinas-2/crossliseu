@@ -119,6 +119,22 @@ describe('ownership guard', () => {
     expect(ownsChampionship).not.toHaveBeenCalled()
   })
 
+  it('opens the operation page of an owned championship', async () => {
+    signIn()
+
+    await router.push('/manage/mine/operation')
+
+    expect(router.currentRoute.value.name).toBe('championship-operation')
+  })
+
+  it('sends the operation page of another account championship to not-found', async () => {
+    signIn()
+
+    await router.push('/manage/other/operation')
+
+    expect(router.currentRoute.value.name).toBe('not-found')
+  })
+
   it('opens the operator screen of a match in an owned championship', async () => {
     signIn()
 
