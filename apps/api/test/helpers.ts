@@ -127,7 +127,6 @@ export async function seedMatch(
                 robotAId,
                 robotBId,
                 await seedCreatorId(ds),
-                new Date('2026-11-04T13:00:00Z'),
             ),
         );
 }

@@ -1,5 +1,4 @@
-// Pure logic for MatchFormView (Figma ORG-07a/b and ORG-08): step 1 picks the category and the
-// time, step 2 the two robots of that category. Validation mirrors `MatchesService.resolveRobots`
+// Pure logic for MatchFormView (Figma ORG-07a/b and ORG-08): step 1 picks the category, step 2 the two robots of that category. Validation mirrors `MatchesService.resolveRobots`
 // in apps/api.
 import { ApiError } from '@/api/client'
 import type { SelectOption } from '@/components/ui/select-field'
@@ -8,8 +7,6 @@ import type { MatchSummary, Robot, WeightClass } from '@/types'
 
 export interface MatchFormValues {
   weightClass: WeightClass | ''
-  /** `datetime-local` value ("2026-12-09T14:30"), in the browser's time zone */
-  scheduledAt: string
   robotAId: string
   robotBId: string
 }
@@ -19,7 +16,6 @@ export type MatchFormErrors = Partial<Record<MatchFormField, string>>
 
 export const MATCH_MESSAGES = {
   weightClassRequired: 'Escolha a categoria de peso.',
-  scheduledAtRequired: 'Informe a data e o horário.',
   robotARequired: 'Escolha o robô 1.',
   robotBRequired: 'Escolha o robô 2.',
   mustDiffer: 'Escolha dois robôs diferentes.',
@@ -37,27 +33,12 @@ export const MATCH_MESSAGES = {
 
 export const emptyMatchValues = (): MatchFormValues => ({
   weightClass: '',
-  scheduledAt: '',
   robotAId: '',
   robotBId: '',
 })
 
-/** `datetime-local` value → ISO timestamp, read in the browser's time zone */
-export const toScheduledAtIso = (local: string): string => new Date(local).toISOString()
-
-const pad2 = (value: number) => String(value).padStart(2, '0')
-
-/** ISO timestamp → `datetime-local` value ("YYYY-MM-DDTHH:mm") in the browser's time zone */
-export function toLocalInput(iso: string): string {
-  const date = new Date(iso)
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(
-    date.getHours(),
-  )}:${pad2(date.getMinutes())}`
-}
-
 export const matchValuesFrom = (match: MatchSummary): MatchFormValues => ({
   weightClass: match.weightClass,
-  scheduledAt: toLocalInput(match.scheduledAt),
   robotAId: match.robotAId,
   robotBId: match.robotBId,
 })
@@ -65,16 +46,12 @@ export const matchValuesFrom = (match: MatchSummary): MatchFormValues => ({
 export const toMatchInput = (values: MatchFormValues): MatchInput => ({
   robotAId: values.robotAId,
   robotBId: values.robotBId,
-  scheduledAt: toScheduledAtIso(values.scheduledAt),
 })
 
-/** Step 1 (ORG-07a): the category and the planned time */
+/** Step 1 (ORG-07a): the category */
 export function validateStep1(values: MatchFormValues): MatchFormErrors {
   const errors: MatchFormErrors = {}
   if (!values.weightClass) errors.weightClass = MATCH_MESSAGES.weightClassRequired
-  if (!values.scheduledAt || Number.isNaN(new Date(values.scheduledAt).getTime())) {
-    errors.scheduledAt = MATCH_MESSAGES.scheduledAtRequired
-  }
   return errors
 }
 
