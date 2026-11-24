@@ -401,7 +401,35 @@ describe('referee store', () => {
 
       await store.score('A', 1)
 
-      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível enviar. Tente de novo.' })
+      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.' })
+      expect(store.ownCounts).toEqual({ A: 1, B: 0 })
+      expect(store.canScore).toBe(true)
+    })
+
+    it('a network error re-reads the own counts, since the press may have counted', async () => {
+      const store = await active({}, { A: 1, B: 0 })
+      vi.mocked(submitScore).mockRejectedValue(new ApiError(0, 'Network error'))
+      vi.mocked(joinReferee).mockResolvedValue(seated('Ana', { A: 2, B: 0 }))
+
+      await store.score('A', 1)
+
+      expect(store.ownCounts).toEqual({ A: 2, B: 0 })
+      expect(store.canScore).toBe(true)
+    })
+
+    it('keeps the buttons locked until the re-sync answers, then unlocks even if it fails', async () => {
+      const store = await active({}, { A: 1, B: 0 })
+      vi.mocked(submitScore).mockRejectedValue(new ApiError(0, 'Network error'))
+      const resync = deferred<ReturnType<typeof seated>>()
+      vi.mocked(joinReferee).mockReturnValue(resync.promise)
+
+      const pressing = store.score('A', 1)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(store.canScore).toBe(false)
+      resync.reject(new ApiError(0, 'Network error'))
+      await pressing
+
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.canScore).toBe(true)
     })
@@ -421,7 +449,7 @@ describe('referee store', () => {
       await pressing
 
       expect(signal?.aborted).toBe(true)
-      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível enviar. Tente de novo.' })
+      expect(store.feedback).toEqual({ tone: 'danger', text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.' })
       expect(store.ownCounts).toEqual({ A: 1, B: 0 })
       expect(store.canScore).toBe(true)
     })

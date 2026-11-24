@@ -277,6 +277,26 @@ export const useRefereeStore = defineStore('referee', () => {
     }
   }
 
+  /**
+   * Re-reads this referee's own counts after a press with no answer. Best effort and bounded by
+   * SCORE_TIMEOUT_MS, so a bad connection can't keep the buttons locked.
+   */
+  async function resyncOwnCounts(current: number): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), SCORE_TIMEOUT_MS)
+    })
+    try {
+      const joined = await Promise.race([
+        joinReferee(token.value!, name.value!).catch(() => null),
+        timedOut,
+      ])
+      if (joined && current === generation) ownCounts.value = joined.counts
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   async function score(side: RefereeSide, action: RefereeAction): Promise<void> {
     if (!canScore.value || !fight.value) return
     const current = generation
@@ -303,7 +323,14 @@ export const useRefereeStore = defineStore('referee', () => {
       } else if (hasCode(error, 'match_not_running')) {
         feedback.value = { tone: 'warning', text: 'A luta não está em andamento.' }
       } else {
-        feedback.value = { tone: 'danger', text: 'Não foi possível enviar. Tente de novo.' }
+        // No answer: the server may have counted the press anyway, so ask it for the real counts
+        // before the buttons unlock; otherwise a retry could double-count.
+        await resyncOwnCounts(current)
+        if (current !== generation) return
+        feedback.value = {
+          tone: 'danger',
+          text: 'Não foi possível confirmar o envio. Confira o placar antes de tentar de novo.',
+        }
       }
     } finally {
       if (current === generation) pressing.value = false
