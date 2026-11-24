@@ -44,6 +44,9 @@ services:
   rabbitmq:
     # Pinned like postgres: bump it on purpose, the data volume outlives the image
     image: rabbitmq:4.1.8
+    # Fixed node name: RabbitMQ keys its data dir on the hostname, which would
+    # otherwise be the container ID and change on every recreate.
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-crossliseu}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
