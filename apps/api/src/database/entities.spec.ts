@@ -99,7 +99,6 @@ describe('entity metadata', () => {
             'referee_token',
             'robot_a_id',
             'robot_b_id',
-            'scheduled_at',
             'state',
             'weight_class',
             'winner_robot_id',

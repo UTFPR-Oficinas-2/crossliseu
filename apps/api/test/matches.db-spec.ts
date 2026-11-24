@@ -51,7 +51,6 @@ describe('matches (e2e)', () => {
                 championshipId: ids.championship,
                 robotAId: ids.a,
                 robotBId: ids.b,
-                scheduledAt: '2026-11-04T13:00:00Z',
             })
             .expect(201);
         expect(created.body.robotA.name).toBe('Titã');
@@ -68,6 +67,25 @@ describe('matches (e2e)', () => {
             .send({ robotBId: ids.c })
             .expect(200);
         expect(patched.body.robotB.name).toBe('Ferrugem');
+    });
+
+    it('reports startedAt null until the fight starts, then the started event time', async () => {
+        const match = await seedMatch(ds, ids.championship, ids.a, ids.b);
+        const before = await http().get(`/matches/${match.id}`).expect(200);
+        expect(before.body.startedAt).toBeNull();
+
+        await http().post(`/matches/${match.id}/start`).set(auth()).expect(200);
+
+        const [event] = (await ds.query(
+            `SELECT "occurred_at" FROM "match_events" WHERE "match_id" = $1 AND "type" = 'started'`,
+            [match.id],
+        )) as { occurred_at: Date }[];
+        const after = await http().get(`/matches/${match.id}`).expect(200);
+        expect(new Date(after.body.startedAt)).toEqual(event.occurred_at);
+        const listed = await http()
+            .get(`/matches?championshipId=${ids.championship}`)
+            .expect(200);
+        expect(listed.body[0].startedAt).toBe(after.body.startedAt);
     });
 
     it('does not edit a match that is no longer waiting', async () => {

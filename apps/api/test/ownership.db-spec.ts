@@ -257,7 +257,6 @@ describe('championship ownership (e2e)', () => {
                     championshipId: champA.id,
                     robotAId: a.id,
                     robotBId: b.id,
-                    scheduledAt: '2026-11-10T14:00:00Z',
                 })
                 .expect(404);
 
@@ -268,19 +267,20 @@ describe('championship ownership (e2e)', () => {
         });
 
         it('answers a non-owner PATCH with 404 and leaves the row unchanged', async () => {
-            const { b, match } = await seedAMatch();
+            const { a, b, match } = await seedAMatch();
 
             const response = await http()
                 .patch(`/matches/${match.id}`)
                 .set(bearer(tokenB))
-                .send({ robotBId: b.id, scheduledAt: '2030-01-01T00:00:00Z' })
+                .send({ robotAId: b.id, robotBId: a.id })
                 .expect(404);
 
             expect(response.body.message).toBe('match_not_found');
             const row = await ds
                 .getRepository(Match)
                 .findOneByOrFail({ id: match.id });
-            expect(row.scheduledAt).toEqual(match.scheduledAt);
+            expect(row.robotAId).toBe(match.robotAId);
+            expect(row.robotBId).toBe(match.robotBId);
         });
 
         it('answers a non-owner DELETE with 404 and keeps the row', async () => {
@@ -314,12 +314,12 @@ describe('championship ownership (e2e)', () => {
         });
 
         it('lets the owner PATCH and DELETE', async () => {
-            const { match } = await seedAMatch();
+            const { a, b, match } = await seedAMatch();
 
             await http()
                 .patch(`/matches/${match.id}`)
                 .set(bearer(tokenA))
-                .send({ scheduledAt: '2030-01-01T00:00:00Z' })
+                .send({ robotAId: b.id, robotBId: a.id })
                 .expect(200);
             await http()
                 .delete(`/matches/${match.id}`)

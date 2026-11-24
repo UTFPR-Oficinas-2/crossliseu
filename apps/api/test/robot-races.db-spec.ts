@@ -54,7 +54,6 @@ describe('robot writes racing match writes', () => {
                     robotA,
                     robotB,
                     creatorId,
-                    new Date('2026-11-04T13:00:00Z'),
                 );
             });
         return { created, release: () => gate.resolve() };
@@ -114,7 +113,6 @@ describe('robot writes racing match writes', () => {
                     championshipId,
                     robotAId: robotA,
                     robotBId: robotB,
-                    scheduledAt: new Date('2026-11-04T13:00:00Z'),
                 },
                 creatorId,
             );

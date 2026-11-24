@@ -27,8 +27,7 @@ export class MatchesService {
     ) {}
 
     async create(createMatchDto: CreateMatchDto, createdByUserId: string) {
-        const { championshipId, robotAId, robotBId, scheduledAt } =
-            createMatchDto;
+        const { championshipId, robotAId, robotBId } = createMatchDto;
 
         // Throws championship_not_found when it does not exist or is not the caller's
         await this.championshipsService.findOwned(
@@ -49,7 +48,6 @@ export class MatchesService {
                     robotAId,
                     robotBId,
                     createdByUserId,
-                    scheduledAt,
                 ),
         );
         if (!created) {
@@ -75,9 +73,11 @@ export class MatchesService {
                 settled = true;
             }
         }
-        return settled
-            ? this.matchesRepository.findAll(championshipId)
-            : matches;
+        return this.withStartedAt(
+            settled
+                ? await this.matchesRepository.findAll(championshipId)
+                : matches,
+        );
     }
 
     async findOne(id: string) {
@@ -90,7 +90,19 @@ export class MatchesService {
             throw new NotFoundException('match_not_found');
         }
 
+        await this.withStartedAt([match]);
         return match;
+    }
+
+    /** Fills `startedAt` from the `started` events, one query for the whole list */
+    private async withStartedAt(matches: Match[]): Promise<Match[]> {
+        const startedAt = await this.matchesRepository.findStartedAt(
+            matches.map((match) => match.id),
+        );
+        for (const match of matches) {
+            match.startedAt = startedAt.get(match.id) ?? null;
+        }
+        return matches;
     }
 
     async update(id: string, updateMatchDto: UpdateMatchDto, userId: string) {
@@ -114,9 +126,6 @@ export class MatchesService {
                     robotA,
                     robotB,
                 ),
-                ...(updateMatchDto.scheduledAt && {
-                    scheduledAt: updateMatchDto.scheduledAt,
-                }),
             }),
         );
         if (!updated) {

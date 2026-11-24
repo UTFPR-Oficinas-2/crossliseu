@@ -223,7 +223,6 @@ describe('deleting a championship (e2e)', () => {
                     championshipId: championship.id,
                     robotAId: a.id,
                     robotBId: b.id,
-                    scheduledAt: new Date('2026-11-04T13:00:00Z'),
                 },
                 await seedCreatorId(ds),
             );
