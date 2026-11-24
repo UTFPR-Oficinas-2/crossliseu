@@ -436,6 +436,162 @@ describe('FightService', () => {
         expect(store.written.map((e) => e.type)).toEqual(['closed']);
     });
 
+    describe('close confirms the official result (#50)', () => {
+        /** A finished fight with `endReason` and the referees' points as scored events */
+        function finished(
+            endReason: 'time_out' | 'manual' | 'surrender',
+            points: { A: number; B: number },
+            surrendered: 'a' | 'b' | null = null,
+        ) {
+            const scores = [
+                ...Array.from({ length: points.A }, (_, i) =>
+                    scoredEvent('a', 1, 1, at(1000 + i)),
+                ),
+                ...Array.from({ length: points.B }, (_, i) =>
+                    scoredEvent('b', 2, 1, at(2000 + i)),
+                ),
+            ];
+            const fight = setup({
+                state: 'finished',
+                events: [
+                    event('started', T0),
+                    ...scores,
+                    event('finished', at(90_000)),
+                ],
+                now: at(100_000),
+            });
+            fight.store.match.endReason = endReason;
+            fight.store.match.surrenderedRobotId = surrendered;
+            return fight;
+        }
+
+        it('after a time-out writes the side with more points as winner', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 3 });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.winnerRobotId).toBe('a');
+            expect(store.match.draw ?? false).toBe(false);
+            expect(store.written.map((e) => e.type)).toEqual(['closed']);
+        });
+
+        it('after a manual finish with equal points writes a draw and no winner', async () => {
+            const { service, store } = finished('manual', { A: 2, B: 2 });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.draw).toBe(true);
+            expect(store.match.winnerRobotId ?? null).toBeNull();
+        });
+
+        it('with no points at all writes a draw', async () => {
+            const { service, store } = finished('time_out', { A: 0, B: 0 });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.draw).toBe(true);
+            expect(store.match.winnerRobotId ?? null).toBeNull();
+        });
+
+        it('after a surrender of A writes B as winner, whatever the points', async () => {
+            const { service, store } = finished(
+                'surrender',
+                { A: 4, B: 0 },
+                'a',
+            );
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.winnerRobotId).toBe('b');
+            expect(store.match.draw ?? false).toBe(false);
+        });
+
+        it('a draw call writes a draw over a winning proposal', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 1 });
+
+            await service.command(MATCH_ID, 'close', USER_ID, { draw: true });
+
+            expect(store.match.draw).toBe(true);
+            expect(store.match.winnerRobotId ?? null).toBeNull();
+        });
+
+        it('the operator variant takes the draw call too', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 1 });
+
+            const state = await service.operatorCommand(
+                MATCH_ID,
+                'close',
+                USER_ID,
+                { draw: true },
+            );
+
+            expect(store.match.draw).toBe(true);
+            expect(state.closed).toBe(true);
+        });
+
+        it('a second close is 409 and leaves the result as confirmed', async () => {
+            const { service, store } = finished('time_out', { A: 5, B: 3 });
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            await expect(
+                service.command(MATCH_ID, 'close', USER_ID, { draw: true }),
+            ).rejects.toThrow(
+                new ConflictException('match_invalid_transition'),
+            );
+
+            expect(store.match.winnerRobotId).toBe('a');
+            expect(store.match.draw ?? false).toBe(false);
+            expect(store.written.map((e) => e.type)).toEqual(['closed']);
+        });
+
+        it.each<MatchState>(['scheduled', 'ongoing', 'paused'])(
+            'close from %s is 409 and writes no result',
+            async (state) => {
+                const { service, store } = setup({
+                    state,
+                    events: state === 'scheduled' ? [] : [event('started', T0)],
+                    now: at(10_000),
+                });
+                if (state === 'paused') {
+                    store.events.push(event('paused', at(5_000)));
+                }
+
+                await expect(
+                    service.command(MATCH_ID, 'close', USER_ID),
+                ).rejects.toThrow(
+                    new ConflictException('match_invalid_transition'),
+                );
+
+                expect(store.match.winnerRobotId ?? null).toBeNull();
+                expect(store.match.draw ?? false).toBe(false);
+                expect(store.written).toEqual([]);
+            },
+        );
+
+        it('close of an ongoing fight whose time ran out settles the time-out and writes the points winner', async () => {
+            const { service, store } = setup({
+                state: 'ongoing',
+                events: [
+                    event('started', T0),
+                    scoredEvent('a', 1, 1, at(1000)),
+                    scoredEvent('a', 2, 1, at(1001)),
+                    scoredEvent('a', 3, 1, at(1002)),
+                    scoredEvent('b', 1, 1, at(1003)),
+                ],
+                now: at(200_000),
+            });
+
+            await service.command(MATCH_ID, 'close', USER_ID);
+
+            expect(store.match.endReason).toBe('time_out');
+            expect(store.match.winnerRobotId).toBe('a');
+            expect(store.written.map((e) => e.type)).toEqual([
+                'finished',
+                'closed',
+            ]);
+        });
+    });
+
     it('every disallowed command is 409 match_invalid_transition', async () => {
         const cases: [MatchState, 'pause' | 'resume' | 'start'][] = [
             ['scheduled', 'pause'],

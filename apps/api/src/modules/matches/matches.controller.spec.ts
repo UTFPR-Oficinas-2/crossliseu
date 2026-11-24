@@ -43,7 +43,38 @@ describe('MatchesController fight views', () => {
         expect(service.operatorState).toHaveBeenCalledExactlyOnceWith(id);
     });
 
-    it.each(['start', 'pause', 'resume', 'finish', 'close'] as const)(
+    it.each([
+        [undefined, false],
+        [{}, false],
+        [{ draw: false }, false],
+        [{ draw: true }, true],
+    ] as const)(
+        'routes close with body %o as draw %s, in both views',
+        async (body, draw) => {
+            const { controller, service } = setup();
+
+            expect(await controller.close(id, userId, undefined, body)).toEqual(
+                fight,
+            );
+            expect(
+                await controller.close(id, userId, 'operator', body),
+            ).toEqual(operatorFight);
+            expect(service.command).toHaveBeenCalledExactlyOnceWith(
+                id,
+                'close',
+                userId,
+                { draw },
+            );
+            expect(service.operatorCommand).toHaveBeenCalledExactlyOnceWith(
+                id,
+                'close',
+                userId,
+                { draw },
+            );
+        },
+    );
+
+    it.each(['start', 'pause', 'resume', 'finish'] as const)(
         'routes %s with the authenticated user and the requested view',
         async (command) => {
             const { controller, service } = setup();

@@ -7,7 +7,11 @@ import {
 import type { OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { ChampionshipsService } from '../../championships/championships.service.js';
-import type { MatchState } from '../entities/match.entity.js';
+import type {
+    Match,
+    MatchEndReason,
+    MatchState,
+} from '../entities/match.entity.js';
 import type {
     JudgeSeat,
     MatchEvent,
@@ -19,6 +23,7 @@ import { FightTimer } from './fight-timer.js';
 import { remainingMs, timeOutAt } from './fight-clock.js';
 import type { FightState } from './fight-state.js';
 import { scoreTotals, seatCounts } from './score.js';
+import { proposeResult, surrenderedSide } from './fight-result.js';
 import type { Side, SideCounts } from './score.js';
 import { transitionFor } from './fight-transitions.js';
 import type { FightCommand } from './fight-transitions.js';
@@ -27,8 +32,15 @@ import type { FightWrites, LockedFight } from './fight.repository.js';
 
 interface Settled {
     state: MatchState;
+    /** After the settle: `time_out` when it just finished the match, else the match's own */
+    endReason: MatchEndReason | null;
     events: MatchEvent[];
     wrote: boolean;
+}
+
+/** Only `close` reads it: `draw` ends the fight as a draw instead of the proposal (#50) */
+export interface CommandOptions {
+    draw?: boolean;
 }
 
 export interface OperatorFightState extends FightState {
@@ -100,13 +112,17 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         await Promise.all(matchIds.map((id) => this.trySyncTimer(id)));
     }
 
-    /** Owner-only. 404 match_not_found, 409 match_invalid_transition. Returns the state after. */
+    /**
+     * Owner-only. 404 match_not_found, 409 match_invalid_transition. Returns the state after.
+     * `close` also confirms the official result: the proposal, or a draw with `options.draw`.
+     */
     async command(
         matchId: string,
         command: FightCommand,
         userId: string,
+        options: CommandOptions = {},
     ): Promise<FightState> {
-        await this.executeCommand(matchId, command, userId);
+        await this.executeCommand(matchId, command, userId, options);
         return this.buildState(matchId);
     }
 
@@ -114,8 +130,9 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         matchId: string,
         command: FightCommand,
         userId: string,
+        options: CommandOptions = {},
     ): Promise<OperatorFightState> {
-        await this.executeCommand(matchId, command, userId);
+        await this.executeCommand(matchId, command, userId, options);
         return this.buildOperatorState(matchId);
     }
 
@@ -123,6 +140,7 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         matchId: string,
         command: FightCommand,
         userId: string,
+        options: CommandOptions,
     ): Promise<void> {
         const match = await this.repo.findWithRobots(matchId);
         if (
@@ -162,6 +180,9 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
                     });
                     await writes.appendEvent('started', now, userId);
                 } else if (command === 'close') {
+                    await writes.updateMatch(
+                        this.confirmedResult(fight.match, settled, options),
+                    );
                     await writes.appendEvent('closed', now, userId);
                     await writes.clearArenaPointer();
                 } else {
@@ -455,7 +476,12 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
             match.state !== 'ongoing' ||
             remainingMs(match.state, events, now) !== 0
         ) {
-            return { state: match.state, events, wrote: false };
+            return {
+                state: match.state,
+                endReason: match.endReason,
+                events,
+                wrote: false,
+            };
         }
         // The instant time ran out, not the instant somebody noticed
         const occurredAt = eventTime(
@@ -466,8 +492,32 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         await writes.appendEvent('finished', occurredAt, null);
         return {
             state: 'finished',
+            endReason: 'time_out',
             events: [...events, { type: 'finished', occurredAt } as MatchEvent],
             wrote: true,
+        };
+    }
+
+    /** The columns `close` writes: the proposed winner, or a draw when proposed or called */
+    private confirmedResult(
+        match: Match,
+        settled: Settled,
+        options: CommandOptions,
+    ): { winnerRobotId: string } | { draw: true } {
+        const proposal = proposeResult({
+            endReason: settled.endReason,
+            surrenderedSide: surrenderedSide(match),
+            totals: scoreTotals(settled.events, {
+                A: match.robotAId,
+                B: match.robotBId,
+            }),
+        });
+        if (options.draw === true || proposal.outcome === 'draw') {
+            return { draw: true };
+        }
+        return {
+            winnerRobotId:
+                proposal.outcome === 'A' ? match.robotAId : match.robotBId,
         };
     }
 

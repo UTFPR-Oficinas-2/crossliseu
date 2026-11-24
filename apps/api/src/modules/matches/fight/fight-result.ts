@@ -15,7 +15,8 @@ export interface ResultProposal {
  * three referees wins, and equal points (including none) propose a draw.
  */
 export function proposeResult(input: {
-    endReason: MatchEndReason;
+    /** Null only on data older than end reasons; decided by points like any non-surrender */
+    endReason: MatchEndReason | null;
     surrenderedSide: Side | null;
     totals: SideCounts;
 }): ResultProposal {

@@ -71,6 +71,16 @@ describe('proposeResult', () => {
         ).toEqual({ outcome: 'draw', basis: 'tied' });
     });
 
+    it('a fight with no recorded end reason is decided by points', () => {
+        expect(
+            proposeResult({
+                endReason: null,
+                surrenderedSide: null,
+                totals: { A: 2, B: 1 },
+            }),
+        ).toEqual({ outcome: 'A', basis: 'points' });
+    });
+
     it('a surrender without the surrendered side is a bug', () => {
         expect(() =>
             proposeResult({
