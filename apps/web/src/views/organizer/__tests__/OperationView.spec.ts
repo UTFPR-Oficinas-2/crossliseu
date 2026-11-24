@@ -268,6 +268,17 @@ describe('OperationView', () => {
     expect(router.currentRoute.value.query.matchId).toBeUndefined()
   })
 
+  it('keeps the fight of the destination URL when moving to another championship', async () => {
+    const { wrapper, router } = await mountAt('/manage/c2/operation?arenaId=a1')
+
+    await router.push('/manage/c1/operation?arenaId=a1&matchId=m1')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query).toEqual({ arenaId: 'a1', matchId: 'm1' })
+    const fight = card(wrapper, '2 · Luta', 'Marte × Cobalto')
+    expect((fight.get('input').element as HTMLInputElement).checked).toBe(true)
+  })
+
   it('locks the choice while the fight is being opened', async () => {
     let release!: (value: Arena) => void
     vi.mocked(selectArenaMatch).mockReturnValue(new Promise((resolve) => (release = resolve)))

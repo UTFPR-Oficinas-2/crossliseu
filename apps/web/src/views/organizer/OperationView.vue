@@ -144,7 +144,7 @@ watch(championshipId, (id) => {
   void loadFights(id)
 })
 
-watch([championshipId, arenaId, matchId, pendingMatchId], syncQuery)
+watch([arenaId, matchId, pendingMatchId], syncQuery)
 
 // Following a link to the picker while on it (AppNav "Operação") changes only the query
 watch(
