@@ -10,6 +10,7 @@
   --color-orange: #ff8a3d;
   --color-orange-dim: #5c3a1e;
   --color-green: #88d4ab;
+  --color-green-dim: #1e3a2e;
   --color-blue: #82beff;
   --color-pink: #ee9bbc;
   --color-red: #e2544f;
@@ -73,6 +74,9 @@
   --size-dot-lg: 10px; /* referee waiting card marker */
   --size-referee-side-bar-width: 4px; /* ARB-01 competitor color bar */
   --size-referee-side-bar-height: 40px;
+  --size-referee-score-button-height: 72px; /* ARB-02 +1 / −1 buttons */
+  --size-referee-plus-width: 100px;
+  --size-referee-minus-width: 96px;
   --size-aside: 360px; /* organizer form aside column */
   --size-row-action: 140px; /* "Ver pública" / "Gerenciar" in My championships rows */
   --size-menu-max: 320px; /* select menu height before it scrolls */
@@ -190,4 +194,16 @@
   --text-timer-l-line-height: 1;
   --text-timer-l-tracking: 0;
   --text-timer-xl-size: 64px;
+
+  --text-timer-m-family: var(--font-mono);
+  --text-timer-m-weight: 600;
+  --text-timer-m-size: 28px;
+  --text-timer-m-line-height: 1;
+  --text-timer-m-tracking: 0;
+
+  --text-numeric-xl-family: var(--font-heading);
+  --text-numeric-xl-weight: 700;
+  --text-numeric-xl-size: 44px;
+  --text-numeric-xl-line-height: 1;
+  --text-numeric-xl-tracking: 0;
 }

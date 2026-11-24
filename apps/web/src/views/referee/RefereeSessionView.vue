@@ -6,6 +6,7 @@ import { onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRefereeStore } from '@/stores/referee'
 import RefereeNameForm from './components/RefereeNameForm.vue'
+import RefereeScoring from './components/RefereeScoring.vue'
 import RefereeWaiting from './components/RefereeWaiting.vue'
 
 const { accessToken } = defineProps<{ accessToken: string }>()
@@ -48,6 +49,9 @@ onBeforeUnmount(() => referee.dispose())
   <RefereeWaiting
     v-else-if="referee.fight?.status === 'scheduled'"
     :robots="{ A: referee.fight.robots.A.name, B: referee.fight.robots.B.name }"
+  />
+  <RefereeScoring
+    v-else-if="referee.fight?.status === 'ongoing' || referee.fight?.status === 'paused'"
   />
 </template>
 

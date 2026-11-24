@@ -119,6 +119,23 @@ describe('RefereeSessionView', () => {
     expect(wrapper.text()).toContain('Aguardando o operador iniciar')
   })
 
+  it.each(['ongoing', 'paused'])('shows the scoring panel while %s', async (status) => {
+    localStorage.setItem(KEY, 'Ana')
+    vi.mocked(joinReferee).mockResolvedValue({
+      matchId: 'm-1',
+      seat: 1,
+      name: 'Ana',
+      counts: { A: 0, B: 0 },
+    })
+    const { wrapper } = await mountView()
+
+    channel().options.onState(frame({ status }))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('TEMPO RESTANTE')
+    expect(wrapper.text()).not.toContain('Aguardando o operador iniciar')
+  })
+
   it('redirects to the invalid-access page when the session becomes invalid', async () => {
     localStorage.setItem(KEY, 'Ana')
     vi.mocked(joinReferee).mockResolvedValue({
