@@ -30,7 +30,7 @@ const match: MatchSummary = {
   robotBId: 'r2',
   arenaId: null,
   state: 'scheduled',
-  scheduledAt: at,
+  startedAt: null,
   createdAt: at,
   modifiedAt: at,
 }

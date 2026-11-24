@@ -90,7 +90,6 @@ erDiagram
     string state "scheduled | ongoing | paused | finished"
     string end_reason "(time_out | manual | surrender), nullable"
     string referee_token "nullable, unique"
-    timestamptz scheduled_at
     timestamptz created_at
     timestamptz modified_at
     timestamptz deleted_at "nullable, soft delete"

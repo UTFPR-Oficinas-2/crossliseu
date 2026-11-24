@@ -16,8 +16,14 @@ vi.mock('@/data', () => ({
   createChampionship: vi.fn<(input: ChampionshipInput, token: string) => Promise<Championship>>(),
   updateChampionship:
     vi.fn<(id: string, input: ChampionshipInput, token: string) => Promise<Championship>>(),
+  removeChampionship: vi.fn<(id: string, token: string) => Promise<void>>(),
 }))
-import { createChampionship, getChampionship, updateChampionship } from '@/data'
+import {
+  createChampionship,
+  getChampionship,
+  removeChampionship,
+  updateChampionship,
+} from '@/data'
 
 const stub = { render: () => null }
 const LEAVE_MESSAGE = 'Há alterações não salvas. Deseja sair mesmo assim?'
@@ -99,6 +105,7 @@ describe('ChampionshipFormView', () => {
     vi.mocked(getChampionship).mockReset()
     vi.mocked(createChampionship).mockReset()
     vi.mocked(updateChampionship).mockReset()
+    vi.mocked(removeChampionship).mockReset()
     confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
   afterEach(() => {
@@ -354,5 +361,128 @@ describe('ChampionshipFormView', () => {
 
     expect(confirmSpy).not.toHaveBeenCalled()
     expect(router.currentRoute.value.fullPath).toBe('/manage/c1/participants')
+  })
+
+  describe('deleting', () => {
+    const deleteButton = (wrapper: Wrapper) =>
+      wrapper.findAll('button').find((b) => b.text() === 'Excluir campeonato')
+    const dialog = (wrapper: Wrapper) => wrapper.find('[role="alertdialog"]')
+    const dialogButton = (wrapper: Wrapper, label: string) =>
+      dialog(wrapper)
+        .findAll('button')
+        .find((b) => b.text() === label)!
+
+    async function openDialog(attach = false) {
+      vi.mocked(getChampionship).mockResolvedValue(row())
+      const mounted = await mountView('/manage/c1/settings', attach)
+      await deleteButton(mounted.wrapper)!.trigger('click')
+      return mounted
+    }
+
+    it('create: has no delete button', async () => {
+      const { wrapper } = await mountView('/manage/new')
+
+      expect(deleteButton(wrapper)).toBeUndefined()
+    })
+
+    it('asks for confirmation naming the championship and its cascade', async () => {
+      const { wrapper } = await openDialog()
+
+      expect(dialog(wrapper).text()).toContain(
+        'Excluir "Copa 2026"? Os robôs e as lutas dele também serão removidos. Isso não pode ser desfeito.',
+      )
+      expect(removeChampionship).not.toHaveBeenCalled()
+    })
+
+    it('keeps the championship when the user cancels', async () => {
+      const { wrapper, router } = await openDialog()
+
+      await dialogButton(wrapper, 'Manter campeonato').trigger('click')
+
+      expect(dialog(wrapper).exists()).toBe(false)
+      expect(removeChampionship).not.toHaveBeenCalled()
+      expect(router.currentRoute.value.fullPath).toBe('/manage/c1/settings')
+    })
+
+    it('keeps the championship and the typed values when Esc is pressed', async () => {
+      const { wrapper } = await openDialog(true)
+      await input(wrapper, 'name').setValue('Outro nome')
+
+      await wrapper.get('.confirm-dialog').trigger('keydown', { key: 'Escape' })
+
+      expect(dialog(wrapper).exists()).toBe(false)
+      expect(removeChampionship).not.toHaveBeenCalled()
+      expect(input(wrapper, 'name').element.value).toBe('Outro nome')
+      wrapper.unmount()
+    })
+
+    it('deletes, leaves for the list and skips the unsaved-changes prompt', async () => {
+      vi.mocked(removeChampionship).mockResolvedValue(undefined)
+      const { wrapper, router } = await openDialog()
+      await input(wrapper, 'name').setValue('Editado e não salvo')
+
+      await dialogButton(wrapper, 'Excluir').trigger('click')
+      await flushPromises()
+
+      expect(removeChampionship).toHaveBeenCalledExactlyOnceWith('c1', token)
+      expect(router.currentRoute.value.fullPath).toBe('/manage')
+      expect(confirmSpy).not.toHaveBeenCalled()
+    })
+
+    it('explains that a live match blocks the delete and stays on the page', async () => {
+      vi.mocked(removeChampionship).mockRejectedValue(
+        new ApiError(409, 'Conflict', ['championship_has_live_match']),
+      )
+      const { wrapper, router } = await openDialog()
+
+      await dialogButton(wrapper, 'Excluir').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[role="alert"]').text()).toBe(FORM_MESSAGES.deleteLiveMatch)
+      expect(dialog(wrapper).exists()).toBe(false)
+      expect(router.currentRoute.value.fullPath).toBe('/manage/c1/settings')
+    })
+
+    it('shows the not-found and the no-connection messages', async () => {
+      vi.mocked(removeChampionship).mockRejectedValueOnce(new ApiError(404, 'Not Found'))
+      const { wrapper } = await openDialog()
+      await dialogButton(wrapper, 'Excluir').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[role="alert"]').text()).toBe(FORM_MESSAGES.deleteNotFound)
+
+      vi.mocked(removeChampionship).mockRejectedValueOnce(new ApiError(0, 'network'))
+      await deleteButton(wrapper)!.trigger('click')
+      await dialogButton(wrapper, 'Excluir').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[role="alert"]').text()).toBe(FORM_MESSAGES.noConnection)
+    })
+
+    it('blocks save and delete while a delete is in flight and does not redirect after leaving', async () => {
+      let resolve: () => void = () => {}
+      vi.mocked(removeChampionship).mockReturnValue(new Promise<void>((r) => (resolve = r)))
+      const { wrapper, router } = await openDialog()
+
+      await dialogButton(wrapper, 'Excluir').trigger('click')
+
+      expect(deleteButton(wrapper)!.attributes('disabled')).toBeDefined()
+      expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+
+      const push = vi.spyOn(router, 'push')
+      wrapper.unmount()
+      resolve()
+      await flushPromises()
+
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    it('blocks the delete button while a save is in flight', async () => {
+      vi.mocked(updateChampionship).mockReturnValue(new Promise(() => {}))
+      vi.mocked(getChampionship).mockResolvedValue(row())
+      const { wrapper } = await mountView('/manage/c1/settings')
+
+      await wrapper.get('form').trigger('submit')
+
+      expect(deleteButton(wrapper)!.attributes('disabled')).toBeDefined()
+    })
   })
 })

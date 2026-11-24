@@ -25,6 +25,9 @@ export const FORM_MESSAGES = {
   noConnection: 'Não foi possível conectar ao servidor. Tente novamente.',
   reviewFields: 'Revise os campos destacados.',
   generic: 'Não foi possível salvar o campeonato. Tente novamente.',
+  deleteLiveMatch: 'Há uma luta em andamento. Encerre-a antes de excluir.',
+  deleteNotFound: 'Campeonato não encontrado.',
+  deleteGeneric: 'Não foi possível excluir o campeonato. Tente novamente.',
 } as const
 
 export const emptyFormValues = (): ChampionshipFormValues => ({
@@ -82,4 +85,13 @@ export function describeSaveError(error: unknown): {
     }
   }
   return { message: FORM_MESSAGES.generic, fields: {} }
+}
+
+export function describeDeleteError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 0) return FORM_MESSAGES.noConnection
+    if (error.details.includes('championship_has_live_match')) return FORM_MESSAGES.deleteLiveMatch
+    if (error.status === 404) return FORM_MESSAGES.deleteNotFound
+  }
+  return FORM_MESSAGES.deleteGeneric
 }

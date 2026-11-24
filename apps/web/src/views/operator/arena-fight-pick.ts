@@ -50,7 +50,7 @@ export interface FightOption {
   heldBy: Arena | null
 }
 
-/** The championship's scheduled fights, earliest first */
+/** The championship's scheduled fights, in the order they were created */
 export function fightOptions(
   matches: MatchSummary[],
   robots: Robot[],
@@ -59,7 +59,7 @@ export function fightOptions(
   const byId = new Map(robots.map((robot) => [robot.id, robot]))
   return matches
     .filter((m) => m.state === 'scheduled')
-    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map((match) => {
       const a = byId.get(match.robotAId)
       const b = byId.get(match.robotBId)

@@ -43,7 +43,7 @@ const match = (id: string, state: MatchState, robotAId = 'r1', robotBId = 'r2'):
   robotBId,
   arenaId: null,
   state,
-  scheduledAt: at,
+  startedAt: null,
   createdAt: at,
   modifiedAt: at,
 })

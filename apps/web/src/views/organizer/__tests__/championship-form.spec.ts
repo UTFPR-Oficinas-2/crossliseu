@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/api/client'
 import {
   FORM_MESSAGES as M,
+  describeDeleteError,
   describeSaveError,
   formValuesFrom,
   toChampionshipInput,
@@ -87,5 +88,22 @@ describe('describeSaveError', () => {
       fields: {},
     })
     expect(describeSaveError(new Error('x'))).toEqual({ message: M.generic, fields: {} })
+  })
+})
+
+describe('describeDeleteError', () => {
+  it('explains a live match, a missing championship and a lost connection', () => {
+    expect(
+      describeDeleteError(new ApiError(409, 'Conflict', ['championship_has_live_match'])),
+    ).toBe(M.deleteLiveMatch)
+    expect(
+      describeDeleteError(new ApiError(404, 'Not Found', ['championship_not_found'])),
+    ).toBe(M.deleteNotFound)
+    expect(describeDeleteError(new ApiError(0, 'network'))).toBe(M.noConnection)
+  })
+
+  it('falls back to the generic message', () => {
+    expect(describeDeleteError(new ApiError(500, 'boom'))).toBe(M.deleteGeneric)
+    expect(describeDeleteError(new Error('x'))).toBe(M.deleteGeneric)
   })
 })

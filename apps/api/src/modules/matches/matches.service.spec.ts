@@ -23,7 +23,7 @@ const ROBOT_C_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const MATCH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const ARENA_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
-const SCHEDULED_AT = new Date('2026-11-10T14:00:00Z');
+const STARTED_AT = new Date('2026-11-10T14:00:00Z');
 
 function robot(
     id: string,
@@ -50,7 +50,6 @@ function match(state: MatchState = 'scheduled'): Match {
         ROBOT_A_ID,
         ROBOT_B_ID,
         USER_ID,
-        SCHEDULED_AT,
     );
     entity.id = MATCH_ID;
     entity.state = state;
@@ -107,6 +106,10 @@ function setup(
             },
         ),
         findAll: vi.fn().mockResolvedValue(matches),
+        // The `started` event times, by match id: only started matches appear
+        findStartedAt: vi.fn((): Promise<Map<string, Date>> =>
+            Promise.resolve(new Map()),
+        ),
         findOne: vi.fn((id: string) =>
             Promise.resolve(matches.find((entity) => entity.id === id) ?? null),
         ),
@@ -168,7 +171,6 @@ const dto = {
     championshipId: CHAMPIONSHIP_ID,
     robotAId: ROBOT_A_ID,
     robotBId: ROBOT_B_ID,
-    scheduledAt: SCHEDULED_AT,
 };
 
 describe('MatchesService.create', () => {
@@ -192,7 +194,6 @@ describe('MatchesService.create', () => {
             robotBId: ROBOT_B_ID,
             state: 'scheduled',
             createdByUserId: USER_ID,
-            scheduledAt: SCHEDULED_AT,
         });
     });
 
@@ -445,28 +446,6 @@ describe('MatchesService.update', () => {
             robotAId: ROBOT_A_ID,
             robotBId: ROBOT_C_ID,
         });
-    });
-
-    it('reschedules a match', async () => {
-        const { service, matchesRepository } = setup(
-            [robot(ROBOT_A_ID), robot(ROBOT_B_ID)],
-            [match()],
-        );
-        const scheduledAt = new Date('2026-11-11T09:30:00Z');
-
-        const updated = await service.update(
-            MATCH_ID,
-            { scheduledAt },
-            USER_ID,
-        );
-
-        expect(matchesRepository.updated).toHaveBeenCalledWith(MATCH_ID, {
-            robotAId: ROBOT_A_ID,
-            robotBId: ROBOT_B_ID,
-            weightClass: 'lightweight',
-            scheduledAt,
-        });
-        expect(updated.scheduledAt).toEqual(scheduledAt);
     });
 
     it('checks the merged pair against the match championship', async () => {
@@ -792,5 +771,44 @@ describe('MatchesService robots read under the lock', () => {
         await expect(service.create(dto, USER_ID)).rejects.toThrow(
             new NotFoundException('championship_not_found'),
         );
+    });
+});
+
+describe('MatchesService startedAt', () => {
+    function matchWithId(id: string, state: MatchState = 'scheduled') {
+        const entity = match(state);
+        entity.id = id;
+        return entity;
+    }
+
+    it('is null before the fight starts', async () => {
+        const first = matchWithId('m1');
+        const { service } = setup([], [first]);
+
+        const [listed] = await service.findAll();
+        const found = await service.findOne('m1');
+
+        expect(listed.startedAt).toBeNull();
+        expect(found.startedAt).toBeNull();
+    });
+
+    it('gives each match its own started event time', async () => {
+        const first = matchWithId('m1');
+        const second = matchWithId('m2', 'ongoing');
+        const { service, matchesRepository } = setup([], [first, second]);
+        matchesRepository.findStartedAt.mockResolvedValue(
+            new Map([['m2', STARTED_AT]]),
+        );
+
+        const listed = await service.findAll();
+
+        expect(matchesRepository.findStartedAt).toHaveBeenCalledWith([
+            'm1',
+            'm2',
+        ]);
+        expect(listed.map((entry) => entry.startedAt)).toEqual([
+            null,
+            STARTED_AT,
+        ]);
     });
 });

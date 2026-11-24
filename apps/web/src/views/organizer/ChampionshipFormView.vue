@@ -6,10 +6,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import InputField from '@/components/ui/InputField.vue'
-import { createChampionship, getChampionship, updateChampionship } from '@/data'
+import { createChampionship, getChampionship, removeChampionship, updateChampionship } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 import {
+  describeDeleteError,
   describeSaveError,
   emptyFormValues,
   formValuesFrom,
@@ -39,6 +41,8 @@ const loadState = ref<'loading' | 'ready' | 'not-found' | 'error'>(
 )
 const championshipName = ref('')
 const saving = ref(false)
+const deleting = ref(false)
+const confirmingDelete = ref(false)
 const bannerError = ref<string | null>(null)
 const saved = ref(false)
 const formEl = ref<HTMLFormElement | null>(null)
@@ -132,6 +136,26 @@ async function onSubmit() {
   }
 }
 
+async function onDelete() {
+  confirmingDelete.value = false
+  if (deleting.value || saving.value) return
+  deleting.value = true
+  bannerError.value = null
+  saved.value = false
+  try {
+    await removeChampionship(championshipId!, auth.token ?? '')
+    if (isUnmounted) return
+    // Not dirty any more: skip the leave confirmation
+    baseline.value = { ...values }
+    await router.push({ name: 'my-championships' })
+  } catch (error) {
+    if (isUnmounted) return
+    bannerError.value = describeDeleteError(error)
+  } finally {
+    deleting.value = false
+  }
+}
+
 const cancelTarget = computed(() =>
   mode === 'create'
     ? { name: 'my-championships' }
@@ -159,6 +183,15 @@ const nextSteps = [
 
 <template>
   <div class="championship-form">
+    <ConfirmDialog
+      :open="confirmingDelete"
+      title="Excluir campeonato?"
+      :message="`Excluir &quot;${championshipName}&quot;? Os robôs e as lutas dele também serão removidos. Isso não pode ser desfeito.`"
+      confirm-label="Excluir"
+      cancel-label="Manter campeonato"
+      @confirm="onDelete"
+      @cancel="confirmingDelete = false"
+    />
     <nav aria-label="Navegação estrutural">
       <ol class="championship-form__breadcrumb text-mono-s">
         <li>
@@ -221,7 +254,7 @@ const nextSteps = [
           name="name"
           hint="Aparece na página pública do campeonato."
           required
-          :disabled="saving"
+          :disabled="saving || deleting"
           :error="fieldError('name')"
           @focusout="touched.add('name')"
         />
@@ -233,7 +266,7 @@ const nextSteps = [
             label="Data de início *"
             name="startDate"
             required
-            :disabled="saving"
+            :disabled="saving || deleting"
             :error="fieldError('startDate')"
             @focusout="touched.add('startDate')"
           />
@@ -243,7 +276,7 @@ const nextSteps = [
             label="Data de término *"
             name="endDate"
             required
-            :disabled="saving"
+            :disabled="saving || deleting"
             :error="fieldError('endDate')"
             @focusout="touched.add('endDate')"
           />
@@ -264,10 +297,23 @@ const nextSteps = [
           <AppButton
             class="championship-form__button"
             type="submit"
-            :disabled="saving"
+            :disabled="saving || deleting"
             :aria-busy="saving"
           >
             Salvar campeonato
+          </AppButton>
+        </div>
+
+        <div v-if="mode === 'edit'" class="championship-form__danger">
+          <AppButton
+            class="championship-form__button"
+            type="button"
+            variant="destructive"
+            :disabled="saving || deleting"
+            :aria-busy="deleting"
+            @click="confirmingDelete = true"
+          >
+            Excluir campeonato
           </AppButton>
         </div>
       </form>
@@ -420,6 +466,13 @@ const nextSteps = [
   justify-content: flex-end;
   gap: var(--space-3);
   padding-top: var(--space-2);
+}
+
+.championship-form__danger {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 
 .championship-form__saved {

@@ -11,6 +11,7 @@ vi.mock('@/api/championships', () => ({
   listMyChampionships: vi.fn<typeof championshipsApi.listMyChampionships>(),
   createChampionship: vi.fn<typeof championshipsApi.createChampionship>(),
   updateChampionship: vi.fn<typeof championshipsApi.updateChampionship>(),
+  deleteChampionship: vi.fn<typeof championshipsApi.deleteChampionship>(),
 }))
 vi.mock('@/api/arenas', () => ({
   listArenas: vi.fn<typeof arenasApi.listArenas>(),
@@ -46,6 +47,7 @@ import {
   type ApiArena,
 } from '@/api/arenas'
 import {
+  deleteChampionship,
   getChampionship as fetchChampionship,
   listMyChampionships,
   type ApiChampionship,
@@ -67,6 +69,7 @@ import {
   getMyArenas,
   newArenaToken,
   removeArena,
+  removeChampionship,
   renameArena,
   getArenas,
   getChampionship,
@@ -127,7 +130,7 @@ const apiMatch: ApiMatch = {
   championshipId: 'c1',
   weightClass: 'beetleweight',
   state: 'paused',
-  scheduledAt: '2026-12-09T13:00:00.000Z',
+  startedAt: '2026-12-09T13:00:00.000Z',
   arenaId: 'a1',
   endReason: null,
   winnerRobotId: null,
@@ -166,7 +169,7 @@ describe('@/data', () => {
     expect(listRobots).toHaveBeenCalledWith('c1')
   })
 
-  it('maps the match state and scheduledAt and drops the embedded robots', async () => {
+  it('maps the match state and startedAt and drops the embedded robots', async () => {
     vi.mocked(listMatches).mockResolvedValue([apiMatch])
 
     expect(await getMatchSummaries('c1')).toEqual([
@@ -178,11 +181,19 @@ describe('@/data', () => {
         robotBId: 'r2',
         arenaId: 'a1',
         state: 'paused',
-        scheduledAt: '2026-12-09T13:00:00.000Z',
+        startedAt: '2026-12-09T13:00:00.000Z',
         createdAt,
         modifiedAt,
       },
     ])
+  })
+
+  it('keeps startedAt null for a fight that has not started', async () => {
+    vi.mocked(listMatches).mockResolvedValue([{ ...apiMatch, state: 'scheduled', startedAt: null }])
+
+    const [summary] = await getMatchSummaries('c1')
+
+    expect(summary?.startedAt).toBeNull()
   })
 
   it('adds the championship id to create payloads', async () => {
@@ -194,11 +205,7 @@ describe('@/data', () => {
       { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight' },
       'tok',
     )
-    await createMatch(
-      'c1',
-      { robotAId: 'r1', robotBId: 'r2', scheduledAt: '2026-12-09T13:00:00.000Z' },
-      'tok',
-    )
+    await createMatch('c1', { robotAId: 'r1', robotBId: 'r2' }, 'tok')
 
     expect(postRobot).toHaveBeenCalledWith(
       { name: 'Titã', team: 'Equipe Volt', weightClass: 'beetleweight', championshipId: 'c1' },
@@ -208,7 +215,6 @@ describe('@/data', () => {
       {
         robotAId: 'r1',
         robotBId: 'r2',
-        scheduledAt: '2026-12-09T13:00:00.000Z',
         championshipId: 'c1',
       },
       'tok',
@@ -320,6 +326,13 @@ describe('@/data', () => {
     expect(deleteArena).toHaveBeenCalledWith('a1', 't')
   })
 
+  it('removes a championship', async () => {
+    vi.mocked(deleteChampionship).mockResolvedValue(undefined)
+
+    await removeChampionship('c1', 't')
+    expect(deleteChampionship).toHaveBeenCalledWith('c1', 't')
+  })
+
   it('lets arena errors through as ApiError', async () => {
     vi.mocked(deleteArena).mockRejectedValue(new ApiError(409, 'arena_match_live'))
 
@@ -389,7 +402,7 @@ describe('@/data', () => {
       robotBId: 'r2',
       arenaId: 'a1',
       state: 'paused',
-      scheduledAt: '2026-12-09T13:00:00.000Z',
+      startedAt: '2026-12-09T13:00:00.000Z',
       createdAt,
       modifiedAt,
     })

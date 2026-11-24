@@ -8,9 +8,7 @@ import {
   robotHint,
   robotOptions,
   robotsInClass,
-  toLocalInput,
   toMatchInput,
-  toScheduledAtIso,
   validateMatchForm,
   validateStep1,
   withWeightClass,
@@ -36,28 +34,20 @@ const robots = [
 
 const values = (overrides: Partial<MatchFormValues> = {}): MatchFormValues => ({
   weightClass: 'beetleweight',
-  scheduledAt: '2026-12-09T14:30',
   robotAId: '',
   robotBId: '',
   ...overrides,
 })
 
-describe('scheduledAt conversion', () => {
-  it('round-trips a datetime-local value through ISO', () => {
-    expect(toLocalInput(toScheduledAtIso('2026-12-09T14:30'))).toBe('2026-12-09T14:30')
-  })
-
-  it('sends a full ISO timestamp', () => {
-    expect(toScheduledAtIso('2026-12-09T14:30')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/)
-  })
-})
-
 describe('validateStep1', () => {
-  it('requires the category and the time', () => {
-    expect(validateStep1(values({ weightClass: '', scheduledAt: '' }))).toEqual({
+  it('requires the category', () => {
+    expect(validateStep1(values({ weightClass: '' }))).toEqual({
       weightClass: 'Escolha a categoria de peso.',
-      scheduledAt: 'Informe a data e o horário.',
     })
+  })
+
+  it('needs only the category', () => {
+    expect(validateStep1(values())).toEqual({})
   })
 
   it('accepts both', () => {
@@ -156,7 +146,6 @@ describe('toMatchInput', () => {
     expect(toMatchInput(values({ robotAId: 'marte', robotBId: 'cobalto' }))).toEqual({
       robotAId: 'marte',
       robotBId: 'cobalto',
-      scheduledAt: toScheduledAtIso('2026-12-09T14:30'),
     })
   })
 })

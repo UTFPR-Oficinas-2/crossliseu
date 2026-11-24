@@ -135,8 +135,8 @@ export interface MatchSummary {
   state: MatchState
   /** The arena the fight ran on, set at Start. `null` before Start */
   arenaId: string | null
-  /** When the fight is planned to start (ISO) */
-  scheduledAt: string
+  /** When the fight started (ISO). `null` before Start */
+  startedAt: string | null
   createdAt: string
   modifiedAt: string
 }
@@ -162,4 +162,3 @@ export interface Match extends MatchSummary {
   analysisStatus: ProcessingStatus
   heatmaps: RobotHeatmap[]
 }
-

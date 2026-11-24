@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Match } from './entities/match.entity.js';
+import { MatchEvent } from './entities/match-event.entity.js';
 import { EntityManager, In, IsNull, Repository } from 'typeorm';
 import type { FindOptionsWhere } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
@@ -81,6 +82,23 @@ export class MatchesRepository {
             // Fights are ordered manually by creation; there is no bracket
             order: { createdAt: 'ASC' },
         });
+    }
+
+    /**
+     * When each of these matches started, from its `started` event (at most one per match).
+     * Matches that have not started are absent from the map.
+     */
+    async findStartedAt(matchIds: string[]): Promise<Map<string, Date>> {
+        if (matchIds.length === 0) {
+            return new Map();
+        }
+        const events = await this.repository.manager.find(MatchEvent, {
+            select: { matchId: true, occurredAt: true },
+            where: { matchId: In(matchIds), type: 'started' },
+        });
+        return new Map(
+            events.map((event) => [event.matchId, event.occurredAt]),
+        );
     }
 
     /** With its robots, like findAll */

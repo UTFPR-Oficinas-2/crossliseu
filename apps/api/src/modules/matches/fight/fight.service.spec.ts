@@ -86,14 +86,7 @@ function setup({
     missing = false,
     lockedNow,
 }: Options = {}) {
-    const match = new Match(
-        'lightweight',
-        CHAMPIONSHIP_ID,
-        'a',
-        'b',
-        USER_ID,
-        T0,
-    );
+    const match = new Match('lightweight', CHAMPIONSHIP_ID, 'a', 'b', USER_ID);
     match.id = MATCH_ID;
     match.state = state;
     match.endReason = null;

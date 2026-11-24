@@ -33,7 +33,6 @@ export class Match extends BaseEntity {
         robotAId?: string,
         robotBId?: string,
         createdByUserId?: string,
-        scheduledAt?: Date,
     ) {
         super();
 
@@ -42,8 +41,7 @@ export class Match extends BaseEntity {
             !championshipId ||
             !robotAId ||
             !robotBId ||
-            !createdByUserId ||
-            !scheduledAt
+            !createdByUserId
         ) {
             return;
         }
@@ -53,7 +51,6 @@ export class Match extends BaseEntity {
         this.robotAId = robotAId;
         this.robotBId = robotBId;
         this.createdByUserId = createdByUserId;
-        this.scheduledAt = scheduledAt;
         this.state = 'scheduled';
     }
 
@@ -66,8 +63,11 @@ export class Match extends BaseEntity {
     @Column({ name: 'end_reason', type: 'varchar', nullable: true })
     endReason: MatchEndReason | null;
 
-    @Column({ name: 'scheduled_at', type: 'timestamptz', nullable: false })
-    scheduledAt: Date;
+    /**
+     * When the fight started: the `started` event's time, `null` before Start. Not a column;
+     * MatchesService fills it on the way out.
+     */
+    startedAt?: Date | null;
 
     @Column({ name: 'championship_id', type: 'uuid', nullable: false })
     championshipId: string;
