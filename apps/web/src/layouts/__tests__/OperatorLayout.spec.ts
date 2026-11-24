@@ -66,7 +66,6 @@ async function mountAt(path: string, operation: RouteComponent = stub) {
         path: '/operator',
         component: OperatorLayout,
         children: [
-          { path: '', name: 'operator', component: stub },
           { path: ':matchId', name: 'match-operation', component: operation },
         ],
       },
@@ -194,20 +193,6 @@ describe('OperatorLayout', () => {
       arenaConnected: false,
     })
     expect(wrapper.find('[aria-current="step"]').text()).toBe('1 · Preparação')
-  })
-
-  it('loads nothing on the picker route', async () => {
-    const wrapper = await mountAt('/operator')
-
-    expect(getMatchSummary).not.toHaveBeenCalled()
-    expect(wrapper.findComponent(OperatorNav).exists()).toBe(false)
-  })
-
-  it('shows the app navigation on the picker route, with Operação current', async () => {
-    const wrapper = await mountAt('/operator')
-
-    expect(wrapper.findComponent(AppNav).exists()).toBe(true)
-    expect(wrapper.find('a[aria-current="page"]').text()).toBe('Operação')
   })
 
   it('keeps the operator navigation, not the app one, while running a fight', async () => {

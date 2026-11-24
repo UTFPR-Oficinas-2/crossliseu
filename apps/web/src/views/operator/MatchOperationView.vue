@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import CompetitorTile from '@/components/ui/CompetitorTile.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import type { StatusTone } from '@/components/ui/status-pill'
+import { matchChampionshipId } from '@/data'
 import { useAuthStore } from '@/stores/auth'
 import type { MatchEndReason, MatchState } from '@/types'
 import { formatElapsed } from '@/utils/recording'
@@ -18,7 +19,26 @@ const emit = defineEmits<{
 }>()
 const auth = useAuthStore()
 const router = useRouter()
-const operatorHome = { name: 'operator' } as const
+// "Back to the operation" is the picker of the match's championship; /manage if it can't be told
+const championshipId = ref<string | null>(null)
+const operatorHome = computed<RouteLocationRaw>(() =>
+  championshipId.value
+    ? { name: 'championship-operation', params: { championshipId: championshipId.value } }
+    : { name: 'my-championships' },
+)
+watch(
+  () => matchId,
+  async (id) => {
+    championshipId.value = null
+    try {
+      const resolved = await matchChampionshipId(id)
+      if (id === matchId) championshipId.value = resolved
+    } catch (error) {
+      console.error('Could not resolve the match championship', error)
+    }
+  },
+  { immediate: true },
+)
 const {
   state,
   loadState,
@@ -84,7 +104,7 @@ watch(state, (snapshot) => {
 watch(
   confirmedCloseMatchId,
   async (closedId) => {
-    if (closedId === matchId) await router.push(operatorHome)
+    if (closedId === matchId) await router.push(operatorHome.value)
   },
   { flush: 'post' },
 )

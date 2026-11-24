@@ -4,10 +4,8 @@
 // content (preparation, running, closing) is rendered by the child route.
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AppNav from '@/components/ui/AppNav.vue'
 import OperatorNav from '@/components/ui/OperatorNav.vue'
 import { getArenas, getChampionship, getMatchSummary, getRobots } from '@/data'
-import { useSignOut } from '@/composables/useSignOut'
 import { useAuthStore } from '@/stores/auth'
 import type { Arena, Championship, MatchState, MatchSummary, Robot } from '@/types'
 
@@ -151,21 +149,10 @@ function exitOperation() {
     params: { championshipId: match.value.championshipId },
   })
 }
-
-// The picker (`/operator`, Figma OPE-01) has no fight yet and uses the app navigation
-const onPicker = computed(() => !route.params.matchId)
-
-const handleSignOut = useSignOut()
 </script>
 
 <template>
   <div class="operator-layout">
-    <AppNav
-      v-if="onPicker"
-      :user-name="auth.username ?? ''"
-      active="operator"
-      @sign-out="handleSignOut"
-    />
     <!-- Without a match there is no fight context to show, so the nav is omitted -->
     <OperatorNav
       v-if="match"
