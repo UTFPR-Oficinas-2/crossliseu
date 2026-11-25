@@ -1416,6 +1416,18 @@ describe('FightService.correctEndReason (#57)', () => {
         expect(repo.withLockedFight).not.toHaveBeenCalled();
     });
 
+    it('a surrender with a null side is 400 surrender_side_required', async () => {
+        const { service, repo } = finished('manual');
+
+        await expect(
+            service.correctEndReason(MATCH_ID, USER_ID, {
+                endReason: 'surrender',
+                side: null as unknown as 'A',
+            }),
+        ).rejects.toThrow(new BadRequestException('surrender_side_required'));
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
     it('a side with another reason is 400 surrender_side_unexpected', async () => {
         const { service, repo } = finished('surrender', undefined, 'a');
 

@@ -262,10 +262,11 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         ) {
             throw this.notFound(matchId);
         }
-        if (endReason === 'surrender' && side === undefined) {
+        // `== null`: a surrender recorded without a side breaks every later read of the match
+        if (endReason === 'surrender' && side == null) {
             throw new BadRequestException('surrender_side_required');
         }
-        if (endReason !== 'surrender' && side !== undefined) {
+        if (endReason !== 'surrender' && side != null) {
             throw new BadRequestException('surrender_side_unexpected');
         }
 

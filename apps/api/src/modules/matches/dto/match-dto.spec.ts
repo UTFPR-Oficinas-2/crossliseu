@@ -71,6 +71,12 @@ describe('match DTOs', () => {
         ).toEqual(['side']);
         expect(
             await errorsFor(CorrectEndReasonDto, {
+                endReason: 'surrender',
+                side: null,
+            }),
+        ).toEqual(['side']);
+        expect(
+            await errorsFor(CorrectEndReasonDto, {
                 endReason: 'manual',
                 winnerRobotId: body.robotAId,
             }),
