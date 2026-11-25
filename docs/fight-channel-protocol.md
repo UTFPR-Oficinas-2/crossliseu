@@ -45,6 +45,8 @@ A socket follows exactly one match. To follow another, open another socket.
 
 The operator confirms with `POST /matches/:id/close` (no body: the proposal; `{ "draw": true }`: a draw). The server computes the result itself; the client never sends a winner.
 
+Before closing, the operator can correct the end reason with `PATCH /matches/:id/end-reason` (#57), body `{ "endReason": "time_out" | "manual" | "surrender", "side"?: "A" | "B" }`. `side` is the side that gave up: required for `surrender` (`400 surrender_side_required`) and refused otherwise (`400 surrender_side_unexpected`); any other reason clears `surrenderedSide`. Allowed only while the fight is `finished` and not closed, otherwise `409 match_invalid_transition`. A change pushes a new `state` to every socket and to the arena, so `proposal` follows the corrected reason; a correction that changes nothing pushes nothing. The winner is still written only at close.
+
 **Snapshots.** Every subscribe starts with a full `state`; there is no resume or diff. A socket's last frame is never older than the last committed change, including a change that lands while the first snapshot is being read.
 
 **Heartbeat.** Browsers can't see WebSocket-level pings, so a subscribed socket gets `{"event":"ping","data":null}` every `PING_INTERVAL_MS` (10 s). Clients ignore the frame; its job is to be traffic. If no frame of any kind arrives for 3 x `PING_INTERVAL_MS` (30 s), the connection is half-open: close it and reconnect.

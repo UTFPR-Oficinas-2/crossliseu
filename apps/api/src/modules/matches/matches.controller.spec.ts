@@ -25,6 +25,8 @@ function setup() {
         operatorState: vi.fn().mockResolvedValue(operatorFight),
         command: vi.fn().mockResolvedValue(fight),
         operatorCommand: vi.fn().mockResolvedValue(operatorFight),
+        correctEndReason: vi.fn().mockResolvedValue(fight),
+        operatorCorrectEndReason: vi.fn().mockResolvedValue(operatorFight),
     };
     const controller = new MatchesController(
         {} as MatchesService,
@@ -93,6 +95,34 @@ describe('MatchesController fight views', () => {
                 command,
                 userId,
             );
+        },
+    );
+
+    it.each([
+        [{ endReason: 'manual' }, { endReason: 'manual' }],
+        [
+            { endReason: 'surrender', side: 'B' },
+            { endReason: 'surrender', side: 'B' },
+        ],
+    ] as const)(
+        'routes an end-reason correction %o in both views (#57)',
+        async (body, correction) => {
+            const { controller, service } = setup();
+
+            expect(await controller.correctEndReason(id, userId, body)).toEqual(
+                fight,
+            );
+            expect(
+                await controller.correctEndReason(id, userId, body, 'operator'),
+            ).toEqual(operatorFight);
+            expect(service.correctEndReason).toHaveBeenCalledExactlyOnceWith(
+                id,
+                userId,
+                correction,
+            );
+            expect(
+                service.operatorCorrectEndReason,
+            ).toHaveBeenCalledExactlyOnceWith(id, userId, correction);
         },
     );
 });

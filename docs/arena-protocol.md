@@ -266,7 +266,7 @@ The server can also close with `1001` (it is shutting down), `1011` (it could no
 
 - **Server-side detection.** The server sends a WebSocket ping every 10 s and drops a box that does not answer within 10 s. The arena is shown offline in the web app as soon as its socket closes, except when the socket was replaced (`4003`): the new connection keeps it online.
 - **Box-side detection.** The box expects a server ping every 10 s. If it hears nothing from the server (no ping, no message) for 30 s, it treats the connection as lost, closes it and reconnects with normal backoff. This catches connections that die silently, such as a router or proxy restart that never delivers a close.
-- **During a match the box is ignored.** The match keeps running on the server. Competitors cannot surrender; if they want to, the operator ends the match (`manual`).
+- **During a match the box is ignored.** The match keeps running on the server. Competitors cannot surrender; if they want to, the operator ends the match (`manual`). Before closing, the operator can correct that end reason to what really happened, such as a surrender by one side (`PATCH /matches/:id/end-reason`, #57); a box that is back online then gets a new `finished` `state` with the corrected `endReason`.
 - **On the box.** It goes back to not connected, drops button presses and reconnects.
 - **Reconnect** is just connecting again: `hello`, `welcome`, then a `state` with the current status and `remainingMs`. No special messages.
 
