@@ -6,7 +6,7 @@ import {
   type FightChannelOptions,
   type FightChannelStatus,
 } from '@/api/fight-channel'
-import { getFightState, sendFightCommand, type OperatorFightState } from '@/data'
+import { correctEndReason, getFightState, sendFightCommand, type OperatorFightState } from '@/data'
 import { useFightControl } from '../use-fight-control'
 
 function deferred<T>() {
@@ -22,6 +22,7 @@ function deferred<T>() {
 vi.mock('@/data', () => ({
   getFightState: vi.fn<typeof getFightState>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
+  correctEndReason: vi.fn<typeof correctEndReason>(),
 }))
 vi.mock('@/api/fight-channel', () => ({
   openFightChannel: vi.fn<typeof openFightChannel>(),
@@ -54,6 +55,7 @@ const closed = { ...finished, closed: true, hasSelectedArena: false }
 const readError = 'Não foi possível atualizar a luta.'
 const get = vi.mocked(getFightState)
 const post = vi.mocked(sendFightCommand)
+const correct = vi.mocked(correctEndReason)
 const open = vi.mocked(openFightChannel)
 
 interface FakeChannel {
@@ -100,6 +102,7 @@ describe('useFightControl', () => {
     })
     get.mockReset().mockResolvedValue(snapshot())
     post.mockReset()
+    correct.mockReset()
     vi.mocked(reportUnauthorized).mockReset()
     scope = effectScope()
   })
@@ -545,5 +548,114 @@ describe('useFightControl', () => {
     const fight = startWith(closed)
     expect(fight.state.value?.closed).toBe(true)
     expect(fight.confirmedCloseMatchId.value).toBeNull()
+  })
+
+  describe('correctEndReason (#57)', () => {
+    const corrected = {
+      ...finished,
+      endReason: 'surrender' as const,
+      surrenderedSide: 'B' as const,
+      proposal: { outcome: 'A' as const, basis: 'surrender' as const },
+    }
+
+    it('sends the correction and applies the corrected snapshot', async () => {
+      const response = deferred<OperatorFightState>()
+      correct.mockReturnValueOnce(response.promise)
+      const fight = startWith(finished)
+
+      const request = fight.correctEndReason({ endReason: 'surrender', side: 'B' })
+      expect(fight.busy.value).toBe(true)
+      response.resolve(corrected)
+      await request
+
+      expect(correct).toHaveBeenCalledExactlyOnceWith(
+        'm1',
+        { endReason: 'surrender', side: 'B' },
+        'jwt',
+        expect.any(AbortSignal),
+      )
+      expect(fight.state.value).toEqual(corrected)
+      expect(fight.busy.value).toBe(false)
+      expect(fight.error.value).toBeNull()
+      expect(fight.confirmedCloseMatchId.value).toBeNull()
+    })
+
+    it('sends nothing while the fight runs, once it is closed, or while a command runs', async () => {
+      const ongoing = startWith(snapshot({ status: 'ongoing' }))
+      await ongoing.correctEndReason({ endReason: 'manual' })
+      channel().push(closed)
+      await ongoing.correctEndReason({ endReason: 'manual' })
+
+      channel().push(finished)
+      const hung = deferred<OperatorFightState>()
+      post.mockReturnValueOnce(hung.promise)
+      const close = ongoing.command('close')
+      await ongoing.correctEndReason({ endReason: 'manual' })
+      hung.resolve(closed)
+      await close
+
+      expect(correct).not.toHaveBeenCalled()
+    })
+
+    it('reconciles a 409 with one read and says the fight changed', async () => {
+      correct.mockRejectedValueOnce(new ApiError(409, 'match_invalid_transition'))
+      get.mockResolvedValueOnce(closed)
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'manual' })
+
+      expect(get).toHaveBeenCalledOnce()
+      expect(fight.state.value).toEqual(closed)
+      expect(fight.error.value).toBe('O estado da luta mudou. Confira os controles disponíveis.')
+    })
+
+    it('reads again after a network failure without leaving a command uncertain', async () => {
+      correct.mockRejectedValueOnce(new ApiError(0, 'network'))
+      get.mockResolvedValueOnce(finished)
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'surrender', side: 'B' })
+
+      expect(get).toHaveBeenCalledOnce()
+      expect(fight.uncertainCommand.value).toBeNull()
+      expect(fight.error.value).toBe('Não foi possível confirmar a correção.')
+    })
+
+    it('clears the error when the read after a failure shows the correction landed', async () => {
+      correct.mockRejectedValueOnce(new ApiError(503, 'unavailable'))
+      get.mockResolvedValueOnce(corrected)
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'surrender', side: 'B' })
+
+      expect(fight.state.value).toEqual(corrected)
+      expect(fight.error.value).toBeNull()
+    })
+
+    it('clears the error when a later pushed frame shows the correction landed', async () => {
+      correct.mockRejectedValueOnce(new ApiError(0, 'network'))
+      get.mockResolvedValueOnce(finished)
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'surrender', side: 'B' })
+      expect(fight.error.value).toBe('Não foi possível confirmar a correção.')
+
+      // The other side gave up: not the requested correction, so the error stays
+      channel().push({ ...corrected, surrenderedSide: 'A' })
+      expect(fight.error.value).toBe('Não foi possível confirmar a correção.')
+
+      channel().push(corrected)
+      expect(fight.error.value).toBeNull()
+    })
+
+    it('reports a refused correction without reading again', async () => {
+      correct.mockRejectedValueOnce(new ApiError(400, 'surrender_side_required'))
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'surrender' })
+
+      expect(get).not.toHaveBeenCalled()
+      expect(fight.error.value).toBe('Não foi possível corrigir o motivo.')
+    })
   })
 })

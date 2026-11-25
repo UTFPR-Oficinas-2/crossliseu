@@ -52,6 +52,7 @@ const {
   refresh,
   resumeControls,
   command,
+  correctEndReason,
 } = useFightControl(
   () => matchId,
   () => auth.token ?? '',
@@ -215,6 +216,7 @@ function confirmResumeControls() {
           :disabled="disabled"
           @confirm="command('close')"
           @draw="command('close', { draw: true })"
+          @correct="correctEndReason"
         />
 
         <p v-if="state.status === 'ongoing'" class="fight-card__note text-body-s">

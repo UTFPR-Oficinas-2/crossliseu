@@ -15,9 +15,13 @@ import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { UpdateMatchDto } from './dto/update-match.dto.js';
 import { CloseMatchDto } from './dto/close-match.dto.js';
+import { CorrectEndReasonDto } from './dto/correct-end-reason.dto.js';
 import type { FightCommand } from './fight/fight-transitions.js';
 import { FightService } from './fight/fight.service.js';
-import type { CommandOptions } from './fight/fight.service.js';
+import type {
+    CommandOptions,
+    EndReasonCorrection,
+} from './fight/fight.service.js';
 import { MatchesService } from './matches.service.js';
 import { Public } from '../auth/public-decorator.js';
 import { CurrentUserId } from '../auth/current-user-id.decorator.js';
@@ -119,6 +123,24 @@ export class MatchesController {
         return view === 'operator'
             ? this.fightService.operatorCommand(id, 'close', userId, options)
             : this.fightService.command(id, 'close', userId, options);
+    }
+
+    @Patch(':id/end-reason')
+    @HttpCode(HttpStatus.OK)
+    correctEndReason(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUserId() userId: string,
+        @Body() body: CorrectEndReasonDto,
+        @Query('view') view?: string,
+    ) {
+        // Before close only; the winner is still written at close (#57)
+        const correction: EndReasonCorrection = {
+            endReason: body.endReason,
+            ...(body.side !== undefined && { side: body.side }),
+        };
+        return view === 'operator'
+            ? this.fightService.operatorCorrectEndReason(id, userId, correction)
+            : this.fightService.correctEndReason(id, userId, correction);
     }
 
     private runFightCommand(

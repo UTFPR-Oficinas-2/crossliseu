@@ -2,7 +2,14 @@ import { computed, onScopeDispose, readonly, ref, shallowRef, toValue, watch } f
 import type { MaybeRefOrGetter } from 'vue'
 import { ApiError } from '@/api/client'
 import { openFightChannel, type FightChannelStatus } from '@/api/fight-channel'
-import { getFightState, sendFightCommand, type FightCommand, type OperatorFightState } from '@/data'
+import {
+  correctEndReason as sendEndReasonCorrection,
+  getFightState,
+  sendFightCommand,
+  type EndReasonCorrection,
+  type FightCommand,
+  type OperatorFightState,
+} from '@/data'
 
 const REQUEST_TIMEOUT_MS = 10_000
 const COUNTDOWN_INTERVAL_MS = 100
@@ -109,6 +116,8 @@ export function useFightControl(
   let activeCommand: AbortController | null = null
   let channel: { close(): void } | null = null
   let channelVersion = 0
+  // A correction whose response was lost; its error clears once a snapshot shows it landed
+  let unconfirmedCorrection: EndReasonCorrection | null = null
   // Counts pushed frames applied, so a slower HTTP response never overwrites a fresher frame
   let framesApplied = 0
   let countdownTimer: ReturnType<typeof setInterval> | undefined
@@ -126,6 +135,16 @@ export function useFightControl(
         remainingMs.value = Math.max(0, snapshot.remainingMs - (performance.now() - receivedAt))
         if (remainingMs.value === 0) clearInterval(countdownTimer)
       }, COUNTDOWN_INTERVAL_MS)
+    }
+
+    const correction = unconfirmedCorrection
+    if (
+      correction &&
+      snapshot.endReason === correction.endReason &&
+      snapshot.surrenderedSide === (correction.side ?? null)
+    ) {
+      unconfirmedCorrection = null
+      commandError.value = null
     }
 
     const pending = uncertainCommand.value
@@ -246,8 +265,21 @@ export function useFightControl(
     }
   }
 
-  /** `options.draw` only matters for Close: it confirms a draw instead of the proposal (#50) */
-  async function command(action: FightCommand, options?: { draw?: boolean }): Promise<void> {
+  /**
+   * Posts one operator request when nothing else runs and `permits` the current snapshot, then
+   * applies its body unless a pushed frame got there first. `check` may throw to reject the body
+   * before it is applied; `fail` reports an error and says
+   * whether to reconcile with one read.
+   */
+  async function submit(
+    permits: (snapshot: OperatorFightState) => boolean,
+    send: (matchId: string, jwt: string, signal: AbortSignal) => Promise<OperatorFightState>,
+    handlers: {
+      check?: (updated: OperatorFightState) => void
+      done?: (updated: OperatorFightState) => void
+      fail: (cause: unknown) => boolean
+    },
+  ): Promise<void> {
     const snapshot = state.value
     const jwt = toValue(token)
     if (
@@ -257,7 +289,7 @@ export function useFightControl(
       uncertainCommand.value ||
       loadState.value !== 'ready' ||
       !snapshot ||
-      !permitsCommand(snapshot, action)
+      !permits(snapshot)
     ) {
       return
     }
@@ -269,34 +301,22 @@ export function useFightControl(
     activeCommand = controller
     posting.value = true
     commandError.value = null
+    unconfirmedCorrection = null
     let reconcile = false
 
     try {
       const updated = await requestWithTimeout(controller, (signal) =>
-        options
-          ? sendFightCommand(snapshot.matchId, action, jwt, signal, options)
-          : sendFightCommand(snapshot.matchId, action, jwt, signal),
+        send(snapshot.matchId, jwt, signal),
       )
       if (version !== generation) return
       checkSnapshot(updated, snapshot.matchId)
-      if (action === 'close' && !updated.closed) throw new Error('Close was not confirmed')
-      // Frames applied while the command was in flight already hold equal or fresher state
+      handlers.check?.(updated)
+      // Frames applied while the request was in flight already hold equal or fresher state
       if (framesApplied === seen) apply(updated)
-      if (action === 'close') confirmedCloseMatchId.value = updated.matchId
+      handlers.done?.(updated)
     } catch (cause) {
       if (version !== generation) return
-      if (!(cause instanceof ApiError) || cause.status === 0 || cause.status >= 500) {
-        uncertainCommand.value = action
-        shouldNavigateOnClose = action === 'close'
-        commandError.value = 'Ainda não foi possível confirmar o comando.'
-        reconcile = true
-      } else if (cause.status === 409) {
-        loadState.value = 'error'
-        commandError.value = 'O estado da luta mudou. Confira os controles disponíveis.'
-        reconcile = true
-      } else {
-        commandError.value = 'Não foi possível executar o comando.'
-      }
+      reconcile = handlers.fail(cause)
     } finally {
       if (version === generation) {
         activeCommand = null
@@ -306,9 +326,71 @@ export function useFightControl(
     }
   }
 
+  /** A 409 means the fight moved on: show it and read the current state */
+  function conflicted(cause: unknown): boolean {
+    if (!(cause instanceof ApiError) || cause.status !== 409) return false
+    loadState.value = 'error'
+    commandError.value = 'O estado da luta mudou. Confira os controles disponíveis.'
+    return true
+  }
+
+  const unconfirmed = (cause: unknown) =>
+    !(cause instanceof ApiError) || cause.status === 0 || cause.status >= 500
+
+  /** `options.draw` only matters for Close: it confirms a draw instead of the proposal (#50) */
+  function command(action: FightCommand, options?: { draw?: boolean }): Promise<void> {
+    return submit(
+      (snapshot) => permitsCommand(snapshot, action),
+      (id, jwt, signal) =>
+        options
+          ? sendFightCommand(id, action, jwt, signal, options)
+          : sendFightCommand(id, action, jwt, signal),
+      {
+        check: (updated) => {
+          if (action === 'close' && !updated.closed) throw new Error('Close was not confirmed')
+        },
+        done: (updated) => {
+          if (action === 'close') confirmedCloseMatchId.value = updated.matchId
+        },
+        fail: (cause) => {
+          if (unconfirmed(cause)) {
+            uncertainCommand.value = action
+            shouldNavigateOnClose = action === 'close'
+            commandError.value = 'Ainda não foi possível confirmar o comando.'
+            return true
+          }
+          if (conflicted(cause)) return true
+          commandError.value = 'Não foi possível executar o comando.'
+          return false
+        },
+      },
+    )
+  }
+
+  /** Corrects the end reason of a finished fight before Close (#57); never leaves a command uncertain */
+  function correctEndReason(correction: EndReasonCorrection): Promise<void> {
+    return submit(
+      (snapshot) => permitsCommand(snapshot, 'close'),
+      (id, jwt, signal) => sendEndReasonCorrection(id, correction, jwt, signal),
+      {
+        fail: (cause) => {
+          if (unconfirmed(cause)) {
+            commandError.value = 'Não foi possível confirmar a correção.'
+            unconfirmedCorrection = correction
+            return true
+          }
+          if (conflicted(cause)) return true
+          commandError.value = 'Não foi possível corrigir o motivo.'
+          return false
+        },
+      },
+    )
+  }
+
   function clearRequests() {
     generation++
     shouldNavigateOnClose = false
+    unconfirmedCorrection = null
     clearInterval(countdownTimer)
     cancelRead()
     activeCommand?.abort()
@@ -358,5 +440,6 @@ export function useFightControl(
     refresh,
     resumeControls,
     command,
+    correctEndReason,
   }
 }

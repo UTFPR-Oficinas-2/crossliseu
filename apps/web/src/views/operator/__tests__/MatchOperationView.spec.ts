@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { openFightChannel, type FightChannelOptions } from '@/api/fight-channel'
 import {
+  correctEndReason,
   freeRefereeSeat,
   getFightState,
   getRefereeSeats,
@@ -37,6 +38,7 @@ vi.mock('@/data', () => ({
   getRefereeSeats: vi.fn<typeof getRefereeSeats>(() => Promise.resolve([])),
   freeRefereeSeat: vi.fn<typeof freeRefereeSeat>(),
   sendFightCommand: vi.fn<typeof sendFightCommand>(),
+  correctEndReason: vi.fn<typeof correctEndReason>(),
   matchChampionshipId: vi.fn<typeof matchChampionshipId>(() => Promise.resolve('c1')),
 }))
 vi.mock('@/api/fight-channel', () => ({
@@ -337,6 +339,31 @@ describe('MatchOperationView', () => {
       expect.any(AbortSignal),
     )
     expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('saves a corrected end reason before Close (#57)', async () => {
+    firstFrame = finished
+    const corrected: OperatorFightState = {
+      ...finished,
+      endReason: 'surrender',
+      surrenderedSide: 'B',
+      proposal: { outcome: 'A', basis: 'surrender' },
+    }
+    vi.mocked(correctEndReason).mockReset().mockResolvedValueOnce(corrected)
+    const { wrapper, click } = await mountFight()
+
+    await click('Editar resultado')
+    await wrapper.get('input[value="surrender:B"]').setValue(true)
+    await click('Salvar resultado')
+
+    expect(correctEndReason).toHaveBeenCalledExactlyOnceWith(
+      'm1',
+      { endReason: 'surrender', side: 'B' },
+      expect.any(String),
+      expect.any(AbortSignal),
+    )
+    expect(wrapper.text()).toContain('por desistência do lado B')
+    expect(post).not.toHaveBeenCalled()
   })
 
   it('calls a draw with Close and { draw: true }', async () => {

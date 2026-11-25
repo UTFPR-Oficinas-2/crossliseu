@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { CreateMatchDto } from './create-match.dto.js';
 import { UpdateMatchDto } from './update-match.dto.js';
 import { CloseMatchDto } from './close-match.dto.js';
+import { CorrectEndReasonDto } from './correct-end-reason.dto.js';
 
 const body = {
     championshipId: '11111111-1111-4111-8111-111111111111',
@@ -32,6 +33,53 @@ describe('match DTOs', () => {
         ]);
         expect(
             await errorsFor(CloseMatchDto, { winnerRobotId: body.robotAId }),
+        ).toEqual(['winnerRobotId']);
+    });
+
+    it('corrects to any end reason, with a side for a surrender (#57)', async () => {
+        expect(
+            await errorsFor(CorrectEndReasonDto, { endReason: 'manual' }),
+        ).toEqual([]);
+        expect(
+            await errorsFor(CorrectEndReasonDto, { endReason: 'time_out' }),
+        ).toEqual([]);
+        expect(
+            await errorsFor(CorrectEndReasonDto, {
+                endReason: 'surrender',
+                side: 'B',
+            }),
+        ).toEqual([]);
+        // Pairing the side with the reason is the service's job
+        expect(
+            await errorsFor(CorrectEndReasonDto, {
+                endReason: 'manual',
+                side: 'A',
+            }),
+        ).toEqual([]);
+    });
+
+    it('rejects a missing or unknown end reason, an unknown side and a winner', async () => {
+        expect(await errorsFor(CorrectEndReasonDto, {})).toEqual(['endReason']);
+        expect(
+            await errorsFor(CorrectEndReasonDto, { endReason: 'forfeit' }),
+        ).toEqual(['endReason']);
+        expect(
+            await errorsFor(CorrectEndReasonDto, {
+                endReason: 'surrender',
+                side: 'C',
+            }),
+        ).toEqual(['side']);
+        expect(
+            await errorsFor(CorrectEndReasonDto, {
+                endReason: 'surrender',
+                side: null,
+            }),
+        ).toEqual(['side']);
+        expect(
+            await errorsFor(CorrectEndReasonDto, {
+                endReason: 'manual',
+                winnerRobotId: body.robotAId,
+            }),
         ).toEqual(['winnerRobotId']);
     });
 

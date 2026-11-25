@@ -110,6 +110,30 @@ export function getFightState(id: string, signal?: AbortSignal): Promise<Operato
   })
 }
 
+/** The end reason recorded before close (#57); `side` is who gave up, only for a surrender */
+export interface EndReasonCorrection {
+  endReason: MatchEndReason
+  side?: 'A' | 'B'
+}
+
+/**
+ * Corrects a finished, not yet closed fight's end reason (#57). 400 `surrender_side_required` /
+ * `surrender_side_unexpected`, 409 `match_invalid_transition` once the fight is closed.
+ */
+export function correctEndReason(
+  id: string,
+  body: EndReasonCorrection,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OperatorFightState> {
+  return apiRequest(`/matches/${encodeURIComponent(id)}/end-reason?view=operator`, {
+    method: 'PATCH',
+    token,
+    signal,
+    body,
+  })
+}
+
 /** `body` only on Close: `{ draw: true }` confirms a draw instead of the proposal (#50) */
 export function sendFightCommand(
   id: string,

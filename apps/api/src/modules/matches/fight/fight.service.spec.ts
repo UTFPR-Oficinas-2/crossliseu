@@ -1,5 +1,9 @@
 import 'reflect-metadata';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    NotFoundException,
+} from '@nestjs/common';
 import { FightService, TIMER_RETRY_MS } from './fight.service.js';
 import type {
     FightRepository,
@@ -1215,6 +1219,250 @@ describe('FightService change events', () => {
         await service.command(MATCH_ID, 'start', USER_ID);
 
         expect(seenInside).toEqual([false]);
+    });
+});
+
+describe('FightService.correctEndReason (#57)', () => {
+    /** A finished fight on ARENA_ID with the referees' points as scored events */
+    function finished(
+        endReason: 'time_out' | 'manual' | 'surrender',
+        points: { A: number; B: number } = { A: 0, B: 0 },
+        surrendered: 'a' | 'b' | null = null,
+    ) {
+        const scores = [
+            ...Array.from({ length: points.A }, (_, i) =>
+                scoredEvent('a', 1, 1, at(1000 + i)),
+            ),
+            ...Array.from({ length: points.B }, (_, i) =>
+                scoredEvent('b', 2, 1, at(2000 + i)),
+            ),
+        ];
+        const fight = setup({
+            state: 'finished',
+            events: [
+                event('started', T0),
+                ...scores,
+                event('finished', at(90_000)),
+            ],
+            arenaId: ARENA_ID,
+            now: at(100_000),
+        });
+        fight.store.match.endReason = endReason;
+        fight.store.match.surrenderedRobotId = surrendered;
+        fight.store.match.winnerRobotId = null;
+        return fight;
+    }
+
+    it('manual to a surrender by B records B and proposes A, without a winner', async () => {
+        const { service, store, changes } = finished('manual');
+
+        const state = await service.operatorCorrectEndReason(
+            MATCH_ID,
+            USER_ID,
+            { endReason: 'surrender', side: 'B' },
+        );
+
+        expect(state.endReason).toBe('surrender');
+        expect(state.surrenderedSide).toBe('B');
+        expect(state.proposal).toEqual({ outcome: 'A', basis: 'surrender' });
+        expect(store.match.surrenderedRobotId).toBe('b');
+        expect(store.match.winnerRobotId).toBeNull();
+        expect(store.written).toEqual([]);
+        expect(changes).toEqual([{ matchId: MATCH_ID, arenaId: ARENA_ID }]);
+    });
+
+    it('surrender to manual clears the side and falls back to points', async () => {
+        const { service, store } = finished('surrender', { A: 3, B: 1 }, 'a');
+
+        const state = await service.operatorCorrectEndReason(
+            MATCH_ID,
+            USER_ID,
+            { endReason: 'manual' },
+        );
+
+        expect(state.surrenderedSide).toBeNull();
+        expect(store.match.surrenderedRobotId).toBeNull();
+        expect(state.proposal).toEqual({ outcome: 'A', basis: 'points' });
+    });
+
+    it('surrender to manual with equal points proposes a draw', async () => {
+        const { service } = finished('surrender', { A: 2, B: 2 }, 'b');
+
+        const state = await service.operatorCorrectEndReason(
+            MATCH_ID,
+            USER_ID,
+            { endReason: 'manual' },
+        );
+
+        expect(state.proposal).toEqual({ outcome: 'draw', basis: 'tied' });
+    });
+
+    it('a surrender by A corrected to a surrender by B flips the proposal', async () => {
+        const { service, store } = finished('surrender', { A: 0, B: 0 }, 'a');
+
+        const state = await service.operatorCorrectEndReason(
+            MATCH_ID,
+            USER_ID,
+            { endReason: 'surrender', side: 'B' },
+        );
+
+        expect(store.match.surrenderedRobotId).toBe('b');
+        expect(state.proposal).toEqual({ outcome: 'A', basis: 'surrender' });
+    });
+
+    it('time_out can be corrected to manual', async () => {
+        const { service, store } = finished('time_out');
+
+        await service.correctEndReason(MATCH_ID, USER_ID, {
+            endReason: 'manual',
+        });
+
+        expect(store.match.endReason).toBe('manual');
+    });
+
+    it('the same reason and side writes nothing and pushes nothing', async () => {
+        const { service, store, changes } = finished(
+            'surrender',
+            undefined,
+            'b',
+        );
+
+        const state = await service.operatorCorrectEndReason(
+            MATCH_ID,
+            USER_ID,
+            { endReason: 'surrender', side: 'B' },
+        );
+
+        expect(state.surrenderedSide).toBe('B');
+        expect(store.written).toEqual([]);
+        expect(changes).toEqual([]);
+    });
+
+    it.each<MatchState>(['scheduled', 'ongoing', 'paused'])(
+        'from %s is 409 and changes nothing',
+        async (state) => {
+            const { service, store, changes } = setup({
+                state,
+                events: state === 'scheduled' ? [] : [event('started', T0)],
+                arenaId: ARENA_ID,
+                now: at(10_000),
+            });
+            if (state === 'paused') {
+                store.events.push(event('paused', at(5_000)));
+            }
+
+            await expect(
+                service.correctEndReason(MATCH_ID, USER_ID, {
+                    endReason: 'surrender',
+                    side: 'A',
+                }),
+            ).rejects.toThrow(
+                new ConflictException('match_invalid_transition'),
+            );
+
+            expect(store.match.endReason).toBeNull();
+            expect(store.match.surrenderedRobotId ?? null).toBeNull();
+            expect(changes).toEqual([]);
+        },
+    );
+
+    it('after close is 409 and the closed result stays', async () => {
+        const { service, store, changes } = finished(
+            'surrender',
+            undefined,
+            'a',
+        );
+        store.events.push(event('closed', at(95_000)));
+        store.match.winnerRobotId = 'b';
+
+        await expect(
+            service.operatorCorrectEndReason(MATCH_ID, USER_ID, {
+                endReason: 'manual',
+            }),
+        ).rejects.toThrow(new ConflictException('match_invalid_transition'));
+
+        expect(store.match.endReason).toBe('surrender');
+        expect(store.match.surrenderedRobotId).toBe('a');
+        expect(store.match.winnerRobotId).toBe('b');
+        expect(changes).toEqual([]);
+    });
+
+    it('settles a due time-out first, then applies the correction in one push', async () => {
+        const { service, store, changes } = setup({
+            state: 'ongoing',
+            events: [event('started', T0)],
+            arenaId: ARENA_ID,
+            now: at(200_000),
+        });
+
+        await service.correctEndReason(MATCH_ID, USER_ID, {
+            endReason: 'manual',
+        });
+
+        expect(store.match.state).toBe('finished');
+        expect(store.match.endReason).toBe('manual');
+        expect(store.written.map((e) => e.type)).toEqual(['finished']);
+        expect(changes).toHaveLength(1);
+    });
+
+    it('a surrender without a side is 400 surrender_side_required', async () => {
+        const { service, repo } = finished('manual');
+
+        await expect(
+            service.correctEndReason(MATCH_ID, USER_ID, {
+                endReason: 'surrender',
+            }),
+        ).rejects.toThrow(new BadRequestException('surrender_side_required'));
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
+    it('a surrender with a null side is 400 surrender_side_required', async () => {
+        const { service, repo } = finished('manual');
+
+        await expect(
+            service.correctEndReason(MATCH_ID, USER_ID, {
+                endReason: 'surrender',
+                side: null as unknown as 'A',
+            }),
+        ).rejects.toThrow(new BadRequestException('surrender_side_required'));
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
+    it('a side with another reason is 400 surrender_side_unexpected', async () => {
+        const { service, repo } = finished('surrender', undefined, 'a');
+
+        await expect(
+            service.correctEndReason(MATCH_ID, USER_ID, {
+                endReason: 'manual',
+                side: 'A',
+            }),
+        ).rejects.toThrow(new BadRequestException('surrender_side_unexpected'));
+        expect(repo.withLockedFight).not.toHaveBeenCalled();
+    });
+
+    it.each([{ owner: false }, { missing: true }])(
+        'is 404 match_not_found before checking the side (%o)',
+        async (options) => {
+            const { service } = setup({ state: 'finished', ...options });
+
+            await expect(
+                service.correctEndReason(MATCH_ID, USER_ID, {
+                    endReason: 'surrender',
+                }),
+            ).rejects.toThrow(new NotFoundException('match_not_found'));
+        },
+    );
+
+    it('the public variant returns the public state', async () => {
+        const { service } = finished('manual');
+
+        const state = await service.correctEndReason(MATCH_ID, USER_ID, {
+            endReason: 'surrender',
+            side: 'A',
+        });
+
+        expect(state.endReason).toBe('surrender');
+        expect(state).not.toHaveProperty('proposal');
     });
 });
 

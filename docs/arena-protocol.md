@@ -219,6 +219,7 @@ Transitions, all driven by the server:
 - `scheduled → ongoing`, `ongoing ⇄ paused`: the operator starts, pauses and resumes.
 - `ongoing → finished`: the clock reaches zero (`time_out`), a valid surrender (`surrender`), or the operator ends it (`manual`).
 - `paused → finished`: only the operator can end a paused match (`manual`).
+- `finished → finished`: the operator corrects the end reason before closing (new `endReason`, #57).
 - `finished → idle`: the operator confirms closing the match. There is no direct `finished → scheduled`: the next match is selected after closing. Until then the box keeps showing the result.
 
 `scheduled`, `ongoing`, `paused` and `finished` are the API's match states (`MatchState` in `apps/api/src/modules/matches/entities/match.entity.ts`), with no translation. `idle` is the arena's own status: it has no match.
@@ -235,7 +236,7 @@ Transitions, all driven by the server:
 
 The side that surrendered is not part of the value or of `state`: the API records the robot that gave up (`surrendered_robot_id`; the other side is the proposed winner the operator confirms when closing the match), and the box shows the same color for either side.
 
-**Planned (#57, Final delivery milestone): correcting the end reason.** Right after a match ends, in the step where the operator confirms closing it, the operator will be able to change `endReason` (for example from `manual` to `surrender` when the box was offline and a competitor asked to give up). Because the match is still `finished` at that point, a correction sends the box a new `state` with the new `endReason`. After closing, the result is final.
+**Correcting the end reason (#57).** While a match is `finished` and not yet closed, the operator can change `endReason` (`PATCH /matches/:id/end-reason`), for example from `manual` to `surrender` when the box was offline and a competitor asked to give up. The box then gets a new `finished` `state` with the corrected `endReason`. A correction that changes nothing sends nothing. After closing, the result is final.
 
 ## Timer
 
@@ -266,7 +267,7 @@ The server can also close with `1001` (it is shutting down), `1011` (it could no
 
 - **Server-side detection.** The server sends a WebSocket ping every 10 s and drops a box that does not answer within 10 s. The arena is shown offline in the web app as soon as its socket closes, except when the socket was replaced (`4003`): the new connection keeps it online.
 - **Box-side detection.** The box expects a server ping every 10 s. If it hears nothing from the server (no ping, no message) for 30 s, it treats the connection as lost, closes it and reconnects with normal backoff. This catches connections that die silently, such as a router or proxy restart that never delivers a close.
-- **During a match the box is ignored.** The match keeps running on the server. Competitors cannot surrender; if they want to, the operator ends the match (`manual`).
+- **During a match the box is ignored.** The match keeps running on the server. Competitors cannot surrender; if they want to, the operator ends the match (`manual`). Before closing, the operator can correct that end reason to what really happened, such as a surrender by one side (`PATCH /matches/:id/end-reason`, #57); a box that is back online then gets a new `finished` `state` with the corrected `endReason`.
 - **On the box.** It goes back to not connected, drops button presses and reconnects.
 - **Reconnect** is just connecting again: `hello`, `welcome`, then a `state` with the current status and `remainingMs`. No special messages.
 
