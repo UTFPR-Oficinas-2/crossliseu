@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 
 import type { OperatorFightState } from '@/data'
 import ResultConfirmation from '../components/ResultConfirmation.vue'
@@ -144,14 +145,41 @@ describe('ResultConfirmation', () => {
       expect(button(wrapper, 'Salvar resultado').attributes('disabled')).toBeDefined()
     })
 
-    it('saves a surrender with the side that gave up and closes the editor', async () => {
+    it('saves a surrender with the side that gave up and closes once the server has it', async () => {
       const wrapper = await openEditor()
 
       await radios(wrapper)[3]!.setValue(true)
       await button(wrapper, 'Salvar resultado').trigger('click')
 
       expect(wrapper.emitted('correct')).toEqual([[{ endReason: 'surrender', side: 'B' }]])
+      // Still open until the corrected state arrives, so a failed save keeps the choice
+      expect(radios(wrapper).map((r) => r.element.checked)).toEqual([false, false, false, true])
+
+      await wrapper.setProps({
+        state: {
+          ...finished,
+          endReason: 'surrender',
+          surrenderedSide: 'B',
+          proposal: { outcome: 'A', basis: 'surrender' },
+        },
+      })
       expect(radios(wrapper)).toHaveLength(0)
+    })
+
+    it('moves focus into the editor on open and back to Editar resultado on close', async () => {
+      const wrapper = mount(ResultConfirmation, {
+        props: { state: { ...finished, endReason: 'manual' }, disabled: false },
+        attachTo: document.body,
+      })
+
+      await button(wrapper, 'Editar resultado').trigger('click')
+      await nextTick()
+      expect(document.activeElement).toBe(radios(wrapper)[1]!.element)
+
+      await button(wrapper, 'Cancelar').trigger('click')
+      await nextTick()
+      expect(document.activeElement).toBe(button(wrapper, 'Editar resultado').element)
+      wrapper.unmount()
     })
 
     it('saves another reason without a side', async () => {

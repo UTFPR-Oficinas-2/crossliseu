@@ -3,7 +3,7 @@
 // Draw, then the confirmed result once the fight is closed. Before closing, the operator can
 // correct the end reason (#57, Figma OPE-20); the server recomputes the proposal. The server
 // computes the result; this component never chooses a winner.
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import ChoiceItem from '@/components/ui/ChoiceItem.vue'
 import type { EndReasonCorrection, OperatorFightState } from '@/data'
@@ -67,17 +67,35 @@ const choices = computed(() => {
 const editing = ref(false)
 const draft = ref<string | null>(null)
 const changed = computed(() => draft.value !== null && draft.value !== currentChoice.value)
+const editor = useTemplateRef<HTMLFieldSetElement>('editor')
+const actions = useTemplateRef<HTMLDivElement>('actions')
 
-function startEditing() {
+// Keyboard users land on the checked reason when the editor opens, and back on its button when
+// it closes, instead of on <body>
+async function startEditing() {
   draft.value = currentChoice.value
   editing.value = true
+  await nextTick()
+  const checked = editor.value?.querySelector<HTMLInputElement>('input:checked')
+  const first = editor.value?.querySelector<HTMLInputElement>('input')
+  ;(checked ?? first)?.focus()
 }
+
+async function stopEditing() {
+  editing.value = false
+  await nextTick()
+  actions.value?.querySelector<HTMLButtonElement>('button')?.focus()
+}
+
+// The editor closes once the server reports the saved reason, so a failed save keeps the choice
+watch(currentChoice, (current) => {
+  if (editing.value && current !== null && current === draft.value) void stopEditing()
+})
 
 function save() {
   const choice = draft.value as ReasonChoice
   const [endReason, side] = choice.split(':') as [EndReasonCorrection['endReason'], ('A' | 'B')?]
   emit('correct', side ? { endReason, side } : { endReason })
-  editing.value = false
 }
 </script>
 
@@ -93,7 +111,7 @@ function save() {
       <p class="result__note text-body-s">
         Confirmar fecha a luta: o resultado fica oficial e o link dos árbitros deixa de funcionar.
       </p>
-      <div class="result__actions">
+      <div ref="actions" class="result__actions">
         <AppButton v-if="!editing" variant="secondary" :disabled="disabled" @click="startEditing">
           Editar resultado
         </AppButton>
@@ -110,7 +128,7 @@ function save() {
         </AppButton>
       </div>
 
-      <fieldset v-if="editing" class="result__edit">
+      <fieldset v-if="editing" ref="editor" class="result__edit">
         <legend class="result__edit-title text-heading-m">Editar resultado</legend>
         <p class="result__note text-body-s">
           Ajuste o motivo do encerramento antes de confirmar. A vencedora é recalculada: na
@@ -127,7 +145,7 @@ function save() {
         />
         <div class="result__actions">
           <AppButton :disabled="disabled || !changed" @click="save">Salvar resultado</AppButton>
-          <AppButton variant="ghost" @click="editing = false">Cancelar</AppButton>
+          <AppButton variant="ghost" @click="stopEditing">Cancelar</AppButton>
         </div>
       </fieldset>
     </template>
