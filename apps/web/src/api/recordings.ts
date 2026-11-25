@@ -50,3 +50,31 @@ export function markUploaded(
     token,
   })
 }
+
+/** One robot in GET /matches/:id/analysis */
+export interface ApiRobotAnalysis {
+  side: 'A' | 'B'
+  robotId: string
+  /** Frames where the robot was found */
+  detectedPositions: number | null
+  /** Presigned R2 URL of the heatmap PNG, valid until `expiresAt` */
+  heatmapUrl: string | null
+}
+
+/** Answer of GET /matches/:id/analysis: the CV worker's analysis of the uploaded video (#21) */
+export interface ApiMatchAnalysis {
+  status: 'pending' | 'running' | 'done' | 'failed'
+  /** Error code when failed, e.g. "queue_unavailable" or "video_unreadable" */
+  error: string | null
+  /** The worker ran on its test video instead of this recording (development only) */
+  mock: boolean
+  totalFrames: number | null
+  /** Empty until done */
+  robots: ApiRobotAnalysis[]
+  expiresAt: string | null
+}
+
+/** GET /matches/:id/analysis (JWT). 404 analysis_not_found until a video has been confirmed */
+export function getAnalysis(matchId: string, token: string): Promise<ApiMatchAnalysis> {
+  return apiRequest(`/matches/${encodeURIComponent(matchId)}/analysis`, { token })
+}

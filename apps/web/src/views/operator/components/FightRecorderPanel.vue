@@ -32,6 +32,10 @@ import {
 export type FightPhase = 'before' | 'running' | 'ended'
 
 const { matchId, fightPhase } = defineProps<{ matchId: string; fightPhase: FightPhase }>()
+const emit = defineEmits<{
+  /** The API confirmed the upload (and queued the analysis) */
+  uploaded: []
+}>()
 
 const {
   cameras,
@@ -131,8 +135,9 @@ const uploadLabel = computed(() => {
   }
 })
 
-function send() {
-  if (recording.value) void upload(matchId, recording.value, auth.token ?? '')
+async function send() {
+  if (!recording.value) return
+  if (await upload(matchId, recording.value, auth.token ?? '')) emit('uploaded')
 }
 
 // ---------- don't lose an unsent video ----------
