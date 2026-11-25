@@ -65,6 +65,7 @@
   --size-page-max: 1440px; /* public content max width (Figma desktop frame) */
   --size-sidebar: 260px; /* organizer sidebar width */
   --size-step-line: 3px; /* operator step indicator line */
+  --size-preview-min: 160px; /* operator camera preview floor when the screen is short */
   --size-referee-frame: 390px; /* referee mobile frame width */
   --size-avatar: 28px;
   --size-live-action: 176px; /* organizer robot/team columns and aside widths */
