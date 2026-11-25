@@ -116,6 +116,8 @@ export function useFightControl(
   let activeCommand: AbortController | null = null
   let channel: { close(): void } | null = null
   let channelVersion = 0
+  // A correction whose response was lost; its error clears once a snapshot shows it landed
+  let unconfirmedCorrection: EndReasonCorrection | null = null
   // Counts pushed frames applied, so a slower HTTP response never overwrites a fresher frame
   let framesApplied = 0
   let countdownTimer: ReturnType<typeof setInterval> | undefined
@@ -133,6 +135,16 @@ export function useFightControl(
         remainingMs.value = Math.max(0, snapshot.remainingMs - (performance.now() - receivedAt))
         if (remainingMs.value === 0) clearInterval(countdownTimer)
       }, COUNTDOWN_INTERVAL_MS)
+    }
+
+    const correction = unconfirmedCorrection
+    if (
+      correction &&
+      snapshot.endReason === correction.endReason &&
+      snapshot.surrenderedSide === (correction.side ?? null)
+    ) {
+      unconfirmedCorrection = null
+      commandError.value = null
     }
 
     const pending = uncertainCommand.value
@@ -289,6 +301,7 @@ export function useFightControl(
     activeCommand = controller
     posting.value = true
     commandError.value = null
+    unconfirmedCorrection = null
     let reconcile = false
 
     try {
@@ -363,6 +376,7 @@ export function useFightControl(
         fail: (cause) => {
           if (unconfirmed(cause)) {
             commandError.value = 'Não foi possível confirmar a correção.'
+            unconfirmedCorrection = correction
             return true
           }
           if (conflicted(cause)) return true
@@ -376,6 +390,7 @@ export function useFightControl(
   function clearRequests() {
     generation++
     shouldNavigateOnClose = false
+    unconfirmedCorrection = null
     clearInterval(countdownTimer)
     cancelRead()
     activeCommand?.abort()

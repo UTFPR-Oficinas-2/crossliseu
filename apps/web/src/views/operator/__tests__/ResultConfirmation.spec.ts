@@ -210,6 +210,8 @@ describe('ResultConfirmation', () => {
       await radios(wrapper)[0]!.setValue(true)
       await wrapper.setProps({ disabled: true })
       expect(button(wrapper, 'Salvar resultado').attributes('disabled')).toBeDefined()
+      // A save in flight lands anyway, so the editor stays until the server reports it
+      expect(button(wrapper, 'Cancelar').attributes('disabled')).toBeDefined()
     })
 
     it('drops the editor once the fight is closed', async () => {

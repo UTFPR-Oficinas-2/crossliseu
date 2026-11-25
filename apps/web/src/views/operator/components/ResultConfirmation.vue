@@ -93,7 +93,9 @@ watch(currentChoice, (current) => {
 })
 
 function save() {
-  const choice = draft.value as ReasonChoice
+  // ChoiceItem's v-model is a plain string: take the matching choice instead of casting it
+  const choice = choices.value.find((item) => item.value === draft.value)?.value
+  if (!choice) return
   const [endReason, side] = choice.split(':') as [EndReasonCorrection['endReason'], ('A' | 'B')?]
   emit('correct', side ? { endReason, side } : { endReason })
 }
@@ -145,7 +147,7 @@ function save() {
         />
         <div class="result__actions">
           <AppButton :disabled="disabled || !changed" @click="save">Salvar resultado</AppButton>
-          <AppButton variant="ghost" @click="stopEditing">Cancelar</AppButton>
+          <AppButton variant="ghost" :disabled="disabled" @click="stopEditing">Cancelar</AppButton>
         </div>
       </fieldset>
     </template>

@@ -614,11 +614,38 @@ describe('useFightControl', () => {
       get.mockResolvedValueOnce(finished)
       const fight = startWith(finished)
 
-      await fight.correctEndReason({ endReason: 'manual' })
+      await fight.correctEndReason({ endReason: 'surrender', side: 'B' })
 
       expect(get).toHaveBeenCalledOnce()
       expect(fight.uncertainCommand.value).toBeNull()
       expect(fight.error.value).toBe('Não foi possível confirmar a correção.')
+    })
+
+    it('clears the error when the read after a failure shows the correction landed', async () => {
+      correct.mockRejectedValueOnce(new ApiError(503, 'unavailable'))
+      get.mockResolvedValueOnce(corrected)
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'surrender', side: 'B' })
+
+      expect(fight.state.value).toEqual(corrected)
+      expect(fight.error.value).toBeNull()
+    })
+
+    it('clears the error when a later pushed frame shows the correction landed', async () => {
+      correct.mockRejectedValueOnce(new ApiError(0, 'network'))
+      get.mockResolvedValueOnce(finished)
+      const fight = startWith(finished)
+
+      await fight.correctEndReason({ endReason: 'surrender', side: 'B' })
+      expect(fight.error.value).toBe('Não foi possível confirmar a correção.')
+
+      // The other side gave up: not the requested correction, so the error stays
+      channel().push({ ...corrected, surrenderedSide: 'A' })
+      expect(fight.error.value).toBe('Não foi possível confirmar a correção.')
+
+      channel().push(corrected)
+      expect(fight.error.value).toBeNull()
     })
 
     it('reports a refused correction without reading again', async () => {
