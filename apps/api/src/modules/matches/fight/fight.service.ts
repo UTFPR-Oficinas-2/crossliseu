@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     ConflictException,
     Injectable,
     Logger,
@@ -55,6 +56,12 @@ export interface OperatorFightState extends FightState {
     proposal: ResultProposal | null;
     /** The side that gave up when a surrender ended the fight, kept after close */
     surrenderedSide: 'A' | 'B' | null;
+}
+
+/** The end reason the operator records before close (#57); `side` is who gave up, only for a surrender */
+export interface EndReasonCorrection {
+    endReason: MatchEndReason;
+    side?: Side;
 }
 
 export type SurrenderResult = 'done' | 'not_current_match' | 'not_ongoing';
@@ -216,6 +223,97 @@ export class FightService implements OnApplicationBootstrap, OnModuleDestroy {
         }
         if (result.error) {
             this.logger.warn(result.error, { matchId, command });
+            throw new ConflictException(result.error);
+        }
+    }
+
+    /**
+     * Owner-only. Rewrites the end reason of a `finished`, not yet closed fight (#57) and pushes
+     * the new `state`; the winner is still written only at close. 404 match_not_found,
+     * 400 surrender_side_required / surrender_side_unexpected, 409 match_invalid_transition.
+     */
+    async correctEndReason(
+        matchId: string,
+        userId: string,
+        correction: EndReasonCorrection,
+    ): Promise<FightState> {
+        await this.executeCorrection(matchId, userId, correction);
+        return this.buildState(matchId);
+    }
+
+    async operatorCorrectEndReason(
+        matchId: string,
+        userId: string,
+        correction: EndReasonCorrection,
+    ): Promise<OperatorFightState> {
+        await this.executeCorrection(matchId, userId, correction);
+        return this.buildOperatorState(matchId);
+    }
+
+    private async executeCorrection(
+        matchId: string,
+        userId: string,
+        { endReason, side }: EndReasonCorrection,
+    ): Promise<void> {
+        const match = await this.repo.findWithRobots(matchId);
+        if (
+            !match ||
+            !(await this.championships.isOwnedBy(match.championshipId, userId))
+        ) {
+            throw this.notFound(matchId);
+        }
+        if (endReason === 'surrender' && side === undefined) {
+            throw new BadRequestException('surrender_side_required');
+        }
+        if (endReason !== 'surrender' && side !== undefined) {
+            throw new BadRequestException('surrender_side_unexpected');
+        }
+
+        const result = await this.repo.withLockedFight(
+            matchId,
+            async (fight, writes) => {
+                const settled = await this.settleLocked(
+                    fight,
+                    writes,
+                    this.clock.now(),
+                );
+                const closed = settled.events.some((e) => e.type === 'closed');
+                if (settled.state !== 'finished' || closed) {
+                    // Returned, not thrown: a time-out settled above must still commit
+                    return {
+                        error: 'match_invalid_transition',
+                        wrote: settled.wrote,
+                        arenaId: fight.arenaId,
+                    };
+                }
+                const { robotAId, robotBId } = fight.match;
+                const surrenderedRobotId =
+                    side === 'A' ? robotAId : side === 'B' ? robotBId : null;
+                if (
+                    settled.endReason === endReason &&
+                    (fight.match.surrenderedRobotId ?? null) ===
+                        surrenderedRobotId
+                ) {
+                    return {
+                        error: null,
+                        wrote: settled.wrote,
+                        arenaId: fight.arenaId,
+                    };
+                }
+                await writes.updateMatch({ endReason, surrenderedRobotId });
+                return { error: null, wrote: true, arenaId: fight.arenaId };
+            },
+        );
+        if (!result) {
+            throw this.notFound(matchId);
+        }
+        // After the commit, so the arena and browsers read the corrected state
+        if (result.wrote) {
+            this.events.emit({ matchId, arenaId: result.arenaId });
+            await this.trySyncTimer(matchId);
+        }
+        if (result.error) {
+            this.logger.warn(result.error, { matchId, endReason });
             throw new ConflictException(result.error);
         }
     }
