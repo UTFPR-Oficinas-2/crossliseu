@@ -382,7 +382,13 @@ export async function getMatchAnalysis(
   try {
     api = await getAnalysis(matchId, token)
   } catch (error) {
-    if (error instanceof ApiError && error.details.includes('analysis_not_found')) return null
+    if (
+      error instanceof ApiError &&
+      error.status === 404 &&
+      error.details.includes('analysis_not_found')
+    ) {
+      return null
+    }
     throw error
   }
   const status = analysisStatus[api.status]

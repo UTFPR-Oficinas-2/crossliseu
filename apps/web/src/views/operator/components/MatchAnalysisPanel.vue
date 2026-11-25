@@ -126,7 +126,10 @@ function onImageError() {
         <p v-if="analysis.mock" class="analysis__mock text-body-s">
           Modo de teste: estes mapas vêm do vídeo de teste do servidor, não desta gravação.
         </p>
-        <div class="analysis__heatmaps">
+        <p v-if="!analysis.heatmaps.length" class="analysis__note text-body-s">
+          Nenhum mapa de calor disponível para esta análise.
+        </p>
+        <div v-else class="analysis__heatmaps">
           <figure
             v-for="heatmap in analysis.heatmaps"
             :key="heatmap.side"

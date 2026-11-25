@@ -95,6 +95,14 @@ describe('MatchAnalysisPanel', () => {
     expect(wrapper.text()).toContain('Modo de teste')
   })
 
+  it('done without any heatmap: says there is none to show', async () => {
+    get.mockResolvedValue(completed({ heatmaps: [] }))
+
+    const wrapper = await mountPanel()
+
+    expect(wrapper.text()).toContain('Nenhum mapa de calor disponível')
+  })
+
   it('failed: explains the error code', async () => {
     get.mockResolvedValue({
       ...completed(),
