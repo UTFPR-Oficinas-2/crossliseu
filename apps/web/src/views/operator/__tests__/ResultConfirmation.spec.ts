@@ -31,7 +31,7 @@ describe('ResultConfirmation', () => {
 
     expect(wrapper.text()).toContain('Vencedor proposto: Tritura')
     expect(wrapper.text()).toContain('por pontos 4 × 2')
-    expect(buttons(wrapper)).toEqual(['Confirmar resultado', 'Declarar empate'])
+    expect(buttons(wrapper)).toEqual(['Editar resultado', 'Confirmar resultado', 'Declarar empate'])
   })
 
   it('proposes the other side after a surrender', () => {
@@ -48,12 +48,12 @@ describe('ResultConfirmation', () => {
     const wrapper = render({ score: { A: 2, B: 2 }, proposal: { outcome: 'draw', basis: 'tied' } })
 
     expect(wrapper.text()).toContain('Empate proposto (placar igual 2 × 2)')
-    expect(buttons(wrapper)).toEqual(['Confirmar empate'])
+    expect(buttons(wrapper)).toEqual(['Editar resultado', 'Confirmar empate'])
   })
 
   it('emits confirm and draw from its buttons', async () => {
     const wrapper = render({})
-    const [confirm, draw] = wrapper.findAll('button')
+    const [, confirm, draw] = wrapper.findAll('button')
 
     await confirm!.trigger('click')
     await draw!.trigger('click')
@@ -84,5 +84,115 @@ describe('ResultConfirmation', () => {
     const draw = render({ closed: true, proposal: null, draw: true })
     expect(draw.text()).toContain('Empate')
     expect(buttons(draw)).toEqual([])
+  })
+
+  describe('editing the end reason before close (#57)', () => {
+    const button = (wrapper: ReturnType<typeof render>, label: string) =>
+      wrapper.findAll('button').find((b) => b.text() === label)!
+    const radios = (wrapper: ReturnType<typeof render>) =>
+      wrapper.findAll<HTMLInputElement>('input[type="radio"]')
+    async function openEditor(state: Partial<OperatorFightState> = {}, disabled = false) {
+      const wrapper = render({ endReason: 'manual', ...state }, disabled)
+      await button(wrapper, 'Editar resultado').trigger('click')
+      return wrapper
+    }
+
+    it('lists the four end reasons with the current one checked and marked', async () => {
+      const wrapper = await openEditor()
+
+      expect(wrapper.text()).toContain('Ajuste o motivo do encerramento')
+      expect(radios(wrapper).map((r) => r.element.value)).toEqual([
+        'time_out',
+        'manual',
+        'surrender:A',
+        'surrender:B',
+      ])
+      expect(radios(wrapper).map((r) => r.element.checked)).toEqual([false, true, false, false])
+      const titles = wrapper.findAll('.choice-item__title').map((t) => t.text())
+      expect(titles).toEqual([
+        'Tempo esgotado',
+        'Encerrada pelo operador',
+        'Desistência do lado A · Tritura',
+        'Desistência do lado B · Ferrugem',
+      ])
+      const metas = wrapper.findAll('.choice-item__meta').map((t) => t.text())
+      expect(metas).toEqual([
+        'O cronômetro chegou a zero',
+        'Motivo atual',
+        'Tritura desistiu',
+        'Ferrugem desistiu',
+      ])
+    })
+
+    it('checks the side that gave up when a surrender ended the fight', async () => {
+      const wrapper = await openEditor({ endReason: 'surrender', surrenderedSide: 'B' })
+
+      expect(radios(wrapper).map((r) => r.element.checked)).toEqual([false, false, false, true])
+    })
+
+    it('holds Close and the draw call while editing, and saves only a change', async () => {
+      const wrapper = await openEditor()
+
+      expect(buttons(wrapper)).toEqual([
+        'Confirmar resultado',
+        'Declarar empate',
+        'Salvar resultado',
+        'Cancelar',
+      ])
+      expect(button(wrapper, 'Confirmar resultado').attributes('disabled')).toBeDefined()
+      expect(button(wrapper, 'Declarar empate').attributes('disabled')).toBeDefined()
+      expect(button(wrapper, 'Salvar resultado').attributes('disabled')).toBeDefined()
+    })
+
+    it('saves a surrender with the side that gave up and closes the editor', async () => {
+      const wrapper = await openEditor()
+
+      await radios(wrapper)[3]!.setValue(true)
+      await button(wrapper, 'Salvar resultado').trigger('click')
+
+      expect(wrapper.emitted('correct')).toEqual([[{ endReason: 'surrender', side: 'B' }]])
+      expect(radios(wrapper)).toHaveLength(0)
+    })
+
+    it('saves another reason without a side', async () => {
+      const wrapper = await openEditor({ endReason: 'surrender', surrenderedSide: 'A' })
+
+      await radios(wrapper)[1]!.setValue(true)
+      await button(wrapper, 'Salvar resultado').trigger('click')
+
+      expect(wrapper.emitted('correct')).toEqual([[{ endReason: 'manual' }]])
+    })
+
+    it('cancels without saving', async () => {
+      const wrapper = await openEditor()
+
+      await radios(wrapper)[0]!.setValue(true)
+      await button(wrapper, 'Cancelar').trigger('click')
+
+      expect(wrapper.emitted('correct')).toBeUndefined()
+      expect(radios(wrapper)).toHaveLength(0)
+      expect(buttons(wrapper)[0]).toBe('Editar resultado')
+    })
+
+    it('cannot edit or save while a command runs', async () => {
+      const idle = render({ endReason: 'manual' }, true)
+      expect(button(idle, 'Editar resultado').attributes('disabled')).toBeDefined()
+
+      const wrapper = await openEditor()
+      await radios(wrapper)[0]!.setValue(true)
+      await wrapper.setProps({ disabled: true })
+      expect(button(wrapper, 'Salvar resultado').attributes('disabled')).toBeDefined()
+    })
+
+    it('drops the editor once the fight is closed', async () => {
+      const wrapper = await openEditor()
+
+      await wrapper.setProps({
+        state: { ...finished, endReason: 'manual', closed: true, proposal: null, winnerSide: 'A' },
+      })
+
+      expect(radios(wrapper)).toHaveLength(0)
+      expect(buttons(wrapper)).toEqual([])
+    })
   })
 })
