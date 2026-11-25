@@ -26,9 +26,15 @@ static void test_not_connected_blinks_magenta() {
   assertRgb(MAGENTA, ledColorAt(LedState::NotConnected, 1000));
 }
 
-static void test_connected_is_solid_cyan() {
-  const uint32_t times[] = {0, 999, 1000, 5000};
-  for (uint32_t t : times) assertRgb(CYAN, ledColorAt(LedState::Connected, t));
+static void test_connected_cycles_blue_green_red() {
+  assertRgb(BLUE, ledColorAt(LedState::Connected, 0));
+  assertRgb(BLUE, ledColorAt(LedState::Connected, 999));
+  assertRgb(GREEN, ledColorAt(LedState::Connected, 1000));
+  assertRgb(GREEN, ledColorAt(LedState::Connected, 1999));
+  assertRgb(RED, ledColorAt(LedState::Connected, 2000));
+  assertRgb(RED, ledColorAt(LedState::Connected, 2999));
+  assertRgb(BLUE, ledColorAt(LedState::Connected, 3000));   // recomeça o ciclo
+  assertRgb(GREEN, ledColorAt(LedState::Connected, 61000)); // continua girando
 }
 
 static void test_ready_is_f1_start_in_blue() {
@@ -47,7 +53,7 @@ static void test_ready_is_f1_start_in_blue() {
 static void test_solid_states() {
   const uint32_t times[] = {0, 400, 600, 123456};
   for (uint32_t t : times) {
-    assertRgb(GREEN, ledColorAt(LedState::Running, t));
+    assertRgb(WHITE, ledColorAt(LedState::Running, t));
     assertRgb(YELLOW, ledColorAt(LedState::Paused, t));
     assertRgb(RED, ledColorAt(LedState::Surrender, t));
   }
@@ -63,35 +69,21 @@ static void test_ended_blinks_white() {
 static const LedState ALL_STATES[] = {LedState::NotConnected, LedState::Connected, LedState::Ready, LedState::Running,
                                       LedState::Paused,       LedState::Ended,     LedState::Surrender};
 
-// Máscara dos canais acesos: 1 = R, 2 = G, 4 = B; 0 = apagado.
-static uint8_t mask(Rgb c) { return (c.r ? 1 : 0) | (c.g ? 2 : 0) | (c.b ? 4 : 0); }
-
-// Conjunto (bit m = máscara m) das máscaras acesas de um estado em 12 s.
-static uint8_t masksOf(LedState state) {
-  uint8_t set = 0;
-  for (uint32_t t = 0; t < 12000; t += 50) {
-    const uint8_t m = mask(ledColorAt(state, t));
-    if (m) set |= 1 << m;
-  }
-  return set;
+// Nenhum par de estados mostra a mesma sequência de cores em 12 s: mesmo os que
+// usam a mesma cor (branco fixo x branco piscando, vermelho fixo x ciclo da arena
+// livre) se distinguem pelo efeito.
+static bool sameSequence(LedState a, LedState b) {
+  for (uint32_t t = 0; t < 12000; t += 50)
+    if (ledColorAt(a, t) != ledColorAt(b, t)) return false;
+  return true;
 }
 
-// Cada estado acende uma mistura de canais só dele: dá para distinguir num relance,
-// em qualquer momento e em qualquer brilho.
-static void test_states_never_share_a_hue() {
+static void test_states_never_look_the_same() {
   for (LedState a : ALL_STATES) {
     for (LedState b : ALL_STATES) {
       if (a == b) continue;
-      TEST_ASSERT_EQUAL_MESSAGE(0, masksOf(a) & masksOf(b), ledStateName(a));
+      TEST_ASSERT_FALSE_MESSAGE(sameSequence(a, b), ledStateName(a));
     }
-  }
-}
-
-// Vermelho (só R aceso) é só da desistência.
-static void test_red_only_in_surrender() {
-  for (LedState state : ALL_STATES) {
-    if (state == LedState::Surrender) continue;
-    TEST_ASSERT_EQUAL_MESSAGE(0, masksOf(state) & (1 << 1), ledStateName(state));
   }
 }
 
@@ -172,12 +164,11 @@ static void test_led_state_not_connected_wins() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_not_connected_blinks_magenta);
-  RUN_TEST(test_connected_is_solid_cyan);
+  RUN_TEST(test_connected_cycles_blue_green_red);
   RUN_TEST(test_ready_is_f1_start_in_blue);
   RUN_TEST(test_solid_states);
   RUN_TEST(test_ended_blinks_white);
-  RUN_TEST(test_states_never_share_a_hue);
-  RUN_TEST(test_red_only_in_surrender);
+  RUN_TEST(test_states_never_look_the_same);
   RUN_TEST(test_scaled_keeps_hue);
   RUN_TEST(test_state_count_matches_enum);
   RUN_TEST(test_same_state_keeps_the_effect_going);

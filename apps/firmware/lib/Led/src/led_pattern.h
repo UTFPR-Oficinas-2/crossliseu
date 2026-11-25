@@ -17,9 +17,8 @@ struct Rgb {
   bool operator!=(const Rgb& o) const { return !(*this == o); }
 };
 
-// Cores, em brilho de 0 a 255 por canal. Cada estado acende uma mistura de canais
-// (R, G, B) só dele, para não haver dois estados parecidos em nenhum brilho
-// (test_states_never_share_a_hue). Ajuste aqui se na fita uma cor ficar puxada para outra.
+// Cores, em brilho de 0 a 255 por canal. Ajuste aqui se na fita uma cor ficar
+// puxada para outra.
 namespace led_colors {
 constexpr Rgb OFF = {0, 0, 0};
 constexpr Rgb RED = {255, 0, 0};
@@ -28,12 +27,16 @@ constexpr Rgb BLUE = {0, 0, 255};
 constexpr Rgb WHITE = {255, 255, 255};
 constexpr Rgb YELLOW = {255, 160, 0};
 constexpr Rgb MAGENTA = {255, 0, 255};
-constexpr Rgb CYAN = {0, 255, 255};
 }  // namespace led_colors
 
 // Tempos dos efeitos, em ms.
 constexpr uint32_t LED_BLINK_MS = 500;   // pisca: 500 ms aceso, 500 ms apagado
 constexpr uint32_t LED_STEP_MS = 1000;   // largada F1 do Preparar: 1 s por degrau
+constexpr uint32_t LED_CYCLE_MS = 1000;  // arena livre: 1 s em cada cor
+
+// Ciclo da arena livre: azul -> verde -> vermelho -> azul...
+constexpr Rgb LED_CYCLE_COLORS[] = {led_colors::BLUE, led_colors::GREEN, led_colors::RED};
+constexpr uint8_t LED_CYCLE_STEPS = sizeof(LED_CYCLE_COLORS) / sizeof(LED_CYCLE_COLORS[0]);
 
 // Os 5 degraus da largada F1: 20%, 40%, 60%, 80% e 100% de brilho percebido.
 // O olho não enxerga o brilho de forma linear, então cada degrau é corrigido
@@ -54,13 +57,13 @@ inline Rgb scaled(Rgb c, uint8_t level) {
 }
 
 // Cor da fita `elapsedMs` depois de entrar no estado.
-//   NotConnected  magenta piscando                                     (R+B)
-//   Connected     ciano fixo                                           (G+B)
-//   Ready         azul em 5 degraus (largada F1), 1 s cada, apaga 1 s   (B)
-//   Running       verde fixo                                           (G)
-//   Paused        amarelo fixo                                         (R+G)
-//   Ended         branco piscando (bandeira quadriculada)              (R+G+B)
-//   Surrender     vermelho fixo; o único estado com vermelho           (R)
+//   NotConnected  magenta piscando (0,5 s aceso, 0,5 s apagado)
+//   Connected     azul -> verde -> vermelho, 1 s cada, em ciclo
+//   Ready         azul em 5 degraus (largada F1), 1 s cada, apaga 1 s e recomeça
+//   Running       branco fixo
+//   Paused        amarelo fixo
+//   Ended         branco piscando (bandeira quadriculada)
+//   Surrender     vermelho fixo
 inline Rgb ledColorAt(LedState state, uint32_t elapsedMs) {
   using namespace led_colors;
   const bool blinkOn = (elapsedMs / LED_BLINK_MS) % 2 == 0;
@@ -68,13 +71,13 @@ inline Rgb ledColorAt(LedState state, uint32_t elapsedMs) {
     case LedState::NotConnected:
       return blinkOn ? MAGENTA : OFF;
     case LedState::Connected:
-      return CYAN;
+      return LED_CYCLE_COLORS[(elapsedMs / LED_CYCLE_MS) % LED_CYCLE_STEPS];
     case LedState::Ready: {
       const uint32_t step = (elapsedMs / LED_STEP_MS) % (LED_F1_STEPS + 1);
       return step < LED_F1_STEPS ? scaled(BLUE, LED_F1_LEVELS[step]) : OFF;
     }
     case LedState::Running:
-      return GREEN;
+      return WHITE;
     case LedState::Paused:
       return YELLOW;
     case LedState::Surrender:
