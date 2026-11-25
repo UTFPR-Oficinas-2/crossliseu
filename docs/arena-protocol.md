@@ -281,14 +281,14 @@ The strip is a 12 V RGB strip driven by PWM on each channel, so it can dim and m
 | Box state | Color |
 | --- | --- |
 | Not connected | Magenta, blinking |
-| Connected (`idle`) | Cyan |
+| Connected (`idle`) | Blue, green, red, 1 s each, in a loop |
 | Ready | Blue in 5 brightness steps, 1 s each, then off 1 s, again (an F1 start) |
-| Running | Green |
+| Running | White |
 | Paused | Yellow |
 | Ended (`time_out`, `manual`) | White, blinking |
 | Ended (`surrender`) | Red |
 
-Each state lights its own mix of the red, green and blue channels, so no two states look alike at any brightness. Red is used only for a surrender.
+Some states share a colour but never the same effect: Running is solid white and Ended blinks white; a surrender is solid red and Connected only shows red for 1 s of its loop.
 
 ## Firmware modules
 
