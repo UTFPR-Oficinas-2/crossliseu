@@ -409,11 +409,13 @@ export async function getMatchAnalysis(
 
 // The operator snapshot already matches the view's data model.
 export {
+  correctEndReason,
   freeRefereeSeat,
   getFightState,
   getRefereeSeats,
   getRefereeToken,
   sendFightCommand,
+  type EndReasonCorrection,
   type FightCommand,
   type OperatorFightState,
   type RefereeSeat,

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getFightState, sendFightCommand, type OperatorFightState } from '../matches'
+import {
+  correctEndReason,
+  getFightState,
+  sendFightCommand,
+  type OperatorFightState,
+} from '../matches'
 
 const snapshot: OperatorFightState = {
   matchId: 'fight /#1',
@@ -62,5 +67,25 @@ describe('operator fight requests', () => {
       headers: { 'Content-Type': 'application/json' },
     })
     expect(JSON.parse(String(init?.body))).toEqual({ draw: true })
+  })
+
+  it('sends an end-reason correction as an authenticated JSON PATCH (#57)', async () => {
+    expect(
+      await correctEndReason(
+        snapshot.matchId,
+        { endReason: 'surrender', side: 'B' },
+        'operator-token',
+        signal,
+      ),
+    ).toEqual(snapshot)
+
+    const [url, init] = fetch.mock.calls[0]!
+    expect(String(url).endsWith('/matches/fight%20%2F%231/end-reason?view=operator')).toBe(true)
+    expect(init).toMatchObject({
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer operator-token', 'Content-Type': 'application/json' },
+      signal,
+    })
+    expect(JSON.parse(String(init?.body))).toEqual({ endReason: 'surrender', side: 'B' })
   })
 })
