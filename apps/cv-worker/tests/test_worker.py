@@ -214,6 +214,28 @@ class ShutdownTest(unittest.TestCase):
         self.assertGreaterEqual(runner.kills, 1)
         timed_out.close.assert_called_once_with()
 
+    def test_connection_lost_mid_job_kills_the_job_and_reconnects(self):
+        # A dropped connection also puts the message back in the queue: the job in hand must not
+        # keep running next to its own redelivery
+        runner = FakeRunner()
+        instance = worker.Worker("amqp://unused", runner=runner)
+        lost, healthy = mock.MagicMock(), mock.MagicMock()
+        lost.channel.return_value.start_consuming.side_effect = pika.exceptions.StreamLostError("lost")
+        kills_when_reconnected = []
+
+        def consume_again():
+            kills_when_reconnected.append(runner.kills)  # before stop(), which kills too
+            instance.stop()
+
+        healthy.channel.return_value.start_consuming.side_effect = consume_again
+
+        with mock.patch.object(worker.pika, "BlockingConnection", side_effect=[lost, healthy]), mock.patch.object(
+            instance._stopping, "wait"
+        ):
+            instance.run_forever()
+
+        self.assertEqual(kills_when_reconnected, [1])
+
     def test_health_file_exists_only_while_consuming(self):
         import tempfile
 
@@ -342,6 +364,38 @@ class ChildJobRunnerTest(unittest.TestCase):
         self.assertFalse(thread.is_alive())
         self.assertEqual(len(raised), 1)
         self.assertNotIsInstance(raised[0], PermanentJobError)  # a stopped job runs again
+
+    def test_an_old_run_ending_late_does_not_forget_the_current_child(self):
+        # After a reconnect the redelivery can start before the old run has finished cleaning up
+        runner = worker.ChildJobRunner(60, target=target_sleeps)
+
+        def wait_for(condition):
+            deadline = time.monotonic() + 10
+            while not condition() and time.monotonic() < deadline:
+                time.sleep(0.05)
+
+        def run():
+            try:
+                runner.run(BODY)
+            except Exception:  # noqa: BLE001  (both runs end by a kill)
+                pass
+
+        first = threading.Thread(target=run)
+        first.start()
+        wait_for(lambda: runner._child is not None)
+        old_child = runner._child
+        second = threading.Thread(target=run)
+        second.start()
+        wait_for(lambda: runner._child is not None and runner._child is not old_child)
+        new_child = runner._child
+
+        old_child.kill()
+        first.join(10)
+
+        self.assertIs(runner._child, new_child)
+        runner.kill()
+        second.join(10)
+        self.assertFalse(second.is_alive())
 
     def test_kill_when_idle_does_nothing(self):
         worker.ChildJobRunner(10, target=target_done).kill()

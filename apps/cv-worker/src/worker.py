@@ -134,7 +134,9 @@ class ChildJobRunner:
                 raise RuntimeError(f"the job's process ended without a result (exit code {child.exitcode})")
         finally:
             with self._lock:
-                self._child = None
+                # After a reconnect a newer run may already hold the slot: leave it to that one
+                if self._child is child:
+                    self._child = None
             if child.is_alive():
                 child.kill()
             if child.pid is not None:
@@ -200,6 +202,8 @@ class Worker:
             except pika.exceptions.AMQPConnectionError as error:
                 set_healthy(False)
                 log.warning("RabbitMQ not reachable (%s); retrying in 5 s", error)
+                # A connection lost mid-job also puts the message back in the queue
+                self.runner.kill()
                 # Wakes up at once if stop() is called while waiting
                 self._stopping.wait(5)
 

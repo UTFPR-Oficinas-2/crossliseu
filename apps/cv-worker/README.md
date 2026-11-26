@@ -71,7 +71,8 @@ request is delivered again: the same job hangs again, over and over.
 `PRECONDITION_FAILED - delivery acknowledgement ... timed out`) from `start_consuming`. Before #133
 the worker only handled connection errors, so this ended the worker process and the container
 restarted it. Now the worker kills the job in hand (its request is already back in the queue),
-closes the connection and consumes again on a new one.
+closes the connection and consumes again on a new one. A connection lost mid-job (network, RabbitMQ
+restart) is handled the same way: the job in hand is killed, since its request is back in the queue.
 
 ---
 
