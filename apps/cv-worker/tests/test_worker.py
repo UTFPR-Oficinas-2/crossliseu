@@ -435,5 +435,76 @@ class TimeoutPathTest(unittest.TestCase):
         self.assertEqual(runner.kills, 1)
 
 
+class JobTimeoutSettingTest(unittest.TestCase):
+    def test_unset_or_empty_is_20_minutes(self):
+        self.assertEqual(worker.job_timeout_from_env(None), 1200)
+        self.assertEqual(worker.job_timeout_from_env(""), 1200)
+
+    def test_reads_seconds(self):
+        self.assertEqual(worker.job_timeout_from_env("90"), 90)
+        self.assertEqual(worker.job_timeout_from_env("0.5"), 0.5)
+
+    def test_rejects_a_value_that_is_not_a_positive_number(self):
+        # 0 would fail every job at once with processing_timeout; "20m" would crash at import
+        for value in ("0", "-5", "20m", "nan", "inf"):
+            with self.subTest(value=value), self.assertRaises(SystemExit) as caught:
+                worker.job_timeout_from_env(value)
+            self.assertIn("CV_JOB_TIMEOUT_S", str(caught.exception))
+
+    def test_warns_at_or_above_rabbitmqs_consumer_timeout(self):
+        logging.disable(logging.NOTSET)
+        try:
+            with self.assertLogs("cv-worker", level="WARNING") as logs:
+                self.assertEqual(worker.job_timeout_from_env("1800"), 1800)
+        finally:
+            logging.disable(logging.CRITICAL)
+        self.assertIn("consumer_timeout", "\n".join(logs.output))
+
+
+class LeftoverJobDirectoriesTest(unittest.TestCase):
+    def test_removes_job_directories_left_by_a_previous_run_and_nothing_else(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            leftover = os.path.join(tmp, "cv-job-abc123")
+            os.makedirs(os.path.join(leftover, "input"))
+            with open(os.path.join(leftover, "input", "recording.mp4"), "wb") as recording:
+                recording.write(b"frames")
+            other = os.path.join(tmp, "worker-healthy")
+            open(other, "w").close()
+            unrelated = os.path.join(tmp, "not-cv-job")
+            os.makedirs(unrelated)
+
+            self.assertEqual(worker.remove_leftover_job_dirs(tmp), 1)
+
+            self.assertFalse(os.path.exists(leftover))
+            self.assertTrue(os.path.exists(other))
+            self.assertTrue(os.path.isdir(unrelated))
+
+    def test_nothing_to_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(worker.remove_leftover_job_dirs(tmp), 0)
+
+
+class ClosedChannelLogTest(unittest.TestCase):
+    def test_a_job_killed_because_the_channel_closed_is_not_logged_as_queued_for_a_retry(self):
+        # run_forever killed it after RabbitMQ took the delivery back: there is no retry to queue
+        channel = FakeChannel()
+        channel.is_open = False
+        method = SimpleNamespace(delivery_tag=7, redelivered=False)
+        instance = worker.Worker("amqp://unused", runner=FakeRunner(error=RuntimeError("killed")))
+
+        logging.disable(logging.NOTSET)
+        try:
+            with self.assertLogs("cv-worker", level="INFO") as logs:
+                instance.process(channel, method, pika.BasicProperties(), BODY)
+        finally:
+            logging.disable(logging.CRITICAL)
+
+        output = "\n".join(logs.output)
+        self.assertNotIn("queued for another try", output)
+        self.assertIn("RabbitMQ will deliver it again", output)
+        self.assertEqual(channel.acked, [])
+        self.assertEqual(channel.published, [])
+
+
 if __name__ == "__main__":
     unittest.main()

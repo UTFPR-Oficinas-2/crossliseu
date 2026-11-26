@@ -61,9 +61,11 @@ Each job runs in a child process, so a hung job can really be stopped (a Python 
 killed); the worker owns the job's temporary directory and removes it, even after a kill. A child
 that dies without a result (out of memory, a crash inside OpenCV) counts as a transient failure and
 is retried once, then the analysis fails with `processing_failed`. On SIGTERM the worker kills the
-running job and leaves its message unacked, so it runs again after the restart.
+running job and leaves its message unacked, so it runs again after the restart. A job directory
+(`/tmp/cv-job-*`) that a shutdown left behind is removed when the worker starts.
 
-`CV_JOB_TIMEOUT_S` must stay well below `consumer_timeout`. At or above it, RabbitMQ closes the
+`CV_JOB_TIMEOUT_S` is in seconds; a value that is not a positive number stops the worker at startup.
+It must stay well below `consumer_timeout` (the worker logs a warning at 30 min or more). At or above it, RabbitMQ closes the
 channel while the job still runs, the worker can no longer ack or report on that channel, and the
 request is delivered again: the same job hangs again, over and over.
 

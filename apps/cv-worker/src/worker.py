@@ -18,6 +18,7 @@ Environment:
 """
 import json
 import logging
+import math
 import multiprocessing
 import os
 import shutil
@@ -43,7 +44,11 @@ ATTEMPT_HEADER = "x-attempt"
 # A job running longer than this is killed and fails with processing_timeout. 20 min: generous for
 # a 16-min video (the upload limit), and 10 min below RabbitMQ's consumer_timeout, so the worker
 # reports the timeout before the broker takes the delivery back.
-JOB_TIMEOUT_S = float(os.environ.get("CV_JOB_TIMEOUT_S", 1200))
+DEFAULT_JOB_TIMEOUT_S = 1200
+# RabbitMQ's default consumer_timeout, not overridden in compose: a job limit at or above it is lost
+CONSUMER_TIMEOUT_S = 30 * 60
+# Prefix of each job's directory in the system temp dir (see ChildJobRunner.run)
+JOB_DIR_PREFIX = "cv-job-"
 
 # Exists while the worker is connected and consuming; the container healthcheck looks for it
 HEALTH_FILE = os.environ.get("WORKER_HEALTH_FILE", "/tmp/worker-healthy")
@@ -92,6 +97,40 @@ def child_main(conn, body, mock_video, workdir):
         conn.close()
 
 
+def job_timeout_from_env(value):
+    """Seconds a job may run, from CV_JOB_TIMEOUT_S (unset or empty: 20 min). Exits on a value that
+    is not a positive number: 0 would fail every job at once."""
+    if value is None or not value.strip():
+        return DEFAULT_JOB_TIMEOUT_S
+    try:
+        timeout_s = float(value)
+    except ValueError:
+        timeout_s = None
+    if timeout_s is None or not math.isfinite(timeout_s) or timeout_s <= 0:
+        raise SystemExit(f"CV_JOB_TIMEOUT_S must be a positive number of seconds, got {value!r}")
+    if timeout_s >= CONSUMER_TIMEOUT_S:
+        log.warning(
+            "CV_JOB_TIMEOUT_S=%g is not below RabbitMQ's consumer_timeout (%d s): a hung job will be "
+            "taken back and delivered again before the worker can report the timeout",
+            timeout_s,
+            CONSUMER_TIMEOUT_S,
+        )
+    return timeout_s
+
+
+def remove_leftover_job_dirs(tmp_dir=None):
+    """Removes job directories a previous run left behind (a SIGTERM mid-job can end the worker
+    before the job thread cleans up; the container keeps /tmp across restarts). One worker per
+    container, so at startup no job of ours is running. Returns how many were removed."""
+    tmp_dir = tmp_dir or tempfile.gettempdir()
+    removed = 0
+    for entry in os.scandir(tmp_dir):
+        if entry.name.startswith(JOB_DIR_PREFIX) and entry.is_dir(follow_symlinks=False):
+            shutil.rmtree(entry.path, ignore_errors=True)
+            removed += 1
+    return removed
+
+
 class ChildJobRunner:
     """Runs one job at a time in a child process, so a job that hangs can be stopped for real (a
     thread cannot be killed). The parent owns the job's directory and removes it, even when the
@@ -109,7 +148,7 @@ class ChildJobRunner:
     def run(self, body):
         """The job's result message. Raises PermanentJobError (processing_timeout past the limit, or
         the code the job raised) or RuntimeError (transient error, or the child died or was killed)."""
-        workdir = tempfile.mkdtemp(prefix="cv-job-")
+        workdir = tempfile.mkdtemp(prefix=JOB_DIR_PREFIX)
         receiver, sender = self._context.Pipe(duplex=False)
         child = self._context.Process(
             target=self._target, args=(sender, body, self.mock_video, workdir), daemon=True
@@ -260,6 +299,11 @@ class Worker:
         except Exception as error:  # transient: network, R2 or RabbitMQ hiccup, or the child died
             if self.stopped_mid_job():
                 return
+            if not channel.is_open:
+                # run_forever killed the job after RabbitMQ took the delivery back: there is no
+                # retry to queue on this channel
+                log.warning("job %s stopped: the channel closed and RabbitMQ will deliver it again", match_id)
+                return
             attempt = self.attempts(properties)
             if attempt >= MAX_ATTEMPTS:
                 # Out of attempts: give up instead of looping forever
@@ -332,9 +376,14 @@ def main():
     if mock_video:
         log.warning("MOCK MODE: every job runs on %s; results are NOT from the uploaded recording", mock_video)
 
-    # A restarted container keeps its filesystem: drop a marker left by the previous run
+    job_timeout_s = job_timeout_from_env(os.environ.get("CV_JOB_TIMEOUT_S"))
+
+    # A restarted container keeps its filesystem: drop a marker and job files left by the previous run
     set_healthy(False)
-    worker = Worker(url, ChildJobRunner(JOB_TIMEOUT_S, mock_video))
+    removed = remove_leftover_job_dirs()
+    if removed:
+        log.warning("removed %d job director%s left by a previous run", removed, "y" if removed == 1 else "ies")
+    worker = Worker(url, ChildJobRunner(job_timeout_s, mock_video))
     # docker compose stop sends SIGTERM: stop consuming, and the current job's message stays
     # unacked, so RabbitMQ hands it to the next worker
     signal.signal(signal.SIGTERM, lambda *_: worker.stop())
