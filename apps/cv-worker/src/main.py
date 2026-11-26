@@ -53,6 +53,8 @@ def print_summary(result):
     for robot in result.robots.values():
         if robot.heatmap_path is not None:
             print(f"Saved heatmap to {robot.heatmap_path}")
+    if result.combined_heatmap_path is not None:
+        print(f"Saved combined heatmap to {result.combined_heatmap_path}")
 
 
 if __name__ == "__main__":
