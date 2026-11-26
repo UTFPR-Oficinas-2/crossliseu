@@ -126,6 +126,19 @@ describe('stale analyses (db, #133)', () => {
         });
     });
 
+    it('a retried job reporting running again restarts the clock', async () => {
+        const video = await videoWith('running', minutesBefore(40));
+
+        await app
+            .get(AnalysisResultsService)
+            .apply({ ...video, status: 'running', details: {} });
+
+        expect(await sweeper.sweep(new Date(Date.now() + 10 * 60_000))).toBe(0);
+        expect((await analysisOf(video.matchId)).analysis_status).toBe(
+            'running',
+        );
+    });
+
     it('a worker result moves the clock', async () => {
         const video = await videoWith('pending', minutesBefore(60));
 

@@ -16,8 +16,8 @@ type Changes = Pick<
 
 /**
  * What each worker message does to the analysis, and from which states. The worker sends
- * running -> done | failed for every job; a duplicate (a job redone after a crash) or a message
- * that arrives late finds the analysis already past it and changes nothing.
+ * running -> done | failed for every job; a message that arrives late finds the analysis already
+ * done or failed and changes nothing.
  */
 export function transitionFor(result: AnalysisResult): {
     from: readonly AnalysisStatus[];
@@ -26,7 +26,10 @@ export function transitionFor(result: AnalysisResult): {
     switch (result.status) {
         case 'running':
             return {
-                from: ['pending'],
+                // Also from running: a retried or redelivered job reports running again, and that
+                // restarts the stale-analysis clock (#133), so a job that waited in line is not
+                // swept while it runs
+                from: ['pending', 'running'],
                 changes: {
                     analysisStatus: 'running',
                     analysisError: null,

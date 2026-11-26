@@ -20,9 +20,9 @@ function result(
 }
 
 describe('transitionFor', () => {
-    it('running: only from pending', () => {
+    it('running: from pending, and again from running so a retried job restarts the clock (#133)', () => {
         expect(transitionFor(result('running'))).toEqual({
-            from: ['pending'],
+            from: ['pending', 'running'],
             changes: {
                 analysisStatus: 'running',
                 analysisError: null,
@@ -95,7 +95,7 @@ describe('AnalysisResultsService', () => {
         expect(videos.updateAnalysis).toHaveBeenCalledWith(
             MATCH_ID,
             VIDEO_KEY,
-            ['pending'],
+            ['pending', 'running'],
             {
                 analysisStatus: 'running',
                 analysisError: null,
