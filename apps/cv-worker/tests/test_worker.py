@@ -196,6 +196,24 @@ class ShutdownTest(unittest.TestCase):
         ):
             instance.run_forever()
 
+    def test_channel_closed_by_broker_kills_the_job_and_reconnects(self):
+        # RabbitMQ's consumer_timeout: a delivery unacked for 30 min closes the channel with 406.
+        # The message is already back in the queue, so the job in hand must not keep running.
+        runner = FakeRunner()
+        instance = worker.Worker("amqp://unused", runner=runner)
+        timed_out, healthy = mock.MagicMock(), mock.MagicMock()
+        timed_out.channel.return_value.start_consuming.side_effect = pika.exceptions.ChannelClosedByBroker(
+            406, "PRECONDITION_FAILED - delivery acknowledgement on channel 1 timed out"
+        )
+        healthy.channel.return_value.start_consuming.side_effect = instance.stop
+
+        with mock.patch.object(worker.pika, "BlockingConnection", side_effect=[timed_out, healthy]) as connect:
+            instance.run_forever()
+
+        self.assertEqual(connect.call_count, 2)
+        self.assertGreaterEqual(runner.kills, 1)
+        timed_out.close.assert_called_once_with()
+
     def test_health_file_exists_only_while_consuming(self):
         import tempfile
 

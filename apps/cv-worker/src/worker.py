@@ -189,11 +189,26 @@ class Worker:
                 self.channel.start_consuming()
                 set_healthy(False)
                 return  # stop() was called
+            except pika.exceptions.AMQPChannelError as error:
+                # RabbitMQ closed the channel, e.g. consumer_timeout on a delivery left unacked too
+                # long. The broker has already put the message back in the queue: stop the job in
+                # hand, or it would run next to its own redelivery, then consume again at once.
+                set_healthy(False)
+                log.warning("RabbitMQ closed the channel (%s); stopping the job and reconnecting", error)
+                self.runner.kill()
+                self.close_connection()
             except pika.exceptions.AMQPConnectionError as error:
                 set_healthy(False)
                 log.warning("RabbitMQ not reachable (%s); retrying in 5 s", error)
                 # Wakes up at once if stop() is called while waiting
                 self._stopping.wait(5)
+
+    def close_connection(self):
+        try:
+            if self.connection and self.connection.is_open:
+                self.connection.close()
+        except pika.exceptions.AMQPError as error:
+            log.warning("could not close the old connection: %s", error)
 
     def stop(self):
         self._stopping.set()
