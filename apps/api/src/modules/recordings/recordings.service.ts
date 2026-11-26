@@ -138,6 +138,7 @@ export class RecordingsService {
         video.analysisStatus = 'pending';
         video.analysisError = null;
         video.analysisResult = null;
+        video.analysisUpdatedAt = new Date();
         await this.videos.save(video);
 
         await this.startAnalysis(video);
@@ -205,6 +206,7 @@ export class RecordingsService {
             });
             video.analysisStatus = 'failed';
             video.analysisError = 'queue_unavailable';
+            video.analysisUpdatedAt = new Date();
             await this.videos.save(video);
         }
     }

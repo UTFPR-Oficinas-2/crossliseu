@@ -104,4 +104,12 @@ export class MatchVideo extends BaseEntity {
     /** The worker's result message when done (frames, positions and heatmap keys per robot) */
     @Column({ name: 'analysis_result', type: 'jsonb', nullable: true })
     analysisResult: Record<string, unknown> | null;
+
+    /** When analysis_status last changed; the stale-analysis sweep (#133) counts from it */
+    @Column({
+        name: 'analysis_updated_at',
+        type: 'timestamptz',
+        nullable: true,
+    })
+    analysisUpdatedAt: Date | null;
 }

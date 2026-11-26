@@ -73,7 +73,10 @@ export class MatchVideosRepository {
             .createQueryBuilder()
             .update(MatchVideo)
             // TypeORM's partial type does not accept a Record for a jsonb column; it is stored as is
-            .set(changes as QueryDeepPartialEntity<MatchVideo>)
+            .set({
+                ...changes,
+                analysisUpdatedAt: () => 'now()',
+            } as QueryDeepPartialEntity<MatchVideo>)
             .where('match_id = :matchId', { matchId })
             .andWhere('object_key = :videoKey', { videoKey })
             .andWhere("status = 'uploaded'")
