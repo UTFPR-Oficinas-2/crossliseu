@@ -61,6 +61,10 @@ def run_job(body, storage, mock_video=None):
             result = run_pipeline(video, tmp / "output")
         except RuntimeError as error:  # VideoCapture: the file is not a readable video
             raise PermanentJobError("video_unreadable", str(error)) from error
+        if result.total_frames == 0:
+            # Opened but not one frame decoded (damaged stream behind a valid header): without
+            # this the job would be "done" with no heatmaps
+            raise PermanentJobError("video_unreadable", f"no frame could be read from {video_key}")
 
         files = [result.trajectories_path] + [
             robot.heatmap_path for robot in result.robots.values() if robot.heatmap_path
