@@ -7,6 +7,9 @@ import json
 import logging
 import os
 import sys
+import tempfile
+import threading
+import time
 import types
 import unittest
 from types import SimpleNamespace
@@ -84,15 +87,35 @@ class FakeChannel:
         return [(body, headers) for key, body, headers in self.published if key == queue]
 
 
-def run_failing_job(headers=None, redelivered=False):
-    """One delivery whose pipeline fails with a transient error; returns the fake channel."""
+class FakeRunner:
+    """Stands in for ChildJobRunner: returns `result` or raises `error`, and counts kill() calls."""
+
+    def __init__(self, result=None, error=None):
+        self.result = result if result is not None else {"status": "done"}
+        self.error = error
+        self.kills = 0
+
+    def run(self, body):
+        if self.error:
+            raise self.error
+        return self.result
+
+    def kill(self):
+        self.kills += 1
+
+
+def deliver(runner, headers=None, redelivered=False):
+    """One delivery handled by a worker with `runner`; returns the fake channel."""
     channel = FakeChannel()
     method = SimpleNamespace(delivery_tag=7, redelivered=redelivered)
     properties = pika.BasicProperties(headers=headers)
-    instance = worker.Worker("amqp://unused", storage=None)
-    with mock.patch.object(worker, "run_job", side_effect=OSError("network blip")):
-        instance.process(channel, method, properties, BODY)
+    worker.Worker("amqp://unused", runner=runner).process(channel, method, properties, BODY)
     return channel
+
+
+def run_failing_job(headers=None, redelivered=False):
+    """One delivery whose pipeline fails with a transient error; returns the fake channel."""
+    return deliver(FakeRunner(error=OSError("network blip")), headers, redelivered)
 
 
 class RetryAccountingTest(unittest.TestCase):
@@ -137,7 +160,7 @@ class ShutdownTest(unittest.TestCase):
         raise AssertionError("the worker went back to sleep after being stopped")
 
     def test_stop_before_the_first_connection_ends_run_forever(self):
-        instance = worker.Worker("amqp://unused", storage=None)
+        instance = worker.Worker("amqp://unused", runner=FakeRunner())
         instance.stop()
 
         with mock.patch.object(worker.pika, "BlockingConnection") as connect, mock.patch.object(
@@ -148,7 +171,7 @@ class ShutdownTest(unittest.TestCase):
         connect.assert_not_called()
 
     def test_stop_while_connecting_does_not_start_consuming(self):
-        instance = worker.Worker("amqp://unused", storage=None)
+        instance = worker.Worker("amqp://unused", runner=FakeRunner())
         consumer = mock.MagicMock()  # stands in for the connection and its channel
 
         def connect_then_sigterm(*_args, **_kwargs):
@@ -162,7 +185,7 @@ class ShutdownTest(unittest.TestCase):
         consumer.close.assert_called_once_with()
 
     def test_stop_while_waiting_to_reconnect_ends_run_forever(self):
-        instance = worker.Worker("amqp://unused", storage=None)
+        instance = worker.Worker("amqp://unused", runner=FakeRunner())
 
         def unreachable(*_args, **_kwargs):
             instance.stop()  # SIGTERM arrives while RabbitMQ is still down
@@ -178,7 +201,7 @@ class ShutdownTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             marker = os.path.join(directory, "healthy")
-            instance = worker.Worker("amqp://unused", storage=None)
+            instance = worker.Worker("amqp://unused", runner=FakeRunner())
             seen = []
             connection = mock.MagicMock()
             connection.channel.return_value.start_consuming.side_effect = lambda: seen.append(os.path.exists(marker))
@@ -196,7 +219,7 @@ class ShutdownTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             marker = os.path.join(directory, "healthy")
-            instance = worker.Worker("amqp://unused", storage=None)
+            instance = worker.Worker("amqp://unused", runner=FakeRunner())
             connection = mock.MagicMock()
 
             def drop():
@@ -211,6 +234,133 @@ class ShutdownTest(unittest.TestCase):
                 instance.run_forever()
 
             self.assertFalse(os.path.exists(marker))
+
+
+# Child targets for ChildJobRunner: module level, so the `spawn` start method can pickle them.
+# Each one takes what worker.child_main takes: (conn, body, mock_video, workdir).
+def target_done(conn, body, mock_video, workdir):
+    conn.send(("done", {"status": "done"}))
+
+
+def target_permanent(conn, body, mock_video, workdir):
+    conn.send(("permanent", "video_unreadable", "x"))
+
+
+def target_exits(conn, body, mock_video, workdir):
+    os._exit(1)  # dies like an OOM kill or a segfault: nothing on the pipe
+
+
+def target_sleeps(conn, body, mock_video, workdir):
+    time.sleep(60)
+
+
+def target_writes_then_sleeps(conn, body, mock_video, workdir):
+    with open(os.path.join(workdir, "partial.bin"), "wb") as partial:
+        partial.write(b"frames")
+    # Tell the test where the directory is, without sending a result
+    with open(os.environ["CV_TEST_WORKDIR_NOTE"], "w") as note:
+        note.write(workdir)
+    time.sleep(60)
+
+
+class ChildJobRunnerTest(unittest.TestCase):
+    def test_returns_the_childs_result(self):
+        self.assertEqual(worker.ChildJobRunner(10, target=target_done).run(BODY), {"status": "done"})
+
+    def test_past_the_limit_kills_the_child_and_raises_processing_timeout(self):
+        runner = worker.ChildJobRunner(1, target=target_sleeps)
+        started = time.monotonic()
+
+        with self.assertRaises(PermanentJobError) as caught:
+            runner.run(BODY)
+
+        self.assertEqual(caught.exception.code, "processing_timeout")
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertIsNone(runner._child)  # reaped: nothing left running
+
+    def test_a_permanent_error_in_the_child_keeps_its_code(self):
+        with self.assertRaises(PermanentJobError) as caught:
+            worker.ChildJobRunner(10, target=target_permanent).run(BODY)
+
+        self.assertEqual(caught.exception.code, "video_unreadable")
+
+    def test_a_child_that_exits_without_a_result_is_transient(self):
+        started = time.monotonic()
+
+        with self.assertRaises(RuntimeError):
+            worker.ChildJobRunner(30, target=target_exits).run(BODY)
+
+        self.assertLess(time.monotonic() - started, 10)  # did not wait for the limit
+
+    def test_the_workdir_is_removed_after_a_timeout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            note = os.path.join(directory, "workdir")
+            with mock.patch.dict(os.environ, {"CV_TEST_WORKDIR_NOTE": note}):
+                with self.assertRaises(PermanentJobError):
+                    worker.ChildJobRunner(3, target=target_writes_then_sleeps).run(BODY)
+
+            with open(note) as written:
+                workdir = written.read()
+            self.assertFalse(os.path.exists(workdir))
+
+    def test_kill_stops_a_running_child(self):
+        runner = worker.ChildJobRunner(60, target=target_sleeps)
+        raised = []
+
+        def run():
+            try:
+                runner.run(BODY)
+            except Exception as error:  # noqa: BLE001  (the test checks what was raised)
+                raised.append(error)
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        deadline = time.monotonic() + 10
+        while runner._child is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        runner.kill()
+        thread.join(10)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(raised), 1)
+        self.assertNotIsInstance(raised[0], PermanentJobError)  # a stopped job runs again
+
+    def test_kill_when_idle_does_nothing(self):
+        worker.ChildJobRunner(10, target=target_done).kill()
+
+
+class TimeoutPathTest(unittest.TestCase):
+    def test_a_timed_out_job_publishes_processing_timeout_acks_and_is_not_retried(self):
+        channel = deliver(FakeRunner(error=PermanentJobError("processing_timeout", "ran past 1200 s")))
+
+        results = [body for body, _ in channel.to(worker.RESULT_QUEUE)]
+        self.assertIn({"matchId": "m1", "status": "failed", "code": "processing_timeout"}, results)
+        self.assertEqual(channel.acked, [7])
+        self.assertEqual(channel.to(worker.REQUEST_QUEUE), [])
+
+    def test_a_job_that_finishes_publishes_its_result(self):
+        channel = deliver(FakeRunner(result={"matchId": "m1", "status": "done"}))
+
+        self.assertIn({"matchId": "m1", "status": "done"}, [body for body, _ in channel.to(worker.RESULT_QUEUE)])
+        self.assertEqual(channel.acked, [7])
+
+    def test_a_job_killed_by_stop_is_left_unacked_for_redelivery(self):
+        # SIGTERM kills the child; the failure that follows is not a failed attempt
+        instance = worker.Worker("amqp://unused", runner=FakeRunner(error=RuntimeError("killed")))
+        instance.stop()
+        channel = FakeChannel()
+
+        instance.process(channel, SimpleNamespace(delivery_tag=7, redelivered=False), pika.BasicProperties(), BODY)
+
+        self.assertEqual(channel.acked, [])
+        self.assertEqual(channel.to(worker.REQUEST_QUEUE), [])
+        self.assertNotIn("failed", [body.get("status") for body, _ in channel.to(worker.RESULT_QUEUE)])
+
+    def test_stop_kills_the_running_job(self):
+        runner = FakeRunner()
+        worker.Worker("amqp://unused", runner=runner).stop()
+
+        self.assertEqual(runner.kills, 1)
 
 
 if __name__ == "__main__":

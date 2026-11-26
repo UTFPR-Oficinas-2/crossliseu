@@ -11,6 +11,7 @@ the operator has since replaced by recording again.
 
 Robot 1 (blue marker) is side A of the match, robot 2 (red) is side B.
 """
+import contextlib
 import json
 import tempfile
 from pathlib import Path
@@ -40,16 +41,18 @@ def parse_request(body):
     return match_id, video_key
 
 
-def run_job(body, storage, mock_video=None):
+def run_job(body, storage, mock_video=None, workdir=None):
     """Download, process and upload one job. Returns the result message (a dict).
 
     With `mock_video` set, the recording is still downloaded (so the R2 path is exercised) but
     the pipeline runs on that fixed file instead: test recordings have no robot markers.
+    With `workdir` set, the job's files go there and the caller removes them (the worker does, so
+    a job it kills leaves nothing behind); otherwise a temporary directory is used.
     Raises PermanentJobError for jobs that can never succeed; any other exception is transient.
     """
     match_id, video_key = parse_request(body)
 
-    with tempfile.TemporaryDirectory(prefix="cv-job-") as tmp:
+    with _job_directory(workdir) as tmp:
         tmp = Path(tmp)
         try:
             recording = storage.download(video_key, tmp / "input")
@@ -87,6 +90,12 @@ def run_job(body, storage, mock_video=None):
             for robot_id, robot in result.robots.items()
         },
     }
+
+
+def _job_directory(workdir):
+    if workdir is not None:
+        return contextlib.nullcontext(workdir)
+    return tempfile.TemporaryDirectory(prefix="cv-job-")
 
 
 def failed_message(body, code, detail):
