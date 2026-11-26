@@ -85,6 +85,35 @@ export class MatchVideosRepository {
         return (result.affected ?? 0) > 0;
     }
 
+    /**
+     * Fails, in one statement, the analyses of confirmed videos left in `running` since before
+     * `runningBefore` or in `pending` since before `pendingBefore` (#133). Returns each one with
+     * the status it had (Postgres 18 RETURNING old).
+     */
+    async failStaleAnalyses(
+        runningBefore: Date,
+        pendingBefore: Date,
+    ): Promise<{ matchId: string; previousStatus: 'running' | 'pending' }[]> {
+        const [rows]: [
+            { match_id: string; previous_status: 'running' | 'pending' }[],
+            number,
+        ] = await this.repository.query(
+            `UPDATE "match_videos"
+             SET "analysis_status" = 'failed', "analysis_error" = 'processing_timeout',
+                 "analysis_result" = NULL, "analysis_updated_at" = now()
+             WHERE "status" = 'uploaded' AND "deleted_at" IS NULL AND (
+                 ("analysis_status" = 'running' AND "analysis_updated_at" < $1)
+                 OR ("analysis_status" = 'pending' AND "analysis_updated_at" < $2)
+             )
+             RETURNING "match_id", old."analysis_status" AS "previous_status"`,
+            [runningBefore, pendingBefore],
+        );
+        return rows.map((row) => ({
+            matchId: row.match_id,
+            previousStatus: row.previous_status,
+        }));
+    }
+
     save(video: MatchVideo): Promise<MatchVideo> {
         return this.repository.save(video);
     }
