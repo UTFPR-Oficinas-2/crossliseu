@@ -12,6 +12,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { RecordingsModule } from './modules/recordings/recordings.module.js';
 import { FightChannelModule } from './modules/fight-channel/fight-channel.module.js';
 import { AnalysisModule } from './modules/analysis/analysis.module.js';
+import { ResultsModule } from './modules/results/results.module.js';
 
 @Module({
     imports: [
@@ -26,6 +27,7 @@ import { AnalysisModule } from './modules/analysis/analysis.module.js';
         RecordingsModule,
         FightChannelModule,
         AnalysisModule,
+        ResultsModule,
     ],
     controllers: [],
     providers: [],
