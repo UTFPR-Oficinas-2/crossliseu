@@ -47,6 +47,9 @@ ATTEMPT_HEADER = "x-attempt"
 DEFAULT_JOB_TIMEOUT_S = 1200
 # RabbitMQ's default consumer_timeout, not overridden in compose: a job limit at or above it is lost
 CONSUMER_TIMEOUT_S = 30 * 60
+# Pause before reconnecting after RabbitMQ closed the channel. A channel error that keeps coming
+# back (a queue declared with other arguments, no permission) must not turn into a tight loop
+CHANNEL_RECONNECT_DELAY_S = 2
 # Prefix of each job's directory in the system temp dir (see ChildJobRunner.run)
 JOB_DIR_PREFIX = "cv-job-"
 
@@ -142,8 +145,13 @@ class ChildJobRunner:
         self._target = target
         # spawn: a fresh interpreter, nothing inherited from the worker's threads or its RabbitMQ socket
         self._context = multiprocessing.get_context(context)
-        self._lock = threading.Lock()
+        # Re-entrant: kill() is also called from the SIGTERM handler, which runs on the main thread
+        # and can interrupt that same thread while it holds the lock
+        self._lock = threading.RLock()
         self._child = None
+        # Set by kill(), cleared when a run begins: a kill that lands before the child is registered
+        # (child.start() with spawn takes a while) is then not lost
+        self._killed = False
 
     def run(self, body):
         """The job's result message. Raises PermanentJobError (processing_timeout past the limit, or
@@ -155,9 +163,14 @@ class ChildJobRunner:
         )
         started = time.monotonic()
         try:
+            with self._lock:
+                self._killed = False
             child.start()
             with self._lock:
                 self._child = child
+                killed_while_starting = self._killed
+            if killed_while_starting:
+                child.kill()  # the receiver below then sees EOF and the run ends as a stopped job
             sender.close()  # only the child writes: EOF on the receiver once it is gone
             if not receiver.poll(self.timeout_s):
                 child.kill()
@@ -194,6 +207,7 @@ class ChildJobRunner:
     def kill(self):
         """Kill the running job, if any. Safe from another thread (SIGTERM) and when idle."""
         with self._lock:
+            self._killed = True
             child = self._child
         if child is not None and child.is_alive():
             child.kill()
@@ -238,6 +252,7 @@ class Worker:
                 log.warning("RabbitMQ closed the channel (%s); stopping the job and reconnecting", error)
                 self.runner.kill()
                 self.close_connection()
+                self._stopping.wait(CHANNEL_RECONNECT_DELAY_S)
             except pika.exceptions.AMQPConnectionError as error:
                 set_healthy(False)
                 log.warning("RabbitMQ not reachable (%s); retrying in 5 s", error)

@@ -214,6 +214,28 @@ class ShutdownTest(unittest.TestCase):
         self.assertGreaterEqual(runner.kills, 1)
         timed_out.close.assert_called_once_with()
 
+    def test_a_channel_error_that_keeps_coming_back_waits_between_attempts(self):
+        instance = worker.Worker("amqp://unused", runner=FakeRunner())
+        refused = mock.MagicMock()
+        refused.channel.return_value.start_consuming.side_effect = pika.exceptions.ChannelClosedByBroker(
+            406, "PRECONDITION_FAILED"
+        )
+        attempts = []
+
+        def connect(*_args, **_kwargs):
+            attempts.append(1)
+            if len(attempts) == 3:
+                instance.stop()
+            return refused
+
+        with mock.patch.object(worker.pika, "BlockingConnection", side_effect=connect), mock.patch.object(
+            instance._stopping, "wait"
+        ) as wait:
+            instance.run_forever()
+
+        wait.assert_called_with(worker.CHANNEL_RECONNECT_DELAY_S)
+        self.assertGreaterEqual(wait.call_count, 2)
+
     def test_connection_lost_mid_job_kills_the_job_and_reconnects(self):
         # A dropped connection also puts the message back in the queue: the job in hand must not
         # keep running next to its own redelivery
@@ -396,6 +418,56 @@ class ChildJobRunnerTest(unittest.TestCase):
         runner.kill()
         second.join(10)
         self.assertFalse(second.is_alive())
+
+    def test_a_kill_while_the_child_is_starting_is_not_lost(self):
+        # child.start() (spawn) takes a while; a SIGTERM or a channel close in that window used to
+        # find no child to kill and the job ran on
+        runner = worker.ChildJobRunner(60, target=target_sleeps)
+        real_context = runner._context
+
+        class StartThenKill:
+            """Wraps the process (patching it would break pickling for spawn)."""
+
+            def __init__(self, process):
+                self._process = process
+
+            def start(self):
+                self._process.start()
+                runner.kill()  # lands before run() has registered the child
+
+            def __getattr__(self, name):
+                return getattr(self._process, name)
+
+        class KillDuringStart:
+            def Pipe(self, *args, **kwargs):
+                return real_context.Pipe(*args, **kwargs)
+
+            def Process(self, *args, **kwargs):
+                return StartThenKill(real_context.Process(*args, **kwargs))
+
+        runner._context = KillDuringStart()
+        started = time.monotonic()
+
+        with self.assertRaises(RuntimeError):
+            runner.run(BODY)
+
+        self.assertLess(time.monotonic() - started, 10)
+
+    def test_kill_inside_the_lock_does_not_deadlock(self):
+        # A SIGTERM handler runs on the main thread, possibly while it holds the lock
+        runner = worker.ChildJobRunner(10, target=target_done)
+        finished = []
+
+        def run():
+            with runner._lock:
+                runner.kill()
+            finished.append(True)
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(5)
+
+        self.assertEqual(finished, [True])
 
     def test_kill_when_idle_does_nothing(self):
         worker.ChildJobRunner(10, target=target_done).kill()
