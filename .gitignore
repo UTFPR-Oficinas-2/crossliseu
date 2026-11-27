@@ -158,3 +158,6 @@ apps/firmware/config.h
 
 # PlatformIO build output
 apps/firmware/.pio
+
+# Local test videos for apps/cv-worker/tools/upload-video.sh
+apps/cv-worker/tools/*.mp4

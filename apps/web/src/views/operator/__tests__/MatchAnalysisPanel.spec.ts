@@ -119,6 +119,19 @@ describe('MatchAnalysisPanel', () => {
     )
   })
 
+  it('failed by a timeout: says the analysis took too long', async () => {
+    get.mockResolvedValue({
+      ...completed(),
+      status: 'failed',
+      error: 'processing_timeout',
+      heatmaps: [],
+    })
+
+    const wrapper = await mountPanel()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('demorou demais')
+  })
+
   it('reads again after a new upload', async () => {
     get.mockResolvedValueOnce(null).mockResolvedValueOnce(completed())
     const wrapper = await mountPanel(0)

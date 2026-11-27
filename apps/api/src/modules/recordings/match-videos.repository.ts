@@ -73,13 +73,48 @@ export class MatchVideosRepository {
             .createQueryBuilder()
             .update(MatchVideo)
             // TypeORM's partial type does not accept a Record for a jsonb column; it is stored as is
-            .set(changes as QueryDeepPartialEntity<MatchVideo>)
+            .set({
+                ...changes,
+                analysisUpdatedAt: () => 'now()',
+            } as QueryDeepPartialEntity<MatchVideo>)
             .where('match_id = :matchId', { matchId })
             .andWhere('object_key = :videoKey', { videoKey })
             .andWhere("status = 'uploaded'")
             .andWhere('analysis_status IN (:...from)', { from })
             .execute();
         return (result.affected ?? 0) > 0;
+    }
+
+    /**
+     * Fails, in one statement, the analyses of confirmed videos left in `running` since before
+     * `runningBefore` or in `pending` since before `pendingBefore` (#133). Returns each one with
+     * the status it had (Postgres 18 RETURNING old). A row without `analysis_updated_at` (written
+     * by an API instance from before the column) counts from its upload.
+     */
+    async failStaleAnalyses(
+        runningBefore: Date,
+        pendingBefore: Date,
+    ): Promise<{ matchId: string; previousStatus: 'running' | 'pending' }[]> {
+        const [rows]: [
+            { match_id: string; previous_status: 'running' | 'pending' }[],
+            number,
+        ] = await this.repository.query(
+            `UPDATE "match_videos"
+             SET "analysis_status" = 'failed', "analysis_error" = 'processing_timeout',
+                 "analysis_result" = NULL, "analysis_updated_at" = now()
+             WHERE "status" = 'uploaded' AND "deleted_at" IS NULL AND (
+                 ("analysis_status" = 'running'
+                     AND COALESCE("analysis_updated_at", "uploaded_at", "modified_at") < $1)
+                 OR ("analysis_status" = 'pending'
+                     AND COALESCE("analysis_updated_at", "uploaded_at", "modified_at") < $2)
+             )
+             RETURNING "match_id", old."analysis_status" AS "previous_status"`,
+            [runningBefore, pendingBefore],
+        );
+        return rows.map((row) => ({
+            matchId: row.match_id,
+            previousStatus: row.previous_status,
+        }));
     }
 
     save(video: MatchVideo): Promise<MatchVideo> {

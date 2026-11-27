@@ -37,12 +37,16 @@ const display: Record<ProcessingStatus, { label: string; tone: StatusTone }> = {
   failed: { label: 'Falhou', tone: 'danger' },
 }
 
-/** Codes from the API (queue_unavailable) and the CV worker (apps/cv-worker/src/jobs.py) */
+/**
+ * Codes from the API (queue_unavailable, and processing_timeout from its stale-analysis sweep) and
+ * the CV worker (apps/cv-worker/src/jobs.py and worker.py, where a job past its limit is stopped)
+ */
 const errorMessages: Record<string, string> = {
   queue_unavailable: 'O serviço de análise não estava disponível quando o vídeo foi enviado.',
   recording_not_found: 'O vídeo não foi encontrado no armazenamento.',
   video_unreadable: 'O vídeo não pôde ser lido.',
   invalid_message: 'O pedido de análise chegou inválido ao serviço de análise.',
+  processing_timeout: 'A análise demorou demais e foi interrompida.',
 }
 
 const pill = computed(() =>

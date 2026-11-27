@@ -88,6 +88,22 @@ class RunJobTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, "video_unreadable")
         self.assertEqual(storage.uploaded, [], "nothing goes to R2 for a video with no frames")
 
+    def test_with_a_workdir_the_job_works_there_and_leaves_it_to_the_caller(self):
+        # The worker's parent process owns the directory, so a killed job's files can be removed
+        import tempfile
+
+        seen = []
+
+        def run_pipeline(video, output_dir):
+            seen.append(Path(output_dir))
+            return pipeline_result(total_frames=120)(video, output_dir)
+
+        with tempfile.TemporaryDirectory() as workdir:
+            with mock.patch.object(jobs, "run_pipeline", run_pipeline):
+                jobs.run_job(BODY, FakeStorage(), workdir=workdir)
+            self.assertEqual(seen[0].parent, Path(workdir))
+            self.assertTrue(os.path.isdir(workdir))
+
 
 if __name__ == "__main__":
     unittest.main()

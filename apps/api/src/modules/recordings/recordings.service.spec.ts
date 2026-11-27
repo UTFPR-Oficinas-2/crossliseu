@@ -446,6 +446,8 @@ describe('RecordingsService.complete: analysis job (#21)', () => {
             analysisStatus: 'pending',
             analysisError: null,
             analysisResult: null,
+            // The stale-analysis sweep (#133) counts from here
+            analysisUpdatedAt: expect.any(Date),
         });
     });
 
@@ -486,6 +488,7 @@ describe('RecordingsService.complete: analysis job (#21)', () => {
             status: 'uploaded',
             analysisStatus: 'failed',
             analysisError: 'queue_unavailable',
+            analysisUpdatedAt: expect.any(Date),
         });
     });
 

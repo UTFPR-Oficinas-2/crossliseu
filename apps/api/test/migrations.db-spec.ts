@@ -457,4 +457,109 @@ describe('migrations on a fresh database', () => {
             expect(columns).not.toContain('surrendered_robot_id');
         });
     });
+
+    describe('MatchVideoAnalysisUpdatedAt', () => {
+        const MIGRATION = 'MatchVideoAnalysisUpdatedAt1794800000000';
+        const TABLES = `"users", "championships", "robots", "matches", "match_videos"`;
+
+        async function undoThrough(name: string): Promise<void> {
+            while (
+                (
+                    await ds.query(
+                        `SELECT 1 FROM "migrations" WHERE "name" = $1`,
+                        [name],
+                    )
+                ).length > 0
+            ) {
+                await ds.undoLastMigration();
+            }
+        }
+
+        /** A match with one uploaded video in `analysisStatus`, uploaded at `uploadedAt` */
+        async function insertVideo(
+            analysisStatus: string | null,
+            uploadedAt: string,
+        ): Promise<string> {
+            const [user]: { id: string }[] = await ds.query(
+                `INSERT INTO "users" ("username", "email", "password")
+                 VALUES ('op-' || gen_random_uuid(), gen_random_uuid() || '@example.com', 'pw') RETURNING "id"`,
+            );
+            const [championship]: { id: string }[] = await ds.query(
+                `INSERT INTO "championships" ("name", "start_date", "end_date", "created_by_user_id")
+                 VALUES ('Cup', now(), now(), $1) RETURNING "id"`,
+                [user!.id],
+            );
+            const robots: { id: string }[] = await ds.query(
+                `INSERT INTO "robots" ("name", "weight_class", "team", "championship_id", "created_by_user_id")
+                 VALUES ('A', 'antweight', 'T', $1, $2), ('B', 'antweight', 'T', $1, $2)
+                 RETURNING "id"`,
+                [championship!.id, user!.id],
+            );
+            const [match]: { id: string }[] = await ds.query(
+                `INSERT INTO "matches" ("weight_class", "state", "championship_id",
+                    "robot_a_id", "robot_b_id", "created_by_user_id")
+                 VALUES ('antweight', 'finished', $1, $2, $3, $4) RETURNING "id"`,
+                [championship!.id, robots[0]!.id, robots[1]!.id, user!.id],
+            );
+            const [video]: { id: string }[] = await ds.query(
+                `INSERT INTO "match_videos" ("match_id", "object_key", "content_type", "status",
+                    "uploaded_at", "uploaded_by_user_id", "analysis_status")
+                 VALUES ($1, 'recordings/x.mp4', 'video/mp4', 'uploaded', $2, $3, $4) RETURNING "id"`,
+                [match!.id, uploadedAt, user!.id, analysisStatus],
+            );
+            return video!.id;
+        }
+
+        async function updatedAtOf(id: string): Promise<Date | null> {
+            const [row]: { analysis_updated_at: Date | null }[] =
+                await ds.query(
+                    `SELECT "analysis_updated_at" FROM "match_videos" WHERE "id" = $1`,
+                    [id],
+                );
+            return row!.analysis_updated_at;
+        }
+
+        beforeEach(async () => {
+            await ds.runMigrations();
+            await ds.query(`TRUNCATE ${TABLES} CASCADE`);
+            await undoThrough(MIGRATION);
+        });
+
+        afterEach(async () => {
+            await ds.query(`TRUNCATE ${TABLES} CASCADE`);
+            await ds.runMigrations();
+        });
+
+        it('starts the clock of live analyses at the deploy and of finished ones at their upload', async () => {
+            const uploadedAt = '2026-11-01T10:00:00.000Z';
+            const before = Date.now();
+            const running = await insertVideo('running', uploadedAt);
+            const pending = await insertVideo('pending', uploadedAt);
+            const done = await insertVideo('done', uploadedAt);
+            const failed = await insertVideo('failed', uploadedAt);
+            const none = await insertVideo(null, uploadedAt);
+
+            await ds.runMigrations();
+
+            for (const id of [running, pending]) {
+                expect(
+                    (await updatedAtOf(id))!.getTime(),
+                ).toBeGreaterThanOrEqual(before - 1000);
+            }
+            expect(await updatedAtOf(done)).toEqual(new Date(uploadedAt));
+            expect(await updatedAtOf(failed)).toEqual(new Date(uploadedAt));
+            expect(await updatedAtOf(none)).toBeNull();
+        });
+
+        it('rolls back to no analysis_updated_at column', async () => {
+            await ds.runMigrations();
+            await undoThrough(MIGRATION);
+
+            const rows: { column_name: string }[] = await ds.query(
+                `SELECT column_name FROM information_schema.columns
+                 WHERE table_name = 'match_videos' AND column_name = 'analysis_updated_at'`,
+            );
+            expect(rows).toEqual([]);
+        });
+    });
 });
