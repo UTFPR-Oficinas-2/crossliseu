@@ -3,6 +3,7 @@
 Request  (queue analysis.requested): {"matchId": "...", "videoKey": "recordings/<id>.mp4"}
 Result   (queue analysis.finished):
     {"matchId", "videoKey", "status": "done", "mock": bool, "totalFrames", "trajectoriesKey",
+     "combinedHeatmapKey",
      "robots": {"A": {"detectedPositions", "totalFrames", "heatmapKey"}, "B": {...}}}
     {"matchId", "videoKey", "status": "failed", "error": "<code>", "detail": "<text>"}
 
@@ -72,6 +73,8 @@ def run_job(body, storage, mock_video=None, workdir=None):
         files = [result.trajectories_path] + [
             robot.heatmap_path for robot in result.robots.values() if robot.heatmap_path
         ]
+        if result.combined_heatmap_path:
+            files.append(result.combined_heatmap_path)
         keys = storage.upload_analysis(match_id, files)
 
     return {
@@ -81,6 +84,10 @@ def run_job(body, storage, mock_video=None, workdir=None):
         "mock": bool(mock_video),
         "totalFrames": result.total_frames,
         "trajectoriesKey": keys[result.trajectories_path.name],
+        # Both robots on one map (heatmap_combined.png); null when it was not drawn
+        "combinedHeatmapKey": (
+            keys.get(result.combined_heatmap_path.name) if result.combined_heatmap_path else None
+        ),
         "robots": {
             ROBOT_SIDES.get(robot_id, str(robot_id)): {
                 "detectedPositions": robot.accepted_points,

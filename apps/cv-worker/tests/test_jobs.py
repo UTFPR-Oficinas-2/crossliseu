@@ -59,6 +59,7 @@ def pipeline_result(total_frames):
                 )
                 for robot_id in (1, 2)
             },
+            combined_heatmap_path=Path(output_dir) / "heatmap_combined.png" if has_frames else None,
         )
     return run_pipeline
 
@@ -70,6 +71,13 @@ class RunJobTest(unittest.TestCase):
         self.assertEqual(result["status"], "done")
         self.assertEqual(result["robots"]["A"]["heatmapKey"], "analysis/m1/heatmap_robot1.png")
         self.assertEqual(result["robots"]["B"]["heatmapKey"], "analysis/m1/heatmap_robot2.png")
+
+    def test_combined_heatmap_is_uploaded_and_reported(self):
+        storage = FakeStorage()
+        with mock.patch.object(jobs, "run_pipeline", pipeline_result(total_frames=120)):
+            result = jobs.run_job(BODY, storage)
+        self.assertEqual(result["combinedHeatmapKey"], "analysis/m1/heatmap_combined.png")
+        self.assertIn("heatmap_combined.png", [path.name for path in storage.uploaded])
 
     def test_video_that_opens_but_yields_no_frames_is_unreadable(self):
         # A damaged stream behind a valid header: OpenCV opens it, then the first read fails
