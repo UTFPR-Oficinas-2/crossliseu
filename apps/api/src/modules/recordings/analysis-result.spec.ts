@@ -24,6 +24,7 @@ describe('readAnalysisResult', () => {
         ).toEqual({
             mock: false,
             totalFrames: 300,
+            combinedHeatmapKey: null,
             robots: [
                 {
                     side: 'A',
@@ -50,6 +51,7 @@ describe('readAnalysisResult', () => {
         ).toEqual({
             mock: false,
             totalFrames: null,
+            combinedHeatmapKey: null,
             robots: [{ side: 'A', detectedPositions: null, heatmapKey: null }],
         });
     });
@@ -60,5 +62,27 @@ describe('readAnalysisResult', () => {
         });
 
         expect(read?.robots[0].heatmapKey).toBeNull();
+    });
+
+    it('reads the combined heatmap key', () => {
+        expect(
+            readAnalysisResult({
+                robots: {},
+                combinedHeatmapKey: 'analyses/m/heatmap_combined.png',
+            })?.combinedHeatmapKey,
+        ).toBe('analyses/m/heatmap_combined.png');
+    });
+
+    it('drops a combined key outside analyses/', () => {
+        for (const combinedHeatmapKey of [
+            'recordings/m/a.mp4',
+            42,
+            undefined,
+        ]) {
+            expect(
+                readAnalysisResult({ robots: {}, combinedHeatmapKey })
+                    ?.combinedHeatmapKey,
+            ).toBeNull();
+        }
     });
 });

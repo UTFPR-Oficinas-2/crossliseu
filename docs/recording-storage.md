@@ -15,7 +15,8 @@ Each section says whether it is **done**, **in progress** or **planned**. Update
 | `upload-url` and `complete` routes, `match_videos` table | `apps/api` (#45) | Done, not tested end to end |
 | Start processing after the upload, store the result | `apps/api`, `apps/cv-worker` (#21) | Done, tested end to end with Docker Compose (mock video) |
 | Show the analysis and heatmaps on the operator screen | `apps/api`, `apps/web` (#21) | Done |
-| Show the heatmaps on the public match page | `apps/api`, `apps/web` | Planned (the page is still a placeholder) |
+| Public results routes with the combined heatmap | `apps/api` (#22) | Done |
+| Show the combined heatmap on the public match page | `apps/web` (#53) | Planned |
 
 ## Flow
 
@@ -132,7 +133,7 @@ The video is stored in the `match_videos` table, one row per match:
 | `uploaded_at`, `uploaded_by_user_id` | When it was confirmed, and who asked for the URL |
 | `analysis_status` | `pending`, `running`, `done` or `failed`; `null` until the first upload is confirmed. See [Analysis jobs](#analysis-jobs) |
 | `analysis_error` | Error code when `failed`: `queue_unavailable` (set by the API) or the worker's (`recording_not_found`, `video_unreadable`, `processing_failed`, …) |
-| `analysis_result` | `jsonb`: the worker's `done` message without `matchId` / `videoKey` / `status` (`mock`, `totalFrames`, `trajectoriesKey`, `robots`) |
+| `analysis_result` | `jsonb`: the worker's `done` message without `matchId` / `videoKey` / `status` (`mock`, `totalFrames`, `trajectoriesKey`, `combinedHeatmapKey`, `robots`) |
 
 ### `POST /matches/:id/recording/upload-url`
 
@@ -237,6 +238,32 @@ The analysis of the confirmed video, owner-only like the recording routes. Respo
 - `404 analysis_not_found` until a video has been confirmed; `404 match_not_found` as in the other routes.
 
 The operator screen (`/operator/:matchId`) shows it in `MatchAnalysisPanel`, under the recorder: the status while it runs, then one heatmap per side.
+
+### Public results (#22)
+
+Two routes without login, in `apps/api/src/modules/results/`, for the public results screens. A fight is public only once the operator closed it (a `closed` event); a finished fight still waiting for confirmation is neither listed nor readable.
+
+`GET /championships/:id/results`: the confirmed fights, most recently closed first. No analysis here. `404 championship_not_found`.
+
+```json
+[{ "matchId": "…", "championshipId": "…", "weightClass": "beetleweight", "closedAt": "2026-12-09T15:15:30.000Z",
+   "robots": { "A": { "id": "…", "name": "Aço" }, "B": { "id": "…", "name": "Faísca" } },
+   "winnerSide": "A", "draw": false, "endReason": "surrender", "surrenderedSide": "B" }]
+```
+
+`GET /matches/:id/result`: one confirmed fight. `404 result_not_found` both for an unknown match and for one not closed yet.
+
+```json
+{ "…": "every field of a results row",
+  "startedAt": "2026-12-09T15:12:00.000Z", "durationMs": 133000,
+  "score": { "A": 11, "B": 5 },
+  "analysis": { "status": "done", "heatmapUrl": "https://…", "expiresAt": "…",
+                "totalFrames": 3990, "detectedPositions": { "A": 1284, "B": 1131 } } }
+```
+
+- `durationMs` is the time fought, pauses left out (at most 180 000).
+- `score` is the sum of the three referees per side; one referee's points are never public.
+- `analysis` has one status per fight (`null` when no video was confirmed) and only the combined heatmap (`combinedHeatmapKey`, both robots on one map). `heatmapUrl` is set only once `done` and the map exists, so the page never gets a broken link; it works for 15 minutes like the other read URLs. The worker's error code and the per-robot maps are not public.
 
 `RABBITMQ_URL` is optional for the API, like the `R2_*` variables: without it the API starts and every analysis ends `failed` / `queue_unavailable`. Compose builds it from `RABBITMQ_USER` and `RABBITMQ_PASSWORD` for both the API and the worker.
 

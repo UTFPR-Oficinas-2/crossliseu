@@ -36,6 +36,12 @@ import { ChampionshipsModule } from '../championships/championships.module.js';
         RefereesService,
         { provide: Clock, useClass: SystemClock },
     ],
-    exports: [MatchesService, FightService, RefereesService, FightEventsModule],
+    exports: [
+        MatchesService,
+        FightService,
+        RefereesService,
+        FightEventsModule,
+        Clock,
+    ],
 })
 export class MatchesModule {}
