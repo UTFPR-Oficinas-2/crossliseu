@@ -42,7 +42,7 @@ class PipelineResult:
     trajectories_path: Path
     rows: int                   # rows written to trajectories.csv
     robots: dict                # {robot_id: RobotResult}
-    combined_heatmap_path: Path | None  # both robots on one map; None when no frames
+    combined_heatmap_path: Path | None  # both robots on one map; None when not drawn
 
 
 def run_pipeline(video_path, output_dir, display=False):
