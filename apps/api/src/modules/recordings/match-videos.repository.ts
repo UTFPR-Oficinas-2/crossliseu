@@ -88,7 +88,8 @@ export class MatchVideosRepository {
     /**
      * Fails, in one statement, the analyses of confirmed videos left in `running` since before
      * `runningBefore` or in `pending` since before `pendingBefore` (#133). Returns each one with
-     * the status it had (Postgres 18 RETURNING old).
+     * the status it had (Postgres 18 RETURNING old). A row without `analysis_updated_at` (written
+     * by an API instance from before the column) counts from its upload.
      */
     async failStaleAnalyses(
         runningBefore: Date,
@@ -102,8 +103,10 @@ export class MatchVideosRepository {
              SET "analysis_status" = 'failed', "analysis_error" = 'processing_timeout',
                  "analysis_result" = NULL, "analysis_updated_at" = now()
              WHERE "status" = 'uploaded' AND "deleted_at" IS NULL AND (
-                 ("analysis_status" = 'running' AND "analysis_updated_at" < $1)
-                 OR ("analysis_status" = 'pending' AND "analysis_updated_at" < $2)
+                 ("analysis_status" = 'running'
+                     AND COALESCE("analysis_updated_at", "uploaded_at", "modified_at") < $1)
+                 OR ("analysis_status" = 'pending'
+                     AND COALESCE("analysis_updated_at", "uploaded_at", "modified_at") < $2)
              )
              RETURNING "match_id", old."analysis_status" AS "previous_status"`,
             [runningBefore, pendingBefore],

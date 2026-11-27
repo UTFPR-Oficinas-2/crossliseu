@@ -92,6 +92,23 @@ describe('stale analyses (db, #133)', () => {
         }
     });
 
+    it('counts a row with no analysis_updated_at from its upload', async () => {
+        const stale = await videoWith('pending', minutesBefore(7 * 60));
+        const fresh = await videoWith('pending', minutesBefore(5 * 60));
+        await ds.query(
+            `UPDATE "match_videos" SET "analysis_updated_at" = NULL`,
+        );
+
+        expect(await sweeper.sweep(NOW)).toBe(1);
+
+        expect((await analysisOf(stale.matchId)).analysis_status).toBe(
+            'failed',
+        );
+        expect((await analysisOf(fresh.matchId)).analysis_status).toBe(
+            'pending',
+        );
+    });
+
     it('leaves fresh, finished and still-uploading analyses alone', async () => {
         const untouched = [
             await videoWith('running', minutesBefore(44)),

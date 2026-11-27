@@ -530,14 +530,24 @@ describe('migrations on a fresh database', () => {
             await ds.runMigrations();
         });
 
-        it('starts the clock of existing analyses at their upload', async () => {
+        it('starts the clock of live analyses at the deploy and of finished ones at their upload', async () => {
             const uploadedAt = '2026-11-01T10:00:00.000Z';
+            const before = Date.now();
             const running = await insertVideo('running', uploadedAt);
+            const pending = await insertVideo('pending', uploadedAt);
+            const done = await insertVideo('done', uploadedAt);
+            const failed = await insertVideo('failed', uploadedAt);
             const none = await insertVideo(null, uploadedAt);
 
             await ds.runMigrations();
 
-            expect(await updatedAtOf(running)).toEqual(new Date(uploadedAt));
+            for (const id of [running, pending]) {
+                expect(
+                    (await updatedAtOf(id))!.getTime(),
+                ).toBeGreaterThanOrEqual(before - 1000);
+            }
+            expect(await updatedAtOf(done)).toEqual(new Date(uploadedAt));
+            expect(await updatedAtOf(failed)).toEqual(new Date(uploadedAt));
             expect(await updatedAtOf(none)).toBeNull();
         });
 
