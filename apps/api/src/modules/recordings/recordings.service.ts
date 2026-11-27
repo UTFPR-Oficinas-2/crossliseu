@@ -15,13 +15,13 @@ import type {
 import { readAnalysisResult, type Side } from './analysis-result.js';
 import type { MatchVideo } from './entities/match-video.entity.js';
 import { MatchVideosRepository } from './match-videos.repository.js';
+import { READ_URL_TTL_SECONDS, signedRead } from './public-analysis.js';
 import { RecordingStorage } from './recording-storage.js';
 
 /** How long an upload URL works: long enough to start a ~90 MB upload, short if it leaks */
 export const UPLOAD_URL_TTL_SECONDS = 15 * 60;
 
-/** How long a read URL works: enough to start playing or downloading; ask again for a new one */
-export const READ_URL_TTL_SECONDS = 15 * 60;
+export { READ_URL_TTL_SECONDS } from './public-analysis.js';
 
 const EXTENSIONS: Record<RecordingContentType, string> = {
     'video/mp4': 'mp4',
@@ -237,10 +237,13 @@ export class RecordingsService {
                 robotId: robotIds[robot.side],
                 detectedPositions: robot.detectedPositions,
                 heatmapUrl: robot.heatmapKey
-                    ? await this.storage.presignDownload(
-                          robot.heatmapKey,
-                          READ_URL_TTL_SECONDS,
-                      )
+                    ? (
+                          await signedRead(
+                              this.storage,
+                              robot.heatmapKey,
+                              new Date(),
+                          )
+                      ).url
                     : null,
             })),
         );

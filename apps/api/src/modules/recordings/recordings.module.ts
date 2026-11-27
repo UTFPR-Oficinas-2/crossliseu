@@ -24,5 +24,6 @@ import { RecordingsService } from './recordings.service.js';
         MatchVideosRepository,
         { provide: RecordingStorage, useClass: R2RecordingStorage },
     ],
+    exports: [MatchVideosRepository, RecordingStorage],
 })
 export class RecordingsModule {}
