@@ -3,7 +3,7 @@
  * stored as it came. It is jsonb written by another program, so every field is checked here and a
  * missing or odd one becomes null instead of breaking the response.
  *
- *   {"mock": bool, "totalFrames": int, "trajectoriesKey": str,
+ *   {"mock": bool, "totalFrames": int, "trajectoriesKey": str, "combinedHeatmapKey": str | null,
  *    "robots": {"A": {"detectedPositions": int, "totalFrames": int, "heatmapKey": str | null}, "B": …}}
  *
  * Side A is robot 1 (blue marker), side B robot 2 (red).
@@ -20,6 +20,8 @@ export interface RobotAnalysis {
 export interface StoredAnalysis {
     mock: boolean;
     totalFrames: number | null;
+    /** Both robots on one map (#136); null when the worker drew none */
+    combinedHeatmapKey: string | null;
     robots: RobotAnalysis[];
 }
 
@@ -46,6 +48,7 @@ export function readAnalysisResult(raw: unknown): StoredAnalysis | null {
     return {
         mock: raw.mock === true,
         totalFrames: count(raw.totalFrames),
+        combinedHeatmapKey: heatmapKey(raw.combinedHeatmapKey),
         robots: SIDES.filter((side) => isObject(robots[side])).map((side) => {
             const robot = robots[side] as Record<string, unknown>;
             return {
