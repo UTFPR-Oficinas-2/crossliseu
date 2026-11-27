@@ -3,6 +3,7 @@
 Only reads the CSV (and one background image); it never touches the video
 pipeline, so heatmaps can be regenerated from a saved CSV at any time.
 """
+import logging
 import math
 from pathlib import Path
 
@@ -14,6 +15,15 @@ matplotlib.use("Agg")  # no window: matplotlib draws straight to a file
 import matplotlib.pyplot as plt  # noqa: E402  (must come after matplotlib.use)
 
 from storage import load_trajectories  # noqa: E402
+
+log = logging.getLogger(__name__)
+
+# The light end of Blues / Reds is almost white and would veil the arena where a robot barely
+# passed, so the combined map starts each colour scale at this fraction of the colormap
+COMBINED_CMAP_START = 0.35
+# Opacity of a cell is COMBINED_MAX_ALPHA * sqrt(time / vmax); cells under the cut-off stay clear
+COMBINED_MAX_ALPHA = 0.85
+COMBINED_MIN_STRENGTH = 0.02
 
 
 def occupancy_grid(points, width, height, cell_px):
@@ -89,19 +99,72 @@ def render_heatmap(seconds_grid, background_bgr, title, subtitle, colormap, path
     return path
 
 
+def render_combined_heatmap(seconds_grids, background_bgr, title, subtitle, colormaps, labels, path):
+    """Both robots on one map: each in its own colour, on the same time scale.
+
+    Each robot's layer is as opaque as the time it spent there (faint where it passed by, solid
+    where it stayed), so where both robots were the two colours mix instead of one hiding the
+    other. Same vmax for both: equal colour means equal time. (The per-robot maps each scale to
+    their own maximum, so a colour there is not comparable with the same colour here.)
+    """
+    height, width = background_bgr.shape[:2]
+    vmax = max((float(grid.max()) for grid in seconds_grids.values()), default=0.0) or 1.0
+
+    fig, ax = plt.subplots(figsize=(10, 6.4), dpi=120, layout="constrained")
+    gray = cv2.cvtColor(background_bgr, cv2.COLOR_BGR2GRAY)
+    ax.imshow(gray, cmap="gray", vmin=0, vmax=255, alpha=0.6)
+
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=vmax)
+    for robot_id, grid in seconds_grids.items():
+        grid = cv2.resize(grid, (width, height), interpolation=cv2.INTER_LINEAR)
+        # Opacity from the time spent: sqrt so short visits still show; ~0 stays transparent
+        strength = np.clip(grid / vmax, 0, 1)
+        alpha = np.where(
+            strength > COMBINED_MIN_STRENGTH, COMBINED_MAX_ALPHA * np.sqrt(strength), 0.0,
+        )
+        # The light end of Blues / Reds is almost white and would veil the arena where the
+        # robot barely passed; start the colours at a mid tone instead
+        full = matplotlib.colormaps[colormaps.get(robot_id, "Greys")]
+        cmap = matplotlib.colors.ListedColormap(full(np.linspace(COMBINED_CMAP_START, 1.0, 256)))
+        ax.imshow(grid, cmap=cmap, norm=norm, alpha=alpha)
+        colorbar = fig.colorbar(
+            matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, fraction=0.03, pad=0.02,
+        )
+        colorbar.set_label(f"{labels[robot_id]}: time in cell (s)")
+
+    fig.suptitle(title, fontsize=20, fontweight="bold")
+    ax.set_title(subtitle, fontsize=11, color="#444444")
+    ax.set_axis_off()
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
 def generate_heatmaps(csv_path, background_bgr, output_dir, robot_names, colormaps,
                       title, cell_px, blur_cells):
-    """Read trajectories.csv and write heatmap_robot<id>.png for every robot."""
+    """Read trajectories.csv and write heatmap_robot<id>.png for every robot, plus
+    heatmap_combined.png with both robots on one map.
+
+    Returns (robot heatmap paths, combined heatmap path); the latter is None if it could not
+    be drawn.
+    """
     height, width = background_bgr.shape[:2]
     trajectories = load_trajectories(csv_path)
     paths = []
+    seconds_grids = {}
+    tracked = {}
 
     for robot_id, points in trajectories.items():
         seconds_per_frame = frame_duration_s(points)
         counts = occupancy_grid(points, width, height, cell_px)
         seconds_grid = smooth(counts, blur_cells) * seconds_per_frame
+        seconds_grids[robot_id] = seconds_grid
 
         detected = int(counts.sum())
+        tracked[robot_id] = detected * seconds_per_frame
         subtitle = (
             f"Robot {robot_id} ({robot_names.get(robot_id, '?')}) · "
             f"{detected} of {len(points)} frames · "
@@ -114,4 +177,17 @@ def generate_heatmaps(csv_path, background_bgr, output_dir, robot_names, colorma
             Path(output_dir) / f"heatmap_robot{robot_id}.png",
         ))
 
-    return paths
+    # Both robots on one map, from the same grids as the maps above. It is an extra: if it
+    # cannot be drawn, the per-robot maps are already written and the analysis still succeeds
+    labels = {rid: f"Robot {rid} ({robot_names.get(rid, '?')})" for rid in seconds_grids}
+    combined_subtitle = " · ".join(f"{labels[rid]} {tracked[rid]:.1f} s tracked" for rid in seconds_grids)
+    try:
+        combined_path = render_combined_heatmap(
+            seconds_grids, background_bgr, title, combined_subtitle, colormaps, labels,
+            Path(output_dir) / "heatmap_combined.png",
+        )
+    except Exception:
+        log.exception("Could not draw the combined heatmap; keeping the per-robot maps")
+        combined_path = None
+
+    return paths, combined_path

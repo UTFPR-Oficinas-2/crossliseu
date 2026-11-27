@@ -42,6 +42,7 @@ class PipelineResult:
     trajectories_path: Path
     rows: int                   # rows written to trajectories.csv
     robots: dict                # {robot_id: RobotResult}
+    combined_heatmap_path: Path | None  # both robots on one map; None when not drawn
 
 
 def run_pipeline(video_path, output_dir, display=False):
@@ -121,10 +122,11 @@ def run_pipeline(video_path, output_dir, display=False):
         tracker.trajectories, trajectories_path, ROBOT_COLORS, video.width, video.height,
     )
 
-    # Heatmap: one PNG per robot, next to the CSV (needs at least one frame)
+    # Heatmap: one PNG per robot plus one with both robots, next to the CSV (needs a frame)
     heatmap_paths = {}
+    combined_heatmap_path = None
     if background is not None:
-        paths = generate_heatmaps(
+        paths, combined_heatmap_path = generate_heatmaps(
             trajectories_path, background, output_dir, ROBOT_NAMES, HEATMAP_COLORMAPS,
             HEATMAP_TITLE, HEATMAP_CELL_PX, HEATMAP_BLUR_CELLS,
         )
@@ -153,4 +155,5 @@ def run_pipeline(video_path, output_dir, display=False):
         trajectories_path=trajectories_path,
         rows=rows,
         robots=robots,
+        combined_heatmap_path=combined_heatmap_path,
     )
